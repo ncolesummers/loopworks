@@ -25,6 +25,25 @@ For local UI work without GitHub OAuth credentials:
 bun run dev:fixture
 ```
 
+## Environment
+
+Copy `.env.example` to `.env.local` for local development. The fixture server only needs the defaults from `.env.example`; real GitHub SSO, webhooks, database persistence, and Vercel deployment visibility use these variables:
+
+- `AUTH_SECRET`
+- `AUTH_GITHUB_ID`
+- `AUTH_GITHUB_SECRET`
+- `LOOPWORKS_AUTH_BYPASS`
+- `LOOPWORKS_ALLOWED_GITHUB_USERS`
+- `LOOPWORKS_ALLOWED_GITHUB_ORGS`
+- `LOG_LEVEL`
+- `DATABASE_URL`
+- `GITHUB_APP_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_WEBHOOK_SECRET`
+- `VERCEL_ACCESS_TOKEN`
+- `VERCEL_TEAM_ID`
+- `VERCEL_TEAM_SLUG`
+
 ## Validation
 
 ```bash
