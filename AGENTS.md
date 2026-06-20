@@ -39,6 +39,7 @@ This repo is itself an agentic software factory. Agent work in Loopworks should 
    - Run deterministic checks before considering the task complete:
      - `bun run format:check`
      - `bun run lint`
+     - `bun run markdownlint`
      - `bun run typecheck`
      - `bun run test`
      - `bun run storybook:build`
@@ -118,6 +119,6 @@ The initial scaffold uses:
 6. GitHub webhook skeleton and local/dev fixture path.
 7. Vercel deployment visibility client with explicit fixture fallback.
 8. Eve planning-agent skeleton.
-9. Biome, Vitest, Playwright, Storybook, and CI validation.
+9. Biome, Markdownlint, Vitest, Playwright, Storybook, and CI validation.
 
 The current decision baseline lives in `docs/adr/README.md`, and persona-derived test coverage expectations live in `docs/personas-and-test-scenarios.md`.

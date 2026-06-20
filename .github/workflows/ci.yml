@@ -30,6 +30,9 @@ jobs:
       - name: Biome lint
         run: bun run lint
 
+      - name: Markdownlint
+        run: bun run markdownlint
+
       - name: Typecheck
         run: bun run typecheck
 

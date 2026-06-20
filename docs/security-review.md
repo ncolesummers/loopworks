@@ -1,9 +1,11 @@
 # MVP Security Review
 
 ## Purpose
+
 This review is the final MVP gate. It checks that the portal is safe enough to operate with real repositories, real GitHub accounts, and live deployment metadata.
 
 ## Scope
+
 1. Authentication and session handling.
 2. GitHub token handling and least privilege.
 3. Vercel data access and display.
@@ -14,6 +16,7 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 8. Structured logging redaction and correlation safety.
 
 ## Review Questions
+
 1. Can a user see only repositories and data they are allowed to access?
 2. Are tokens stored, refreshed, and scoped safely?
 3. Are write actions behind explicit authorization and review gates?
@@ -23,6 +26,7 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 7. Do Pino logs preserve useful correlation ids without leaking tokens, payload bodies, OAuth data, or private keys?
 
 ## Required Checks
+
 1. Session validation and CSRF protections.
 2. Repo access verification on every sensitive request.
 3. Secret redaction in logs and surfaced summaries.
@@ -32,6 +36,7 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 7. Structured log samples for webhook rejection, duplicate delivery, approval rejection, and Vercel API fallback.
 
 ## Exit Criteria
+
 1. No open high-severity findings.
 2. Token and session handling are documented.
 3. External write paths are explicitly gated.

@@ -140,15 +140,16 @@ The temporary theme should be minimal and pragmatic. It should not become the fi
 
 Repo quality gates are first-class from day one:
 
-1. Biome for formatting, linting, and static analysis.
-2. TypeScript typechecking.
-3. Vitest for focused unit and integration coverage.
-4. Playwright for browser and workflow coverage.
-5. Axe checks for UI accessibility where relevant.
-6. Storybook for reusable component development, review, and documentation.
-7. Storybook build as part of validation.
-8. Aggregate validation script for local and CI use.
-9. Pino structured logging with tests for redaction and integration fallback paths.
+1. Biome for formatting, linting, and TypeScript/JavaScript static analysis.
+2. Markdownlint for Markdown documentation static analysis.
+3. TypeScript typechecking.
+4. Vitest for focused unit and integration coverage.
+5. Playwright for browser and workflow coverage.
+6. Axe checks for UI accessibility where relevant.
+7. Storybook for reusable component development, review, and documentation.
+8. Storybook build as part of validation.
+9. Aggregate validation script for local and CI use.
+10. Pino structured logging with tests for redaction and integration fallback paths.
 
 UI work is not complete until relevant Playwright coverage and Storybook stories are added or intentionally deferred in the issue.
 

@@ -9,6 +9,7 @@ Loopworks is an agentic software factory portal for planning, executing, validat
 - Auth.js GitHub SSO
 - Postgres and Drizzle
 - Biome, Vitest, Playwright, Storybook
+- Markdownlint for Markdown documentation
 - Pino structured logging
 - Eve, Vercel Workflows, Vercel Sandbox, Vercel AI Gateway integration points
 
@@ -49,6 +50,7 @@ Copy `.env.example` to `.env.local` for local development. The fixture server on
 ```bash
 bun run format:check
 bun run lint
+bun run markdownlint
 bun run typecheck
 bun run test
 bun run storybook:build
@@ -70,7 +72,7 @@ bun run precommit:install
 bun run precommit:run
 ```
 
-The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome format check, Biome lint, TypeScript, Vitest, Storybook build, and Playwright.
+The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome format check, Biome lint, Markdownlint, TypeScript, Vitest, Storybook build, and Playwright.
 
 ## Planning
 

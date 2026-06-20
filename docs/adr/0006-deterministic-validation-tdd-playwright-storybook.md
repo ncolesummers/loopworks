@@ -9,7 +9,7 @@ Agentic development can produce convincing summaries that are not reliable evide
 
 ## Decision
 
-Loopworks will treat deterministic validation as the first quality gate. The validation order is format, lint/static analysis, typecheck, unit/integration tests, browser workflow tests, accessibility checks, Lighthouse where relevant, security checks where relevant, and only then LLM review or judgment.
+Loopworks will treat deterministic validation as the first quality gate. The validation order is format, code lint/static analysis, Markdown static analysis, typecheck, unit/integration tests, browser workflow tests, accessibility checks, Lighthouse where relevant, security checks where relevant, and only then LLM review or judgment.
 
 For behavior changes, agents and maintainers should define the test plan before implementation and add or update tests alongside the implementation. Playwright is the browser and user-workflow test runner. Storybook is the component development, documentation, and review surface for reusable UI.
 
@@ -22,9 +22,10 @@ LLM review can summarize or critique deterministic evidence, but it does not rep
 ## Validation
 
 1. `bun run validate` remains the aggregate local quality gate.
-2. PRs and agent runs report deterministic validation evidence before judgment.
-3. UI changes include Playwright coverage for affected flows and Storybook stories for reusable components.
-4. Tests cover auth allowlist, manifest validation, webhook signature/dedupe, Vercel mapping, loop toggles, approval transitions, logger redaction, and persona-derived acceptance scenarios.
+2. Markdown changes pass Markdownlint before commit or PR.
+3. PRs and agent runs report deterministic validation evidence before judgment.
+4. UI changes include Playwright coverage for affected flows and Storybook stories for reusable components.
+5. Tests cover auth allowlist, manifest validation, webhook signature/dedupe, Vercel mapping, loop toggles, approval transitions, logger redaction, and persona-derived acceptance scenarios.
 
 ## Follow-Ups
 
