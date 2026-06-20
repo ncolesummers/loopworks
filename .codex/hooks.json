@@ -1,0 +1,53 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/user-prompt-submit.ts\"",
+            "timeout": 10,
+            "statusMessage": "Checking LoopWorks workflow context"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|functions\\.apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.ts\"",
+            "timeout": 10,
+            "statusMessage": "Checking LoopWorks edit guardrails"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/stop.ts\"",
+            "timeout": 20,
+            "statusMessage": "Reviewing LoopWorks completion checklist"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent-start.ts\"",
+            "timeout": 5,
+            "statusMessage": "Checking LoopWorks subagent scope"
+          }
+        ]
+      }
+    ]
+  }
+}

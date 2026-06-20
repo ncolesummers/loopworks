@@ -12,11 +12,14 @@ test helpers under `tests/`.
    manifests, observability, and agent contracts.
 3. Use Playwright for user-visible workflows and persona-derived acceptance
    scenarios.
-4. Use explicit fixtures. Do not add silent production fallbacks.
-5. Keep e2e tests runnable with `LOOPWORKS_AUTH_BYPASS=true` unless the test is
+4. Use Storybook-native component and a11y tooling for story-level reusable UI
+   checks when configured; do not add bespoke Storybook iframe crawlers for
+   inventory-only assertions.
+5. Use explicit fixtures. Do not add silent production fallbacks.
+6. Keep e2e tests runnable with `LOOPWORKS_AUTH_BYPASS=true` unless the test is
    specifically covering real auth.
 
 ## Validation
 
-Include `bun run test` and relevant Playwright or Storybook checks in final
-validation evidence.
+Include `bun run test` and relevant Playwright, Storybook, or Storybook-native
+component checks in final validation evidence.

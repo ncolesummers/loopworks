@@ -22,6 +22,7 @@
     "test:e2e": "playwright test",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
+    "review:ui": "bun run scripts/review-ui.mjs",
     "precommit": "bun run validate",
     "precommit:install": "uvx prek install",
     "precommit:run": "uvx prek run --all-files",

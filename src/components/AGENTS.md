@@ -16,9 +16,17 @@ under `src/components/`.
    sliders/inputs for numeric values, and menus for option sets.
 5. Ensure text fits inside controls across mobile and desktop viewports.
 6. Keep reusable states accessible and keyboard-usable.
+7. Use `StatusBadge` and the shared status vocabulary for status-like UI; do
+   not use raw `Badge` plus ad hoc semantic colors for state.
+8. Route external artifact, deployment, and evidence links through
+   `getSafeExternalHref`.
+9. Render explicit empty states for empty arrays instead of letting sections
+   disappear silently.
 
 ## Tests
 
-Reusable components need Storybook stories for important states. User-visible
-workflow changes need Playwright coverage and accessibility checks where
-relevant.
+Reusable components need Storybook stories for important states, including
+default plus loading, empty, error, and disabled states where applicable. Use
+Storybook-native component/a11y checks for story-level coverage when configured.
+User-visible workflow changes need Playwright coverage and accessibility checks
+where relevant.
