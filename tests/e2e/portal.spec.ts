@@ -1,6 +1,28 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+const portalRoutes = [
+  {
+    path: "/",
+    nav: "Dashboard",
+    heading: "Agentic delivery loops, repo health, and deployment visibility",
+  },
+  { path: "/catalog", nav: "Catalog", heading: "Repo catalog" },
+  { path: "/loops", nav: "Loops", heading: "Loop registry" },
+  { path: "/runs", nav: "Runs", heading: "Run timeline and artifacts" },
+  { path: "/approvals", nav: "Approvals", heading: "Approval gate" },
+  {
+    path: "/deployments",
+    nav: "Deployments",
+    heading: "Vercel deployments and previews",
+  },
+  {
+    path: "/settings",
+    nav: "Settings",
+    heading: "Connection, label mapping, and dev fixtures",
+  },
+] as const;
+
 test.describe("Loopworks portal", () => {
   test("renders the dashboard surface", async ({ page }) => {
     await page.goto("/");
@@ -29,7 +51,7 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByText("Preview", { exact: true }).first()).toBeVisible();
   });
 
-  test("lets the operator toggle a loop and open GitHub settings", async ({ page }) => {
+  test("lets the operator toggle a loop and open settings", async ({ page }) => {
     await page.goto("/");
 
     const firstLoop = page.getByRole("switch").first();
@@ -37,12 +59,70 @@ test.describe("Loopworks portal", () => {
     await firstLoop.click();
     await expect(firstLoop).not.toBeChecked();
 
-    await page.getByRole("link", { name: "GitHub settings" }).click();
+    await page.getByRole("link", { name: "Settings", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Connection, label mapping, and dev fixtures" }),
     ).toBeVisible();
     await expect(page.getByText("GitHub app connected")).toBeVisible();
   });
+
+  // Persona P01: a signed-in operator can move across each protected MVP slice.
+  test("navigates between protected MVP slices with a shared session surface", async ({ page }) => {
+    await page.goto("/");
+
+    for (const route of portalRoutes) {
+      await page.getByRole("link", { name: route.nav, exact: true }).click();
+      await expect(page).toHaveURL(route.path);
+      await expect(page.getByRole("heading", { name: route.heading })).toBeVisible();
+      await expect(page.getByText("Fixture session")).toBeVisible();
+      await expect(page.getByText("Operator workspace", { exact: true })).toBeVisible();
+    }
+  });
+
+  test("keeps the legacy GitHub settings route as a settings alias", async ({ page }) => {
+    await page.goto("/github");
+
+    await expect(page).toHaveURL("/settings");
+    await expect(
+      page.getByRole("heading", { name: "Connection, label mapping, and dev fixtures" }),
+    ).toBeVisible();
+  });
+
+  for (const viewport of [
+    { name: "mobile", width: 390, height: 844 },
+    { name: "laptop", width: 1280, height: 832 },
+    { name: "desktop", width: 1440, height: 960 },
+  ] as const) {
+    test(`keeps shell navigation readable at ${viewport.name} width`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+
+      const navBoxes = [];
+      for (const route of portalRoutes) {
+        const link = page.getByRole("link", { name: route.nav, exact: true });
+        await expect(link).toBeVisible();
+        const box = await link.boundingBox();
+        expect(box, `${viewport.name} ${route.nav} link`).not.toBeNull();
+        navBoxes.push(box);
+      }
+
+      for (const [index, box] of navBoxes.entries()) {
+        const nextBox = navBoxes[index + 1];
+        if (box && nextBox) {
+          expect(
+            box.y + box.height <= nextBox.y + 1,
+            `${viewport.name} nav links should not overlap vertically`,
+          ).toBe(true);
+        }
+      }
+
+      await expect(
+        page.getByRole("heading", {
+          name: "Agentic delivery loops, repo health, and deployment visibility",
+        }),
+      ).toBeVisible();
+    });
+  }
 
   // Persona P04: an operator switches light/dark from the shell and it persists.
   test("operator can switch light/dark from the shell and the choice persists", async ({
@@ -74,7 +154,7 @@ test.describe("Loopworks portal", () => {
       test("has no a11y violations (incl. contrast) on primary portal surfaces", async ({
         page,
       }) => {
-        for (const path of ["/", "/github"]) {
+        for (const { path } of portalRoutes) {
           await page.goto(path);
           // Full default axe rule set (wcag2/wcag21/best-practice) WITH
           // color-contrast — only the prior contrast suppression is removed.

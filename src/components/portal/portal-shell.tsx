@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowRight,
   CheckCircle2,
+  Clock3,
   Circle,
   Database,
   GitBranch,
@@ -32,11 +33,13 @@ import { cn } from "@/lib/utils";
 
 const navigation = [
   { href: "/", label: "Dashboard", icon: SquareTerminal },
-  { href: "/github", label: "GitHub settings", icon: Github },
-  { href: "#loops", label: "Loop registry", icon: Workflow },
-  { href: "#deployments", label: "Deployments", icon: GitBranch },
-  { href: "#approval", label: "Approval gate", icon: ShieldCheck },
-];
+  { href: "/catalog", label: "Catalog", icon: Database },
+  { href: "/loops", label: "Loops", icon: Workflow },
+  { href: "/runs", label: "Runs", icon: Clock3 },
+  { href: "/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/deployments", label: "Deployments", icon: GitBranch },
+  { href: "/settings", label: "Settings", icon: Github },
+] as const;
 
 export function PortalShell({
   children,
@@ -68,7 +71,7 @@ export function PortalShell({
 
           <Separator className="my-5" />
 
-          <nav className="space-y-1">
+          <nav aria-label="Primary" className="space-y-1">
             {navigation.map((item) => {
               const active = pathname === item.href;
               const Icon = item.icon;
@@ -84,21 +87,6 @@ export function PortalShell({
                 </>
               );
 
-              if (item.href.startsWith("#")) {
-                return (
-                  <a
-                    key={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                      active && "bg-accent text-accent-foreground",
-                    )}
-                    href={item.href}
-                  >
-                    {content}
-                  </a>
-                );
-              }
-
               return (
                 <Link
                   key={item.href}
@@ -106,7 +94,7 @@ export function PortalShell({
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
                     active && "bg-accent text-accent-foreground",
                   )}
-                  href={item.href as "/" | "/github"}
+                  href={item.href}
                 >
                   {content}
                 </Link>
@@ -127,10 +115,10 @@ export function PortalShell({
                 : "Local fixture mode is enabled for this workspace. GitHub and Vercel data are rendered as operational snapshots."}
             </div>
             <Button variant="outline" className="w-full justify-between" asChild>
-              <a href="/#repos">
+              <Link href="/catalog">
                 <span>Open repo catalog</span>
                 <ArrowRight className="h-4 w-4" />
-              </a>
+              </Link>
             </Button>
           </div>
         </aside>
@@ -159,11 +147,11 @@ export function PortalShell({
                 <ModeToggle />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2">
+                    <Button variant="outline" className="min-w-0 gap-2">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                         {initials}
                       </span>
-                      {user.name}
+                      <span className="max-w-28 truncate sm:max-w-40">{user.name}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
