@@ -33,6 +33,8 @@ GitHub is the source of truth for roadmap and work state. GitHub Issues hold pro
 4. Reviewer: inspects run history, validation evidence, PRs, deployments, and approval gates.
 5. Security reviewer: checks auth, secrets, webhook verification, approvals, token scopes, and audit evidence before MVP completion.
 
+The current persona details and derived acceptance-test matrix live in `personas-and-test-scenarios.md`. MVP issues should reference those scenarios when they touch user-visible workflows or risky integration behavior.
+
 ## Source Of Truth Model
 
 GitHub owns:
@@ -104,6 +106,7 @@ The temporary theme should be minimal and pragmatic. It should not become the fi
 7. Add agent evals for prompt, model, tool, and workflow changes.
 8. Build a Backstage-style repo/service catalog with owners, metadata, framework, CI commands, docs links, observability links, design system links, and enabled loops.
 9. Add golden-path templates for supported stacks: Next.js, FastAPI, full-stack Next.js plus FastAPI, docs site, internal tool, and agent-enabled repo.
+10. Capture durable architecture decisions in ADRs and keep issue acceptance criteria aligned with accepted decisions.
 
 ## Integration Requirements
 
@@ -149,11 +152,13 @@ Repo quality gates are first-class from day one:
 
 UI work is not complete until relevant Playwright coverage and Storybook stories are added or intentionally deferred in the issue.
 
+Workflow work should reference persona-derived test cases where applicable. The matrix in `personas-and-test-scenarios.md` is the starting set for MVP acceptance coverage.
+
 ## MVP Milestones
 
 ### M0 Project Foundation
 
-Create the PRD, repo scaffold, Next.js/Bun setup, TypeScript, Tailwind, ShadCN primitives, Biome, Playwright, Storybook, Vitest, Pino structured logging, CI, issue templates, and GitHub backlog bootstrap.
+Create the PRD, ADR baseline, repo scaffold, Next.js/Bun setup, TypeScript, Tailwind, ShadCN primitives, Biome, Playwright, Storybook, Vitest, Pino structured logging, CI, issue templates, and GitHub backlog bootstrap.
 
 Exit criteria:
 
@@ -161,6 +166,7 @@ Exit criteria:
 2. Validation scripts pass.
 3. GitHub repo, labels, milestones, issues, and backlog project exist.
 4. PRD and architecture docs are checked in.
+5. Foundational ADRs and persona-derived test scenarios are checked in.
 
 ### M1 Design System Direction + App Shell
 

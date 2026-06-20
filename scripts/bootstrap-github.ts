@@ -13,6 +13,20 @@ type IssueSeed = {
   body: string;
 };
 
+type ExistingIssue = {
+  number: number;
+  url: string;
+  body: string;
+  labels: string[];
+  milestone?: string;
+};
+
+type ExistingMilestone = {
+  number: number;
+  title: string;
+  description: string | null;
+};
+
 const owner = process.env.GITHUB_OWNER ?? "ncolesummers";
 const repo = process.env.GITHUB_REPO ?? "loopworks";
 const repository = `${owner}/${repo}`;
@@ -21,12 +35,12 @@ const projectTitle = "Loopworks Backlog";
 const milestones = [
   {
     title: "M0 Project Foundation",
-    description: "Repo scaffold, PRD, tooling, CI, and planning bootstrap.",
+    description: "Repo scaffold, PRD, ADR baseline, tooling, CI, and planning bootstrap.",
   },
   {
     title: "M1 Design System Direction + App Shell",
     description:
-      "Early design direction, ShadCN conventions, shell, navigation, and Storybook taxonomy.",
+      "Early design direction, ShadCN conventions, shell, navigation, Storybook taxonomy, and persona-driven test planning.",
   },
   {
     title: "M2 GitHub + Vercel Source Systems",
@@ -45,7 +59,7 @@ const milestones = [
   {
     title: "M5 Agent Governance + Evals",
     description:
-      "Loop governance, proposed diffs, model/prompt/workflow evals, and approval policy hardening.",
+      "Loop governance, ADR lifecycle, proposed diffs, model/prompt/workflow evals, and approval policy hardening.",
   },
 ];
 
@@ -61,6 +75,11 @@ const labels: Label[] = [
     name: "adr-proposed",
     color: "FBCA04",
     description: "Durable decision should become a proposed ADR.",
+  },
+  {
+    name: "area:adr",
+    color: "BFDADC",
+    description: "Architecture decision records and durable decision governance.",
   },
   { name: "loop:development", color: "1D76DB", description: "Development loop work." },
   { name: "loop:research", color: "5319E7", description: "Research loop work." },
@@ -131,6 +150,8 @@ const labels: Label[] = [
   { name: "priority:p3", color: "C2E0C6", description: "Nice-to-have or later hardening." },
 ];
 
+const managedLabelNames = new Set(labels.map((label) => label.name));
+
 const issues: IssueSeed[] = [
   {
     title: "Create PRD and architecture baseline",
@@ -186,6 +207,44 @@ const issues: IssueSeed[] = [
         "Logs use structured fields for route, GitHub delivery id, repository, loop/run identifiers, approval actor, Vercel project, and fallback reasons where available.",
         "Tests cover logger redaction and at least one integration fallback logging path.",
         "Docs state that logs are not the event store and that durable run/control-plane state must still be persisted.",
+      ],
+    }),
+  },
+  {
+    title: "Review foundational ADRs and decision lifecycle",
+    milestone: "M1 Design System Direction + App Shell",
+    labels: ["area:adr", "area:docs", "adr-proposed", "priority:p0"],
+    body: issueBody({
+      summary:
+        "Review the initial ADR set and make ADR creation part of the normal Loopworks planning workflow.",
+      deliverables: [
+        "Review ADRs for GitHub source-of-truth, Vercel stack, Pino observability, Drizzle, ShadCN, testing strategy, and fixture policy.",
+        "Ratify the accepted baseline, identify any superseding follow-ups, and document which future decisions should start as proposed.",
+        "Document when agents and maintainers must add, update, supersede, or link ADRs from GitHub issues.",
+      ],
+      acceptance: [
+        "ADR index reflects current status for each foundational decision.",
+        "Design-system planning outcomes update or supersede the ShadCN/design ADR if needed.",
+        "New architecture-changing issues include an ADR expectation in acceptance criteria where relevant.",
+      ],
+    }),
+  },
+  {
+    title: "Implement persona-derived MVP acceptance tests",
+    milestone: "M1 Design System Direction + App Shell",
+    labels: ["area:validation", "area:ui", "priority:p0"],
+    body: issueBody({
+      summary:
+        "Turn the product personas into executable MVP acceptance coverage across Playwright, Storybook, and focused unit/integration tests.",
+      deliverables: [
+        "Map Product Operator, Maintainer, Agent Supervisor, Reviewer, and Security Reviewer scenarios to MVP issues.",
+        "Add Playwright coverage for dashboard, catalog, Vercel visibility, loop toggles, run timeline, approvals, and sign-in guard flows.",
+        "Add unit/integration coverage for high-risk persona edges such as trigger classification, disabled loops, production fixture blocking, webhook signatures, idempotency, and logger redaction.",
+      ],
+      acceptance: [
+        "Each MVP milestone references relevant persona test ids from the docs matrix.",
+        "Playwright coverage exercises full user workflows instead of only page loads.",
+        "Storybook includes state variations needed by the persona scenarios.",
       ],
     }),
   },
@@ -249,7 +308,7 @@ const issues: IssueSeed[] = [
   {
     title: "GitHub App webhook and dev fixture intake",
     milestone: "M2 GitHub + Vercel Source Systems",
-    labels: ["area:github", "area:control-plane", "agent-ready", "priority:p0"],
+    labels: ["area:github", "area:control-plane", "priority:p0"],
     body: issueBody({
       summary:
         "Create the safe intake path for GitHub issue events that will eventually trigger agentic loops.",
@@ -303,6 +362,25 @@ const issues: IssueSeed[] = [
     }),
   },
   {
+    title: "Seed data and fixture operating model",
+    milestone: "M2 GitHub + Vercel Source Systems",
+    labels: ["area:infra", "area:validation", "area:control-plane", "priority:p1"],
+    body: issueBody({
+      summary:
+        "Create a deliberate seed and fixture strategy so local development stays inspectable without masking production gaps.",
+      deliverables: [
+        "Seeded demo data for repos, loop definitions, runs, run steps, artifacts, approvals, and Vercel deployment states.",
+        "Reset/reseed workflow after the database bootstrap exists.",
+        "Fixture fallback policy and tests proving production does not silently use stand-in data.",
+      ],
+      acceptance: [
+        "Fixture data covers empty, loading, healthy, disabled, blocked, failed, pending approval, approved, rejected, production, preview, and disconnected states.",
+        "API responses and logs identify fixture/fallback reasons without exposing secrets.",
+        "Production environments fail closed when required credentials or durable stores are missing.",
+      ],
+    }),
+  },
+  {
     title: "Loop manifest schema and governance draft",
     milestone: "M3 Durable Loop MVP",
     labels: ["area:loops", "area:control-plane", "priority:p0"],
@@ -324,7 +402,7 @@ const issues: IssueSeed[] = [
   {
     title: "Agent-ready development loop skeleton",
     milestone: "M3 Durable Loop MVP",
-    labels: ["area:loops", "area:agents", "agent-ready", "loop:development", "priority:p0"],
+    labels: ["area:loops", "area:agents", "loop:development", "priority:p0"],
     body: issueBody({
       summary: "Implement the first durable loop skeleton for issues labeled `agent-ready`.",
       deliverables: [
@@ -374,6 +452,25 @@ const issues: IssueSeed[] = [
         "Agent output is an executable plan artifact with stages, validation gates, approval points, and risks.",
         "Agent tools are narrow and auditable.",
         "Future model/prompt/tool changes have a path to eval coverage.",
+      ],
+    }),
+  },
+  {
+    title: "Metrics and trace backend decision",
+    milestone: "M3 Durable Loop MVP",
+    labels: ["area:observability", "area:control-plane", "adr-proposed", "priority:p1"],
+    body: issueBody({
+      summary:
+        "Choose the first metrics backend and trace collector before durable loop execution becomes broad.",
+      deliverables: [
+        "Compare practical backend options for metrics, traces, alerting, retention, and Vercel runtime fit.",
+        "Define metric names for run counts, step duration, validation outcomes, webhook outcomes, deployment health, approval wait time, queue depth, lock contention, retries, cancellations, model usage, and cost.",
+        "Create or update the ADR for telemetry backend choice and rollout plan.",
+      ],
+      acceptance: [
+        "Decision includes local development, Vercel deployment, and production retention implications.",
+        "Correlation fields line up with Pino logs, database records, artifacts, and future traces.",
+        "Follow-up implementation issues exist for instrumentation, dashboards, and alerts.",
       ],
     }),
   },
@@ -460,7 +557,7 @@ function issueBody(input: { summary: string; deliverables: string[]; acceptance:
     `## Summary\n${input.summary}`,
     `## Deliverables\n${input.deliverables.map((item) => `- ${item}`).join("\n")}`,
     `## Acceptance Criteria\n${input.acceptance.map((item) => `- ${item}`).join("\n")}`,
-    "## Notes\nKeep GitHub as the durable planning surface. Add or update Loopworks docs, Storybook stories, Playwright coverage, and deterministic validation where this issue changes product behavior.",
+    "## Notes\nKeep GitHub as the durable planning surface. Add or update Loopworks docs, ADRs, persona test references, Storybook stories, Playwright coverage, and deterministic validation where this issue changes product behavior.",
   ].join("\n\n");
 }
 
@@ -505,20 +602,29 @@ function ensureLabels() {
 }
 
 function existingMilestones() {
-  const output = runGh([
-    "api",
-    `repos/${repository}/milestones`,
-    "--paginate",
-    "--jq",
-    ".[].title",
-  ]);
-  return new Set(output.split("\n").filter(Boolean));
+  const output = runGh(["api", `repos/${repository}/milestones?per_page=100`]);
+  if (!output) {
+    return new Map<string, ExistingMilestone>();
+  }
+  const parsed = JSON.parse(output) as ExistingMilestone[];
+  return new Map(parsed.map((milestone) => [milestone.title, milestone]));
 }
 
 function ensureMilestones() {
-  const existing = dryRun ? new Set<string>() : existingMilestones();
+  const existing = dryRun ? new Map<string, ExistingMilestone>() : existingMilestones();
   for (const milestone of milestones) {
-    if (existing.has(milestone.title)) {
+    const existingMilestone = existing.get(milestone.title);
+    if (existingMilestone) {
+      if (existingMilestone.description !== milestone.description) {
+        runGh([
+          "api",
+          "-X",
+          "PATCH",
+          `repos/${repository}/milestones/${existingMilestone.number}`,
+          "-f",
+          `description=${milestone.description}`,
+        ]);
+      }
       continue;
     }
     runGh([
@@ -543,22 +649,81 @@ function existingIssues() {
     "--limit",
     "200",
     "--json",
-    "number,title,url",
+    "number,title,url,body,labels,milestone",
   ]);
   if (!output) {
-    return new Map<string, { number: number; url: string }>();
+    return new Map<string, ExistingIssue>();
   }
-  const parsed = JSON.parse(output) as Array<{ number: number; title: string; url: string }>;
-  return new Map(parsed.map((issue) => [issue.title, { number: issue.number, url: issue.url }]));
+  const parsed = JSON.parse(output) as Array<{
+    number: number;
+    title: string;
+    url: string;
+    body: string;
+    labels: Array<{ name: string }>;
+    milestone?: { title: string } | null;
+  }>;
+  return new Map(
+    parsed.map((issue) => [
+      issue.title,
+      {
+        number: issue.number,
+        url: issue.url,
+        body: issue.body,
+        labels: issue.labels.map((label) => label.name),
+        milestone: issue.milestone?.title,
+      },
+    ]),
+  );
+}
+
+function reconcileExistingIssue(issue: IssueSeed, existingIssue: ExistingIssue) {
+  const currentLabels = new Set(existingIssue.labels);
+  const desiredLabels = new Set(issue.labels);
+  const labelsToAdd = issue.labels.filter((label) => !currentLabels.has(label));
+  const labelsToRemove = existingIssue.labels.filter(
+    (label) => managedLabelNames.has(label) && !desiredLabels.has(label),
+  );
+
+  const args = [
+    "issue",
+    "edit",
+    String(existingIssue.number),
+    "--repo",
+    repository,
+    "--body",
+    issue.body,
+  ];
+
+  if (existingIssue.milestone !== issue.milestone) {
+    args.push("--milestone", issue.milestone);
+  }
+
+  for (const label of labelsToAdd) {
+    args.push("--add-label", label);
+  }
+
+  for (const label of labelsToRemove) {
+    args.push("--remove-label", label);
+  }
+
+  if (
+    existingIssue.body !== issue.body ||
+    existingIssue.milestone !== issue.milestone ||
+    labelsToAdd.length > 0 ||
+    labelsToRemove.length > 0
+  ) {
+    runGh(args);
+  }
 }
 
 function ensureIssues() {
-  const existing = dryRun ? new Map<string, { number: number; url: string }>() : existingIssues();
+  const existing = dryRun ? new Map<string, ExistingIssue>() : existingIssues();
   const createdOrExistingUrls: string[] = [];
 
   for (const issue of issues) {
     const existingIssue = existing.get(issue.title);
     if (existingIssue) {
+      reconcileExistingIssue(issue, existingIssue);
       createdOrExistingUrls.push(existingIssue.url);
       continue;
     }
@@ -586,6 +751,12 @@ function ensureIssues() {
 }
 
 function ensureProject(issueUrls: string[]) {
+  if (dryRun) {
+    runGh(["project", "list", "--owner", owner, "--format", "json"]);
+    runGh(["project", "create", "--owner", owner, "--title", projectTitle, "--format", "json"]);
+    return;
+  }
+
   const listOutput = runGh(["project", "list", "--owner", owner, "--format", "json"], {
     allowFailure: true,
   });

@@ -6,7 +6,7 @@ Observability is a core product requirement for Loopworks, not an operational af
 
 ## Current Foundation
 
-Loopworks uses Pino for structured JSON logging. The shared logger lives in `src/lib/observability/logger.ts` and provides:
+Loopworks uses Pino for structured JSON logging. This decision is captured in `adr/0003-pino-structured-logging-and-metrics-contract.md`. The shared logger lives in `src/lib/observability/logger.ts` and provides:
 
 1. Stable service metadata: service name, environment, and deployment id.
 2. ISO timestamps for logs.
@@ -46,6 +46,8 @@ The internal control plane should eventually expose:
 6. Vercel deployment readiness and failure counts.
 7. Agent cost, token, model, and tool usage metrics.
 8. Queue depth, concurrency, lock contention, and cancellation counts.
+
+The concrete metrics backend and trace collector are still open decisions. Until those are selected, implementation should still use stable metric names and correlation identifiers so the later backend choice does not force a semantic rewrite.
 
 ## Tracing Direction
 

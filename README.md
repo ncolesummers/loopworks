@@ -47,9 +47,11 @@ bun run validate
 - Agent workflow: `AGENTS.md`
 - Product requirements: `docs/prd.md`
 - Architecture: `docs/architecture.md`
+- ADR index: `docs/adr/README.md`
 - Loop manifest: `docs/loop-manifest.md`
 - Design-system planning: `docs/design-system-planning.md`
 - Observability: `docs/observability.md`
+- Personas and test scenarios: `docs/personas-and-test-scenarios.md`
 - MVP security review: `docs/security-review.md`
 
 ## GitHub Bootstrap

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Loopworks starts with ShadCN/UI for speed, accessibility, and familiar primitives, but it should not stay visually generic. The product needs an early dedicated design-system planning chat before broad UI expansion. This document defines the questions, deliverables, and acceptance criteria for that issue.
+Loopworks starts with ShadCN/UI for speed, accessibility, and familiar primitives, but it should not stay visually generic. This decision is captured in `adr/0005-shadcn-ui-as-component-foundation.md`. The product needs an early dedicated design-system planning chat before broad UI expansion. This document defines the questions, deliverables, and acceptance criteria for that issue.
 
 ## Timing
 
@@ -95,4 +95,3 @@ Use a dedicated chat to decide:
 4. Component taxonomy and naming.
 5. Storybook review rules.
 6. Design QA expectations for Playwright screenshots and accessibility checks.
-

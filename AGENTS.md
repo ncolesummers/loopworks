@@ -17,11 +17,14 @@ This repo is itself an agentic software factory. Agent work in Loopworks should 
 
 1. Planning
    - Read the relevant issue, docs, existing code, and tests.
+   - Read relevant ADRs before changing architecture, stack choices, integration boundaries, observability, testing strategy, fixture policy, or workflow governance.
+   - Check persona-derived test scenarios when work changes user-visible workflows.
    - Write or update an executable plan when the work is more than a small local fix.
    - Identify affected areas: product/docs, UI, backend/integration, observability, security, tests.
 
 2. Test Design
    - Define the validation evidence before implementation.
+   - Map MVP workflow changes to persona-derived test cases when applicable.
    - Add or update focused unit/integration tests for shared logic, GitHub/Vercel integration, auth, approvals, loop manifests, and observability.
    - Add Playwright coverage for user-visible workflow changes.
    - Add Storybook stories for reusable UI components and important states.
@@ -45,6 +48,8 @@ This repo is itself an agentic software factory. Agent work in Loopworks should 
 
 5. Docs And Backlog
    - Update docs when behavior, architecture, governance, observability, or workflow expectations change.
+   - Add or update ADRs when a durable technical or product architecture decision is made.
+   - Update the persona/test-scenario matrix when the intended user workflow changes.
    - Update the GitHub backlog/bootstrap script when new foundational work needs durable tracking.
    - Durable decisions should become ADR proposals or explicit issue comments.
 
@@ -114,3 +119,4 @@ The initial scaffold uses:
 8. Eve planning-agent skeleton.
 9. Biome, Vitest, Playwright, Storybook, and CI validation.
 
+The current decision baseline lives in `docs/adr/README.md`, and persona-derived test coverage expectations live in `docs/personas-and-test-scenarios.md`.

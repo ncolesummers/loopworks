@@ -18,6 +18,8 @@ The MVP should favor working slices over broad platform abstractions. The core a
 8. Quality: Biome, TypeScript, Vitest, Playwright, Axe, Storybook build.
 9. Observability: Pino structured logs now, with metrics and traces designed into the control plane.
 
+The accepted stack and workflow decisions are recorded in `adr/README.md`. Architecture changes should update or supersede the relevant ADR instead of only changing implementation code.
+
 ## Boundary Model
 
 ### Source Systems
@@ -203,3 +205,5 @@ CI should run:
 6. Playwright browser tests.
 
 Local validation should mirror CI through `bun run validate`.
+
+Persona-derived acceptance scenarios in `personas-and-test-scenarios.md` should guide which browser workflows, state variations, and integration edges receive coverage first.
