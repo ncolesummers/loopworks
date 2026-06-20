@@ -65,6 +65,21 @@ Loopworks is an operator portal for agentic software delivery. It should feel li
 9. Deployment summary row/card.
 10. Empty, loading, error, disabled, and unauthorized states.
 
+## Issue #23 Component Build-Out Conventions
+
+The M1 reusable component pass composes the token foundation into fixture-backed
+portal components before the backing data surfaces are complete.
+
+1. Components use `StatusBadge` and `STATUS_META` for all state language.
+2. Storybook is the canonical component review surface for default, disabled,
+   loading, empty, and error variants.
+3. Storybook-native accessibility checks are the target per-story a11y gate;
+   until that runner is wired into CI, `storybook:build` verifies the component
+   inventory and Playwright axe stays focused on composed app surfaces.
+4. Dashboard integration should consume the reusable components instead of
+   re-implementing table rows, cards, timelines, approval panels, validation
+   summaries, or state blocks inline.
+
 ## Storybook Taxonomy
 
 1. `UI/Primitives`: ShadCN-based low-level controls.

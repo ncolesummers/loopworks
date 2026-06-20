@@ -2,8 +2,9 @@
 
 Use this checklist before closing any issue that creates or modifies a shared UI
 component, design token, or page surface. The automated gate is
-`bun run validate` (typecheck + unit tests + Storybook build + Playwright + axe
-a11y). Manual checks below cover what automation does not fully enforce.
+`bun run validate` (typecheck + unit tests + Storybook build + Playwright app
+flows + axe a11y). Manual checks below cover what automation does not fully
+enforce.
 
 ## Tokens and Primitives
 
@@ -50,7 +51,20 @@ a11y). Manual checks below cover what automation does not fully enforce.
 - [ ] New or modified shared components have stories for: default state, disabled
   state, and loading / empty / error states where those states exist.
 - [ ] Story titles follow the active taxonomy: `UI/Primitives/*`,
-  `Portal/Shell/*`, `Foundations/Colors`, `Foundations/Typography`, `States/*`.
+  `Portal/Shell/*`, `Portal/Catalog/*`, `Portal/Loops/*`, `Portal/Runs/*`,
+  `Portal/Approvals/*`, `Portal/Vercel/*`, `Foundations/Colors`,
+  `Foundations/Typography`, `States/*`.
+
+## Visual Regression
+
+- [ ] Storybook's a11y addon reports no violations in light and dark for new
+  reusable component stories; once the native Storybook test runner is wired
+  into CI, those stories should use failing a11y behavior instead of manual
+  inspection.
+- [ ] Human visual review covers both the Storybook stories and the composed
+  dashboard surface before commits.
+- [ ] Screenshot baselines are added only after the composed surface contract is
+  stable enough to avoid high-churn snapshots.
 
 ## Automated Gate
 

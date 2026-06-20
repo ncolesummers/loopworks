@@ -117,13 +117,18 @@ Active namespaces reflect what exists at M1:
 
 - `UI/Primitives/*` — ShadCN-based low-level controls
 - `Portal/Shell/*` — navigation and page layout
+- `Portal/Catalog/*` — repository and service catalog components
+- `Portal/Loops/*` — loop cards, toggles, manifests, and gates
+- `Portal/Runs/*` — timelines, artifacts, and validation summaries
+- `Portal/Approvals/*` — approval gates and audit states
+- `Portal/Vercel/*` — deployment and preview summaries
 - `Foundations/Colors` — token palette reference
 - `Foundations/Typography` — type scale reference
 - `States/*` — loading, empty, error, disabled, and stateful variants
 
-Future namespaces, added as surfaces are built:
-`Portal/Catalog`, `Portal/Loops`, `Portal/Runs`, `Portal/Approvals`,
-`Portal/Vercel`.
+Issue #23 activates the portal component namespaces for fixture-backed M1
+surfaces. Future work should add stories inside these namespaces instead of
+creating parallel taxonomy branches.
 
 ### M0 to M1 Contrast
 
