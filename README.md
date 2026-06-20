@@ -77,6 +77,7 @@ The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome
 ## Planning
 
 - Agent workflow: `AGENTS.md`
+- Contributing guide: `CONTRIBUTING.MD`
 - Product requirements: `docs/prd.md`
 - Architecture: `docs/architecture.md`
 - ADR index: `docs/adr/README.md`

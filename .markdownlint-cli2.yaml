@@ -2,6 +2,7 @@ config:
   MD013: false
 globs:
   - "**/*.md"
+  - "**/*.MD"
 ignores:
   - "node_modules"
   - ".next"
