@@ -8,5 +8,6 @@ test-results
 .env
 .env.local
 .env.*.local
+CLAUDE.local.md
 drizzle/meta
 tsconfig.tsbuildinfo

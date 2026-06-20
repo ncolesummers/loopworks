@@ -30,6 +30,9 @@ jobs:
       - name: Biome lint
         run: bun run lint
 
+      - name: Agent docs sync check
+        run: bun run agent-docs:check
+
       - name: Markdownlint
         run: bun run markdownlint
 

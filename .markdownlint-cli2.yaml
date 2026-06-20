@@ -10,3 +10,5 @@ ignores:
   - "coverage"
   - "playwright-report"
   - "test-results"
+  - "CLAUDE.md"
+  - "**/CLAUDE.md"
