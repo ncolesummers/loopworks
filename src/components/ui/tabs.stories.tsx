@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const meta = {
-  title: "UI/Tabs",
+  title: "UI/Primitives/Tabs",
   component: Tabs,
   render: () => (
     <Tabs defaultValue="overview" className="w-[520px]">

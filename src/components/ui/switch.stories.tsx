@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 const meta = {
-  title: "UI/Switch",
+  title: "UI/Primitives/Switch",
   component: Switch,
   render: () => {
     return (

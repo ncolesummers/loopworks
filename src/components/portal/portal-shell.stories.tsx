@@ -4,7 +4,7 @@ import { DashboardView } from "@/components/portal/dashboard-view";
 import { PortalShell } from "@/components/portal/portal-shell";
 
 const meta = {
-  title: "Portal/PortalShell",
+  title: "Portal/Shell",
   component: PortalShell,
   parameters: {
     layout: "fullscreen",

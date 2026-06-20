@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const meta = {
-  title: "UI/Button",
+  title: "UI/Primitives/Button",
   component: Button,
   args: {
     children: "Primary action",
@@ -26,4 +26,16 @@ export const WithIcon: Story = {
       </>
     ),
   },
+};
+
+export const Variants: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="default">Default</Button>
+      <Button variant="secondary">Secondary</Button>
+      <Button variant="outline">Outline</Button>
+      <Button variant="ghost">Ghost</Button>
+      <Button variant="destructive">Destructive</Button>
+    </div>
+  ),
 };

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { DashboardView } from "@/components/portal/dashboard-view";
 
 const meta = {
-  title: "Portal/DashboardView",
+  title: "Portal/Shell/Dashboard",
   component: DashboardView,
 } satisfies Meta<typeof DashboardView>;
 

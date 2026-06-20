@@ -21,6 +21,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0006](0006-deterministic-validation-tdd-playwright-storybook.md) | Accepted | Use deterministic validation, TDD practice, Playwright, and Storybook as first-class quality gates. |
 | [0007](0007-explicit-seed-data-and-fixture-policy.md) | Accepted | Use explicit seed data and fixtures for local/dev stand-ins without silent production fallback. |
 | [0008](0008-agent-instruction-scope-and-sync.md) | Accepted | Use directory-scoped AGENTS.md files as canonical agent guidance and generated Claude import shims. |
+| [0009](0009-design-system-direction-and-tokens.md) | Accepted | Adopt a monochrome neutral base with one blue accent, Mona Sans and Monaspace Neon typography, an HSL token system, and a centralized STATUS_META vocabulary as the M1 design system. |
 
 ## Template
 
