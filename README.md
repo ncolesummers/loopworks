@@ -42,6 +42,17 @@ The aggregate command is:
 bun run validate
 ```
 
+## Git Hooks
+
+Loopworks uses `pre-k` through `uvx prek`.
+
+```bash
+bun run precommit:install
+bun run precommit:run
+```
+
+The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome format check, Biome lint, TypeScript, Vitest, Storybook build, and Playwright.
+
 ## Planning
 
 - Agent workflow: `AGENTS.md`

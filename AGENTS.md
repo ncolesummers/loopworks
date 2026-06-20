@@ -44,6 +44,7 @@ This repo is itself an agentic software factory. Agent work in Loopworks should 
      - `bun run storybook:build`
      - `bun run test:e2e`
    - For broad changes, run `bun run validate`.
+   - Before committing, run `bun run precommit` or let the installed `pre-k` hook run it.
    - For app/runtime changes, also run `bun run build`.
 
 5. Docs And Backlog

@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: loopworks-validate
+        name: Loopworks CI validation
+        entry: bun run precommit
+        language: system
+        pass_filenames: false
+        always_run: true

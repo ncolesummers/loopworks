@@ -18,11 +18,14 @@
     "test:e2e": "playwright test",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
+    "precommit": "bun run validate",
+    "precommit:install": "uvx prek install",
+    "precommit:run": "uvx prek run --all-files",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "bootstrap:github": "bun run scripts/bootstrap-github.ts",
-    "validate": "playwright test && biome format . && biome lint . && tsc --noEmit && vitest run && storybook build"
+    "validate": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
