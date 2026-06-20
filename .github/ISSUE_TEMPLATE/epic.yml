@@ -32,7 +32,7 @@ body:
     id: acceptance
     attributes:
       label: Acceptance Criteria
-      description: What must be true for this issue to close?
+      description: What must be true for this issue to close? Where this epic changes architecture/integrations/data model/observability/security/design direction, include an ADR expectation (link or 'Proposed ADR required') in the acceptance criteria.
       placeholder: Use short, testable criteria.
     validations:
       required: true

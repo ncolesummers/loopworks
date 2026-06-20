@@ -1,7 +1,13 @@
 # ADR 0005: ShadCN/UI As Component Foundation
 
-Status: Accepted
+Status: Superseded by 0009
 Date: 2026-06-20
+Superseded: 2026-06-20
+
+> The component-foundation decision from this ADR is carried forward and remains
+> in force in [ADR 0009](0009-design-system-direction-and-tokens.md), which now
+> owns design direction, tokens, and the ShadCN/UI component-foundation choice.
+> The visual-regression strategy lives in [ADR 0010](0010-storybook-first-visual-regression-strategy.md).
 
 ## Context
 
@@ -28,7 +34,7 @@ Reusable components should be developed and reviewed in Storybook before broad u
 
 ## Follow-Ups
 
-1. Run the dedicated design-system planning chat before broad M2/M3 UI expansion.
-2. Define the first durable token set and status vocabulary.
-3. Add Storybook taxonomy and design review checklists to issue acceptance criteria.
-4. Add visual regression strategy once key surfaces stabilize.
+1. ~~Run the dedicated design-system planning chat before broad M2/M3 UI expansion.~~ Resolved by [ADR 0009](0009-design-system-direction-and-tokens.md).
+2. ~~Define the first durable token set and status vocabulary.~~ Resolved by [ADR 0009](0009-design-system-direction-and-tokens.md).
+3. ~~Add Storybook taxonomy and design review checklists to issue acceptance criteria.~~ Resolved: Storybook taxonomy in [ADR 0009](0009-design-system-direction-and-tokens.md); the design-review gate lives in `docs/design-review-checklist.md`.
+4. ~~Add visual regression strategy once key surfaces stabilize.~~ Resolved by [ADR 0010](0010-storybook-first-visual-regression-strategy.md).
