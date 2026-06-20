@@ -65,11 +65,12 @@ This runs the same validation path as CI:
 
 1. Biome format check.
 2. Biome lint.
-3. Markdownlint.
-4. TypeScript typecheck.
-5. Vitest.
-6. Storybook build.
-7. Playwright.
+3. Agent docs sync check.
+4. Markdownlint.
+5. TypeScript typecheck.
+6. Vitest.
+7. Storybook build.
+8. Playwright.
 
 For app/runtime changes, also run:
 

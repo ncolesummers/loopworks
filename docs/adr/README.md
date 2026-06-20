@@ -20,6 +20,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0005](0005-shadcn-ui-as-component-foundation.md) | Accepted | Use ShadCN/UI as the component foundation while designing Loopworks-specific tokens early. |
 | [0006](0006-deterministic-validation-tdd-playwright-storybook.md) | Accepted | Use deterministic validation, TDD practice, Playwright, and Storybook as first-class quality gates. |
 | [0007](0007-explicit-seed-data-and-fixture-policy.md) | Accepted | Use explicit seed data and fixtures for local/dev stand-ins without silent production fallback. |
+| [0008](0008-agent-instruction-scope-and-sync.md) | Accepted | Use directory-scoped AGENTS.md files as canonical agent guidance and generated Claude import shims. |
 
 ## Template
 

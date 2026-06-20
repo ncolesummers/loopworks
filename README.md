@@ -50,6 +50,7 @@ Copy `.env.example` to `.env.local` for local development. The fixture server on
 ```bash
 bun run format:check
 bun run lint
+bun run agent-docs:check
 bun run markdownlint
 bun run typecheck
 bun run test
@@ -72,11 +73,12 @@ bun run precommit:install
 bun run precommit:run
 ```
 
-The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome format check, Biome lint, Markdownlint, TypeScript, Vitest, Storybook build, and Playwright.
+The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome format check, Biome lint, agent docs sync, Markdownlint, TypeScript, Vitest, Storybook build, and Playwright.
 
 ## Planning
 
 - Agent workflow: `AGENTS.md`
+- Claude Code shim: `CLAUDE.md` imports `AGENTS.md`; run `bun run agent-docs:sync` after changing agent guides
 - Contributing guide: `CONTRIBUTING.MD`
 - Product requirements: `docs/prd.md`
 - Architecture: `docs/architecture.md`
