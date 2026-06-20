@@ -1,18 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ExternalLink,
-  Github,
-  KeyRound,
-  Link2,
-  Lock,
-  RefreshCcw,
-  ShieldCheck,
-  Webhook,
-} from "lucide-react";
+import { ExternalLink, KeyRound, Link2, Lock, RefreshCcw, ShieldCheck } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getEnabledStatus } from "@/components/portal/status-mapping";
 import { portalFixture } from "@/lib/fixtures";
 
 export function GitHubSettingsView() {
@@ -41,10 +33,7 @@ export function GitHubSettingsView() {
             operators to leave the portal.
           </p>
         </div>
-        <Badge variant="outline" className="gap-1.5">
-          <Github className="h-3.5 w-3.5" />
-          GitHub app connected
-        </Badge>
+        <StatusBadge status="ready" label="GitHub app connected" />
       </section>
 
       <Tabs defaultValue="connection" className="space-y-4">
@@ -83,10 +72,7 @@ export function GitHubSettingsView() {
                       Issue, PR, and deployment signals hydrate the portal.
                     </div>
                   </div>
-                  <Badge variant="success" className="gap-1.5">
-                    <Webhook className="h-3.5 w-3.5" />
-                    Enabled
-                  </Badge>
+                  <StatusBadge status="ready" label="Enabled" />
                 </div>
               </CardContent>
             </Card>
@@ -137,32 +123,38 @@ export function GitHubSettingsView() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {settings.map((setting, index) => (
-                <div key={setting.key}>
-                  <div className="flex items-center gap-4 rounded-md border p-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium">{setting.title}</div>
-                        <Badge variant={setting.enabled ? "success" : "outline"}>
-                          {setting.enabled ? "on" : "off"}
-                        </Badge>
+              {settings.map((setting, index) => {
+                const settingStatus = getEnabledStatus(setting.enabled);
+
+                return (
+                  <div key={setting.key}>
+                    <div className="flex items-center gap-4 rounded-md border p-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium">{setting.title}</div>
+                          <StatusBadge
+                            status={settingStatus.status}
+                            label={setting.enabled ? "On" : "Off"}
+                          />
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">{setting.detail}</div>
                       </div>
-                      <div className="mt-1 text-sm text-muted-foreground">{setting.detail}</div>
+                      <Switch
+                        aria-label={setting.title}
+                        checked={setting.enabled}
+                        onCheckedChange={(checked) => {
+                          setSettings((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, enabled: checked } : item,
+                            ),
+                          );
+                        }}
+                      />
                     </div>
-                    <Switch
-                      checked={setting.enabled}
-                      onCheckedChange={(checked) => {
-                        setSettings((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, enabled: checked } : item,
-                          ),
-                        );
-                      }}
-                    />
+                    {index < settings.length - 1 ? <Separator className="my-3" /> : null}
                   </div>
-                  {index < settings.length - 1 ? <Separator className="my-3" /> : null}
-                </div>
-              ))}
+                );
+              })}
             </CardContent>
           </Card>
         </TabsContent>
@@ -212,20 +204,22 @@ export function GitHubSettingsView() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {settings.map((setting) => (
-                  <div
-                    key={setting.key}
-                    className="flex items-center justify-between rounded-md border px-4 py-3"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{setting.title}</div>
-                      <div className="text-xs text-muted-foreground">{setting.detail}</div>
+                {settings.map((setting) => {
+                  const settingStatus = getEnabledStatus(setting.enabled);
+
+                  return (
+                    <div
+                      key={setting.key}
+                      className="flex items-center justify-between rounded-md border px-4 py-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{setting.title}</div>
+                        <div className="text-xs text-muted-foreground">{setting.detail}</div>
+                      </div>
+                      <StatusBadge status={settingStatus.status} label={settingStatus.label} />
                     </div>
-                    <Badge variant={setting.enabled ? "success" : "outline"}>
-                      {setting.enabled ? "enabled" : "disabled"}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           </section>

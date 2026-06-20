@@ -22,6 +22,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0007](0007-explicit-seed-data-and-fixture-policy.md) | Accepted | Use explicit seed data and fixtures for local/dev stand-ins without silent production fallback. |
 | [0008](0008-agent-instruction-scope-and-sync.md) | Accepted | Use directory-scoped AGENTS.md files as canonical agent guidance and generated Claude import shims. |
 | [0009](0009-design-system-direction-and-tokens.md) | Accepted | Adopt a monochrome neutral base with one blue accent, Mona Sans and Monaspace Neon typography, an HSL token system, and a centralized STATUS_META vocabulary as the M1 design system. |
+| [0010](0010-storybook-first-visual-regression-strategy.md) | Accepted | Use Storybook stories, native a11y review, and human review as the M1 visual-regression strategy before durable screenshot baselines. |
 
 ## Template
 

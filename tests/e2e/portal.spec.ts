@@ -13,6 +13,22 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByRole("heading", { name: "Approval gate" })).toBeVisible();
   });
 
+  test("renders reusable M1 component contracts on the dashboard", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByRole("switch", { name: "Intake and triage" })).toBeChecked();
+    await expect(page.getByText("Needs Approval").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Validation results" })).toBeVisible();
+    await expect(page.getByText("Typecheck", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Typecheck evidence" })).toHaveAttribute(
+      "href",
+      "https://github.com/ncolesummers/loopworks/actions",
+    );
+    await expect(page.getByRole("link", { name: "Preview URL" })).toBeVisible();
+    await expect(page.getByText("Ready", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Preview", { exact: true }).first()).toBeVisible();
+  });
+
   test("lets the operator toggle a loop and open GitHub settings", async ({ page }) => {
     await page.goto("/");
 

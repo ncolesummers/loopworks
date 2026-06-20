@@ -12,14 +12,13 @@ import {
   Github,
   Layers3,
   ShieldCheck,
-  Sparkles,
   SquareTerminal,
   Workflow,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,10 +117,10 @@ export function PortalShell({
           <Separator className="my-5" />
 
           <div className="space-y-3 px-2">
-            <Badge variant="success" className="gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              {user.mode === "github" ? "Authenticated session" : "Fixture session"}
-            </Badge>
+            <StatusBadge
+              status="ready"
+              label={user.mode === "github" ? "Authenticated session" : "Fixture session"}
+            />
             <div className="text-xs leading-5 text-muted-foreground">
               {user.mode === "github"
                 ? "GitHub SSO is active for this workspace. GitHub and Vercel data are rendered as operational snapshots."
@@ -149,14 +148,14 @@ export function PortalShell({
               </div>
 
               <div className="flex items-center gap-3">
-                <Badge variant="outline" className="hidden gap-1.5 md:inline-flex">
+                <span className="hidden h-6 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium md:inline-flex">
                   <Database className="h-3.5 w-3.5" />
                   Postgres sync
-                </Badge>
-                <Badge variant="outline" className="hidden gap-1.5 md:inline-flex">
+                </span>
+                <span className="hidden h-6 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium md:inline-flex">
                   <Github className="h-3.5 w-3.5" />
                   GitHub SSO
-                </Badge>
+                </span>
                 <ModeToggle />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
