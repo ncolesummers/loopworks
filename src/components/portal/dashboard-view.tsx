@@ -53,7 +53,7 @@ function Metric({
   );
 }
 
-function LoopRegistry() {
+export function LoopRegistry() {
   const [loops, setLoops] = useState(portalFixture.loops);
 
   return (
@@ -89,7 +89,7 @@ function LoopRegistry() {
   );
 }
 
-function TimelineAndArtifacts() {
+export function TimelineAndArtifacts() {
   return (
     <Card className="shadow-none">
       <CardHeader className="flex-row items-end justify-between gap-4">

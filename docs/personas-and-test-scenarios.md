@@ -88,7 +88,7 @@ Risks:
 
 | ID | Persona | Scenario | Primary Coverage |
 | --- | --- | --- | --- |
-| P01 | Product Operator | A signed-in operator sees roadmap, repo, loop, run, approval, and deployment summary state on the dashboard. | Playwright, a11y |
+| P01 | Product Operator | A signed-in operator navigates dashboard, catalog, loop, run, approval, deployment, and settings route slices with a consistent session surface. | Playwright, a11y |
 | P02 | Product Operator | An issue with `agent-ready` normalizes into a development loop trigger; `spike` plus `agent-ready` normalizes into a research trigger. | Unit, integration |
 | P03 | Product Operator | A durable decision from planning links to an ADR proposal or accepted ADR. | Integration, docs review |
 | P04 | Product Operator | An operator switches between light and dark mode from the app shell; the choice persists across reloads and both themes meet contrast. | Playwright, a11y |
