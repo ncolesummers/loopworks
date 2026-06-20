@@ -28,19 +28,44 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByText("GitHub app connected")).toBeVisible();
   });
 
-  test("has no critical a11y violations on primary portal surfaces", async ({ page }) => {
+  // Persona P04: an operator switches light/dark from the shell and it persists.
+  test("operator can switch light/dark from the shell and the choice persists", async ({
+    page,
+  }) => {
     await page.goto("/");
 
-    const dashboardResults = await new AxeBuilder({ page })
-      .disableRules(["color-contrast"])
-      .analyze();
-    expect(dashboardResults.violations).toEqual([]);
+    const toggle = page.getByRole("button", { name: "Toggle theme" });
+    await expect(toggle).toBeEnabled();
 
-    await page.goto("/github");
+    const isDark = () => page.evaluate(() => document.documentElement.classList.contains("dark"));
+    const before = await isDark();
 
-    const githubSettingsResults = await new AxeBuilder({ page })
-      .disableRules(["color-contrast"])
-      .analyze();
-    expect(githubSettingsResults.violations).toEqual([]);
+    await toggle.click();
+    await expect.poll(isDark).toBe(!before);
+
+    // Preference persists across a reload (next-themes localStorage).
+    await page.reload();
+    await expect.poll(isDark).toBe(!before);
   });
+
+  // Design-system gate: axe (including color-contrast) must pass on the primary
+  // surfaces in BOTH light and dark. The monochrome base + soft status fills are
+  // the contrast risk, so contrast is intentionally NOT disabled here.
+  for (const colorScheme of ["light", "dark"] as const) {
+    test.describe(`color scheme: ${colorScheme}`, () => {
+      test.use({ colorScheme });
+
+      test("has no a11y violations (incl. contrast) on primary portal surfaces", async ({
+        page,
+      }) => {
+        for (const path of ["/", "/github"]) {
+          await page.goto(path);
+          // Full default axe rule set (wcag2/wcag21/best-practice) WITH
+          // color-contrast — only the prior contrast suppression is removed.
+          const results = await new AxeBuilder({ page }).analyze();
+          expect(results.violations, `${colorScheme} ${path}`).toEqual([]);
+        }
+      });
+    });
+  }
 });

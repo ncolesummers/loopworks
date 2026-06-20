@@ -95,3 +95,81 @@ Use a dedicated chat to decide:
 4. Component taxonomy and naming.
 5. Storybook review rules.
 6. Design QA expectations for Playwright screenshots and accessibility checks.
+
+## Resolved Decisions (M1)
+
+The following answers resolve the open questions above. The durable record is
+`docs/adr/0009-design-system-direction-and-tokens.md`.
+
+### Dedicated Planning Questions — Answered
+
+1. **Feel:** Geist-inspired engineering control plane — calm, dense, precise.
+   Not a marketing page or decorative dashboard. "Functional over decorative."
+
+2. **Color roles:** Monochrome neutral base (hue 0 / 0% saturation) plus one
+   restrained blue accent. Four semantic status families each own four roles
+   (DEFAULT, `-foreground`, `-muted`, `-border`): `success`, `warning`,
+   `danger`, `info`. The neutral status family reuses shared `muted`,
+   `muted-foreground`, and `border` tokens. Color appears only for semantic
+   status or the single brand accent.
+
+3. **Density:** Tailwind default spacing scale — dense but readable. Targets
+   laptop and desktop operators without reinventing the scale.
+
+4. **First Loopworks-branded component:** `StatusBadge` in
+   `src/components/ui/status-badge.tsx`, which centralizes the status
+   vocabulary as a `STATUS_META` map and `Status` type. Shell, card, table,
+   and button primitives follow.
+
+5. **Status badge vocabulary:** Twenty states — `loading`, `empty`, `disabled`,
+   `pending`, `queued`, `running`, `blocked`, `failed`, `succeeded`, `skipped`,
+   `needsApproval`, `approved`, `rejected`, `done`, `production`, `preview`,
+   `ready`, `building`, `errored`, `canceled` — all rendered through
+   `STATUS_META`. No ad-hoc state styling outside this map.
+
+6. **Run timeline density vs. artifact detail:** Deferred to the run-timeline
+   component build-out (see Follow-Ups in ADR 0009).
+
+7. **Risk vs. error distinction:** `warning` tone for risk/gate states
+   (blocked, needsApproval) versus `danger` tone for terminal failures
+   (failed, rejected, errored). Visually distinct families, not shades of
+   the same hue.
+
+8. **Storybook taxonomy:** Active — `UI/Primitives/*`, `Portal/Shell/*`,
+   `Foundations/Colors`, `Foundations/Typography`, `States/*`. Future (added
+   as surfaces are built) — `Portal/Catalog`, `Portal/Loops`, `Portal/Runs`,
+   `Portal/Approvals`, `Portal/Vercel`.
+
+9. **Design review checklist:** See `docs/design-review-checklist.md`. The
+   automated gate is `bun run validate`.
+
+### Token Decisions — Resolved
+
+1. **Color roles:** Neutral ramp (`background`, `foreground`, `card`,
+   `card-foreground`, `popover`, `popover-foreground`, `primary`,
+   `primary-foreground`, `secondary`, `secondary-foreground`, `muted`,
+   `muted-foreground`, `accent`, `accent-foreground`, `border`, `input`) plus
+   `brand`, `brand-foreground`, `ring` (= brand).
+
+2. **Workflow roles:** pending/queued/skipped/canceled/disabled/empty →
+   neutral; running → info; blocked/needsApproval → warning;
+   failed/rejected → danger; succeeded/approved/done → success.
+
+3. **Deployment roles:** production/ready → success; building → info;
+   errored → danger; canceled → neutral; preview → unassigned at M1.
+
+4. **Typography:** Mona Sans (UI text) + Monaspace Neon (IDs, SHAs, run
+   logs). Both GitHub SIL OFL typefaces, self-hosted via `next/font/local`
+   from `src/lib/fonts.ts`.
+
+5. **Spacing:** Tailwind defaults — no custom scale.
+
+6. **Radius and border:** `--radius: 0.5rem`. No additional border-width
+   tokens.
+
+7. **Focus ring:** `ring` token equals the brand blue accent. Keyboard
+   navigation requires a visible focus ring on all interactive elements.
+
+8. **Motion:** ~150ms ease color transitions on interactive elements;
+   spin/pulse only for in-progress states; all motion guarded by
+   `prefers-reduced-motion` via `motion-reduce:` utilities.

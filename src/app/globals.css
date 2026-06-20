@@ -5,57 +5,121 @@
 /* biome-ignore lint: Tailwind at-rules */
 @tailwind utilities;
 
+/*
+ * Loopworks M1 durable tokens.
+ * Direction: Geist-inspired monochrome. Near-pure neutral base, primary action
+ * is near-black (light) / near-white (dark). Color appears only for the brand
+ * accent (one restrained blue: links, focus, info) and semantic status.
+ * See docs/adr/0009-design-system-direction-and-tokens.md.
+ */
+
 :root {
-  --background: 210 20% 98%;
-  --foreground: 222 47% 11%;
+  color-scheme: light;
+
+  /* Neutral ramp */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 9%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 0 0% 9%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 221 83% 53%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 214 32% 91%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 20% 94%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 214 32% 91%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214 26% 88%;
-  --input: 214 26% 88%;
-  --ring: 221 83% 53%;
+  --popover-foreground: 0 0% 9%;
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 9%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 9%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+
+  /* Brand accent (the one restrained color): links, focus ring, info */
+  --brand: 214 95% 43%;
+  --brand-foreground: 0 0% 100%;
+  --ring: 214 95% 43%;
+
+  /* Semantic status families: DEFAULT (dot/icon), -foreground (text on muted),
+     -muted (subtle fill), -border. Neutral status tone reuses muted/border. */
+  --success: 142 71% 35%;
+  --success-foreground: 142 72% 26%;
+  --success-muted: 138 76% 96%;
+  --success-border: 141 79% 85%;
+
+  --warning: 35 92% 42%;
+  --warning-foreground: 26 90% 33%;
+  --warning-muted: 48 100% 96%;
+  --warning-border: 48 95% 77%;
+
+  --danger: 0 72% 45%;
+  --danger-foreground: 0 74% 38%;
+  --danger-muted: 0 86% 97%;
+  --danger-border: 0 93% 89%;
+
+  --info: 214 90% 45%;
+  --info-foreground: 215 80% 38%;
+  --info-muted: 214 95% 96%;
+  --info-border: 213 95% 87%;
+
+  /* Destructive: solid action color for buttons (near-white text on a strong
+     red). Distinct from the soft `danger` status family used for pills/badges. */
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 98%;
+
   --radius: 0.5rem;
 }
 
 .dark {
-  --background: 222 47% 8%;
-  --foreground: 210 40% 98%;
-  --card: 222 47% 10%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222 47% 10%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 8%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 17%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
-  --ring: 224 76% 48%;
+  color-scheme: dark;
+
+  /* Neutral ramp — true near-black neutral, not navy */
+  --background: 0 0% 4%;
+  --foreground: 0 0% 93%;
+  --card: 0 0% 7%;
+  --card-foreground: 0 0% 93%;
+  --popover: 0 0% 7%;
+  --popover-foreground: 0 0% 93%;
+  --primary: 0 0% 93%;
+  --primary-foreground: 0 0% 9%;
+  --secondary: 0 0% 14%;
+  --secondary-foreground: 0 0% 93%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 14%;
+  --accent-foreground: 0 0% 93%;
+  --border: 0 0% 16%;
+  --input: 0 0% 20%;
+
+  --brand: 213 94% 68%;
+  --brand-foreground: 0 0% 9%;
+  --ring: 213 94% 68%;
+
+  --success: 142 64% 48%;
+  --success-foreground: 141 70% 72%;
+  --success-muted: 146 60% 9%;
+  --success-border: 142 60% 20%;
+
+  --warning: 38 92% 55%;
+  --warning-foreground: 46 92% 72%;
+  --warning-muted: 30 60% 10%;
+  --warning-border: 28 70% 22%;
+
+  --danger: 0 84% 62%;
+  --danger-foreground: 0 91% 80%;
+  --danger-muted: 0 60% 12%;
+  --danger-border: 0 58% 26%;
+
+  --info: 213 90% 62%;
+  --info-foreground: 213 93% 80%;
+  --info-muted: 216 60% 13%;
+  --info-border: 215 50% 28%;
+
+  --destructive: 0 70% 45%;
+  --destructive-foreground: 0 0% 98%;
 }
 
 * {
   border-color: hsl(var(--border));
-}
-
-html {
-  color-scheme: light;
 }
 
 body {
@@ -63,7 +127,8 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    var(--font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   font-feature-settings:
     "rlig" 1,
     "calt" 1;
@@ -75,5 +140,5 @@ a {
 }
 
 ::selection {
-  background: hsl(var(--primary) / 0.18);
+  background: hsl(var(--primary) / 0.16);
 }

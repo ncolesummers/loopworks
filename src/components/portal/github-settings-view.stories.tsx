@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 
 const meta = {
-  title: "Portal/GitHubSettingsView",
+  title: "Portal/Shell/GitHub Settings",
   component: GitHubSettingsView,
 } satisfies Meta<typeof GitHubSettingsView>;
 
