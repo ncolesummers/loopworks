@@ -1,0 +1,39 @@
+name: Task
+description: Create an implementation or documentation task.
+title: "[Task]: "
+labels:
+  - kind:task
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this task needed?
+      placeholder: Explain the operational or delivery need.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Deliverable
+      description: What concrete output should exist?
+      placeholder: Describe the result in a testable way.
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Area
+      description: Which area label should apply?
+      placeholder: area:docs
+    validations:
+      required: true
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: Which milestone owns the task?
+      placeholder: M0 Project Foundation
+    validations:
+      required: true
+

@@ -1,0 +1,32 @@
+name: Design System Planning
+description: Create the early design system direction issue.
+title: "[Design System]: "
+labels:
+  - kind:design
+  - area:design-system
+body:
+  - type: textarea
+    id: direction
+    attributes:
+      label: Direction
+      description: What visual and interaction direction should the system take?
+      placeholder: Keep it dense, quiet, and work-focused.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: What must exist before feature work expands?
+      placeholder: Tokens, shell, primitives, and key states.
+    validations:
+      required: true
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: Which milestone owns this work?
+      placeholder: M1 Design System Direction + App Shell
+    validations:
+      required: true
+

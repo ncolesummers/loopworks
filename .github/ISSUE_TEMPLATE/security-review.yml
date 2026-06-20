@@ -1,0 +1,32 @@
+name: MVP Security Review
+description: Create the final MVP security review issue.
+title: "[Security Review]: "
+labels:
+  - kind:security
+  - priority:p0
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What areas must be reviewed?
+      placeholder: Auth, tokens, tenant isolation, logging, and agent writes.
+    validations:
+      required: true
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings
+      description: Record review findings and decisions here.
+      placeholder: Leave empty until the review starts.
+    validations:
+      required: false
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: Which milestone owns the review?
+      placeholder: M4 Validation + PR Path + MVP Security Review
+    validations:
+      required: true
+

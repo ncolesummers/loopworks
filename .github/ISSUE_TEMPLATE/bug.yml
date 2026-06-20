@@ -1,0 +1,39 @@
+name: Bug
+description: Report a defect or regression.
+title: "[Bug]: "
+labels:
+  - kind:bug
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Behavior
+      description: What is happening now?
+      placeholder: Describe the observed problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen instead?
+      placeholder: Describe the desired outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: What steps reproduce the issue?
+      placeholder: List the minimal reproduction steps.
+    validations:
+      required: false
+  - type: input
+    id: severity
+    attributes:
+      label: Severity
+      description: How serious is this?
+      placeholder: priority:p1
+    validations:
+      required: true
+

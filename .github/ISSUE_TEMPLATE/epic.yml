@@ -1,0 +1,39 @@
+name: Epic
+description: Create a milestone-scoped planning issue.
+title: "[Epic]: "
+labels:
+  - kind:epic
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What outcome should this epic deliver?
+      placeholder: Describe the deliverable and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included and excluded?
+      placeholder: List the boundaries clearly.
+    validations:
+      required: true
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: Which milestone owns this epic?
+      placeholder: M0 Project Foundation
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: What must be true for this issue to close?
+      placeholder: Use short, testable criteria.
+    validations:
+      required: true
+

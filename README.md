@@ -1,0 +1,63 @@
+# Loopworks
+
+Loopworks is an agentic software factory portal for planning, executing, validating, and improving software delivery loops. GitHub Issues are the source of truth for roadmap, planning, milestones, decisions, and execution state. Vercel is the application visibility surface for previews, deployments, and build status.
+
+## Stack
+
+- Next.js App Router, TypeScript, Bun
+- ShadCN/UI and Tailwind CSS
+- Auth.js GitHub SSO
+- Postgres and Drizzle
+- Biome, Vitest, Playwright, Storybook
+- Pino structured logging
+- Eve, Vercel Workflows, Vercel Sandbox, Vercel AI Gateway integration points
+
+## Local Development
+
+```bash
+bun install
+bun run dev
+```
+
+For local UI work without GitHub OAuth credentials:
+
+```bash
+bun run dev:fixture
+```
+
+## Validation
+
+```bash
+bun run format:check
+bun run lint
+bun run typecheck
+bun run test
+bun run storybook:build
+bun run test:e2e
+```
+
+The aggregate command is:
+
+```bash
+bun run validate
+```
+
+## Planning
+
+- Agent workflow: `AGENTS.md`
+- Product requirements: `docs/prd.md`
+- Architecture: `docs/architecture.md`
+- Loop manifest: `docs/loop-manifest.md`
+- Design-system planning: `docs/design-system-planning.md`
+- Observability: `docs/observability.md`
+- MVP security review: `docs/security-review.md`
+
+## GitHub Bootstrap
+
+After the repository exists and `gh` can mutate it:
+
+```bash
+bun run bootstrap:github
+```
+
+Use `--dry-run` to print the planned labels, milestones, issues, and project setup without changes.

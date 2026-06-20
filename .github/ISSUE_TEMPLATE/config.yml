@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Loopworks planning docs
+    url: https://github.com/ncolesummers/loopworks
+    about: Use the planning docs and the seeded issue templates to keep backlog state consistent.
+
