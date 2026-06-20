@@ -91,6 +91,7 @@ Risks:
 | P01 | Product Operator | A signed-in operator sees roadmap, repo, loop, run, approval, and deployment summary state on the dashboard. | Playwright, a11y |
 | P02 | Product Operator | An issue with `agent-ready` normalizes into a development loop trigger; `spike` plus `agent-ready` normalizes into a research trigger. | Unit, integration |
 | P03 | Product Operator | A durable decision from planning links to an ADR proposal or accepted ADR. | Integration, docs review |
+| P04 | Product Operator | An operator switches between light and dark mode from the app shell; the choice persists across reloads and both themes meet contrast. | Playwright, a11y |
 | M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, and Vercel project links. | Playwright, Storybook |
 | M02 | Maintainer | Turning a loop off prevents trigger execution and records a skipped reason. | Unit, Playwright |
 | M03 | Maintainer | Missing Vercel credentials in dev returns explicit fixture fallback metadata; production does not silently return fixtures. | Unit, integration |
@@ -98,7 +99,7 @@ Risks:
 | A02 | Agent Supervisor | Approval gates show requested, approved, rejected, bypassed, and expired states with actor and evidence. | Unit, Storybook, Playwright |
 | A03 | Agent Supervisor | Deterministic validation output appears before LLM review or judgment. | Integration, Playwright |
 | R01 | Reviewer | A PR intent or created PR links to the source issue, run, validation artifacts, and Vercel preview. | Integration, Playwright |
-| R02 | Reviewer | UI changes include Storybook stories and browser workflow coverage before the task is complete. | CI, Storybook build, Playwright |
+| R02 | Reviewer | UI changes include Storybook stories, design-token usage, and browser workflow coverage with axe passing in light and dark before the task is complete. | CI, Storybook build, Playwright, a11y |
 | S01 | Security Reviewer | GitHub webhook requests with invalid signatures are rejected before payload processing. | Unit, integration |
 | S02 | Security Reviewer | Repeated delivery ids do not create duplicate runs. | Unit, integration |
 | S03 | Security Reviewer | Local auth bypass cannot work in production environments. | Unit |

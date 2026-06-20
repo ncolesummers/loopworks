@@ -28,6 +28,26 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByText("GitHub app connected")).toBeVisible();
   });
 
+  // Persona P04: an operator switches light/dark from the shell and it persists.
+  test("operator can switch light/dark from the shell and the choice persists", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const toggle = page.getByRole("button", { name: "Toggle theme" });
+    await expect(toggle).toBeEnabled();
+
+    const isDark = () => page.evaluate(() => document.documentElement.classList.contains("dark"));
+    const before = await isDark();
+
+    await toggle.click();
+    await expect.poll(isDark).toBe(!before);
+
+    // Preference persists across a reload (next-themes localStorage).
+    await page.reload();
+    await expect.poll(isDark).toBe(!before);
+  });
+
   // Design-system gate: axe (including color-contrast) must pass on the primary
   // surfaces in BOTH light and dark. The monochrome base + soft status fills are
   // the contrast risk, so contrast is intentionally NOT disabled here.

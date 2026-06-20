@@ -94,6 +94,23 @@ from the soft `danger` status family, which is used for pills and badges.
 The tone mapping table above covers all twenty states; `loading` and `preview`
 both map to the `info` tone.
 
+**Domain role mappings.** The five semantic domains called out for this issue —
+state, workflow, deployment, validation, and approval — all resolve onto the tone
+families above through `STATUS_META`, so no surface invents its own colors:
+
+| Domain | Roles → status (tone) |
+| --- | --- |
+| State | loading (info); empty, disabled (neutral) |
+| Workflow | pending, queued (neutral); running (info); blocked (warning); failed (danger); succeeded, done (success); skipped (neutral) |
+| Deployment | building, preview (info); ready, production (success); errored (danger); canceled (neutral) |
+| Validation | passed → `succeeded` (success); failed → `failed` (danger); non-blocking warnings → `blocked` (warning); in progress → `running` (info); not run → `skipped` (neutral) |
+| Approval | needsApproval (warning); approved (success); rejected (danger) |
+
+Validation results deliberately reuse the workflow tones rather than owning a
+separate token set: a clean run reads as `succeeded`, a failing run as `failed`,
+and a run with non-blocking warnings as `blocked`. This keeps "deterministic
+validation passed/failed" visually consistent with run and approval state.
+
 ### Storybook Taxonomy
 
 Active namespaces reflect what exists at M1:
