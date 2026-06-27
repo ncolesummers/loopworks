@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-06-20
+Related: [0009](0009-design-system-direction-and-tokens.md)
 
 ## Context
 

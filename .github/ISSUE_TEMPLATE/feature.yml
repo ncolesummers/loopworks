@@ -36,3 +36,11 @@ body:
       placeholder: M2 GitHub + Vercel Source Systems
     validations:
       required: true
+  - type: textarea
+    id: adr
+    attributes:
+      label: ADR impact
+      description: Does this change architecture, integrations, the data model, observability, security posture, or design-system direction? If so, link the relevant ADR or note that a Proposed ADR is expected. See docs/adr/README.md.
+      placeholder: e.g. "Proposes a new ADR for the deploy-status integration" or "No architectural impact".
+    validations:
+      required: false

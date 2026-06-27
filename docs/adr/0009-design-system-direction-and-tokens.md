@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-06-20
+Supersedes: 0005
 
 ## Context
 
@@ -15,6 +16,12 @@ establish the first durable token set, status vocabulary, and interface
 conventions appropriate for an operational control plane.
 
 ## Decision
+
+**Component foundation (carried forward from ADR 0005):** ShadCN/UI remains the
+Loopworks component foundation. The temporary M0 theme described in ADR 0005 is
+replaced by the tokens and direction specified below; the active "use ShadCN/UI"
+decision now lives here so readers of the live ADR set find it in a non-superseded
+record.
 
 ### Brand and Feel
 
