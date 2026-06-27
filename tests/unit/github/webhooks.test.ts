@@ -123,6 +123,7 @@ describe("GitHub webhook helpers", () => {
   });
 
   it("skips an agent-ready issue before queueing when the target loop is disabled", () => {
+    const resolveLoop = vi.fn(() => ({ enabled: false }));
     const trigger = getLoopAwareAgentReadyTriggerFromIssuesWebhook(
       {
         action: "labeled",
@@ -140,11 +141,15 @@ describe("GitHub webhook helpers", () => {
           labels: [{ name: "agent-ready" }, { name: "area:loops" }, { name: "priority:p0" }],
         },
       },
-      {
-        enabled: false,
-      },
+      resolveLoop,
     );
 
+    expect(resolveLoop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueNumber: 44,
+        workflow: "development",
+      }),
+    );
     expect(trigger).toEqual({
       shouldTrigger: false,
       reason: "loop_disabled",
@@ -183,6 +188,52 @@ describe("GitHub webhook helpers", () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({
       error: "Invalid GitHub webhook signature.",
+    });
+  });
+
+  it("skips a disabled development loop at the route boundary before queueing", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
+    vi.stubEnv("LOOPWORKS_DEVELOPMENT_LOOP_ENABLED", "false");
+    const payload = JSON.stringify({
+      action: "labeled",
+      repository: {
+        full_name: "ncolesummers/loopworks",
+      },
+      issue: {
+        number: 58,
+        title: "Route disabled loop skips",
+        body: "Exercise disabled loop behavior before queueing.",
+        state: "open",
+        milestone: {
+          title: "M3 Durable Loop MVP",
+        },
+        labels: [{ name: "agent-ready" }, { name: "area:loop" }, { name: "priority:p0" }],
+      },
+    });
+    const signature = createGithubWebhookSignature("secret", payload);
+
+    const response = await postGithubWebhook(
+      new Request("https://loopworks.local/api/github/webhooks", {
+        method: "POST",
+        headers: {
+          "x-github-delivery": "disabled-loop-route-delivery",
+          "x-github-event": "issues",
+          "x-hub-signature-256": signature,
+        },
+        body: payload,
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: true,
+      duplicate: false,
+      agentReadyTrigger: {
+        shouldTrigger: false,
+        reason: "loop_disabled",
+        skipped: true,
+      },
+      nextAction: "record_and_ignore",
     });
   });
 

@@ -18,7 +18,6 @@ describe("loop trigger decisions", () => {
           ...enabledLoop,
           enabled: false,
         },
-        trigger: "agent-ready",
       }),
     ).toEqual({
       shouldTrigger: false,
@@ -31,7 +30,6 @@ describe("loop trigger decisions", () => {
     expect(
       evaluateLoopTriggerDecision({
         loop: enabledLoop,
-        trigger: "agent-ready",
       }),
     ).toEqual({
       shouldTrigger: true,

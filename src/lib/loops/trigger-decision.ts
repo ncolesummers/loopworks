@@ -14,7 +14,6 @@ export type LoopTriggerDecision =
 
 export function evaluateLoopTriggerDecision(input: {
   loop: Pick<LoopRegistryItem, "enabled">;
-  trigger: string;
 }): LoopTriggerDecision {
   if (!input.loop.enabled) {
     return {

@@ -89,7 +89,6 @@ export function LoopRegistry() {
 
                   const decision = evaluateLoopTriggerDecision({
                     loop: { ...item, enabled: false },
-                    trigger: "manual-toggle",
                   });
 
                   return {

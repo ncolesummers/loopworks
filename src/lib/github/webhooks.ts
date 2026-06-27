@@ -66,6 +66,10 @@ export type GithubAgentReadyTrigger =
       skipped?: boolean;
     };
 
+export type GithubAgentReadyLoopResolver = (
+  trigger: Extract<GithubAgentReadyTrigger, { shouldTrigger: true }>,
+) => { enabled: boolean };
+
 export const defaultGithubAgentReadyRules: GithubAgentReadyRules = {
   readyLabels: ["agent-ready"],
   blockedLabels: ["status:blocked"],
@@ -285,7 +289,7 @@ export function getAgentReadyTriggerFromIssuesWebhook(
 
 export function getLoopAwareAgentReadyTriggerFromIssuesWebhook(
   payload: GithubIssuesWebhookPayload,
-  loop: { enabled: boolean },
+  resolveLoop: GithubAgentReadyLoopResolver,
   rules: GithubAgentReadyRules = defaultGithubAgentReadyRules,
 ): GithubAgentReadyTrigger {
   const trigger = getAgentReadyTriggerFromIssuesWebhook(payload, rules);
@@ -294,8 +298,7 @@ export function getLoopAwareAgentReadyTriggerFromIssuesWebhook(
   }
 
   const loopDecision = evaluateLoopTriggerDecision({
-    loop,
-    trigger: trigger.workflow,
+    loop: resolveLoop(trigger),
   });
 
   if (!loopDecision.shouldTrigger) {
