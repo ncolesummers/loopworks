@@ -105,6 +105,17 @@ Risks:
 | S03 | Security Reviewer | Local auth bypass cannot work in production environments. | Unit |
 | S04 | Security Reviewer | Logger redaction removes token, secret, authorization, OAuth, and webhook-sensitive fields. | Unit |
 
+## MVP Milestone Map
+
+| Milestone | Persona Test IDs |
+| --- | --- |
+| M0 Project Foundation | P01, P03, R02, S04 |
+| M1 Design System Direction + App Shell | P01, P04, M01, A02, R02 |
+| M2 GitHub + Vercel Source Systems | P02, M01, M03, R01, S01, S02, S03 |
+| M3 Durable Loop MVP | M02, A01, A02, A03, R01 |
+| M4 Validation + PR Path + MVP Security Review | A03, R01, R02, S01, S02, S03, S04 |
+| M5 Agent Governance + Evals | P03, A02, A03, R02, S04 |
+
 ## How To Use This Matrix
 
 1. New MVP issues should reference the relevant persona test IDs in acceptance criteria.

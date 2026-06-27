@@ -51,7 +51,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["key", "name", "description", "issues"],
+        "required": ["key", "name", "description", "personaTestIds", "issues"],
         "properties": {
           "key": {
             "type": "string",
@@ -65,12 +65,36 @@
             "type": "string",
             "minLength": 1
           },
+          "personaTestIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "P01",
+                "P02",
+                "P03",
+                "P04",
+                "M01",
+                "M02",
+                "M03",
+                "A01",
+                "A02",
+                "A03",
+                "R01",
+                "R02",
+                "S01",
+                "S02",
+                "S03",
+                "S04"
+              ]
+            }
+          },
           "issues": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["title", "labels", "template"],
+              "required": ["title", "labels", "template", "personaTestIds"],
               "properties": {
                 "title": {
                   "type": "string",
@@ -87,6 +111,30 @@
                 "template": {
                   "type": "string",
                   "minLength": 1
+                },
+                "personaTestIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "enum": [
+                      "P01",
+                      "P02",
+                      "P03",
+                      "P04",
+                      "M01",
+                      "M02",
+                      "M03",
+                      "A01",
+                      "A02",
+                      "A03",
+                      "R01",
+                      "R02",
+                      "S01",
+                      "S02",
+                      "S03",
+                      "S04"
+                    ]
+                  }
                 }
               }
             }

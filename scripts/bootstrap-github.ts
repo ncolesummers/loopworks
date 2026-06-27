@@ -152,7 +152,7 @@ const labels: Label[] = [
 
 const managedLabelNames = new Set(labels.map((label) => label.name));
 
-const issues: IssueSeed[] = [
+const issueSeeds: IssueSeed[] = [
   {
     title: "Create PRD and architecture baseline",
     milestone: "M0 Project Foundation",
@@ -550,6 +550,72 @@ const issues: IssueSeed[] = [
   },
 ];
 
+const personaTestIdsByMilestone: Record<string, string[]> = {
+  "M0 Project Foundation": ["P01", "P03", "R02", "S04"],
+  "M1 Design System Direction + App Shell": ["P01", "P04", "M01", "A02", "R02"],
+  "M2 GitHub + Vercel Source Systems": ["P02", "M01", "M03", "R01", "S01", "S02", "S03"],
+  "M3 Durable Loop MVP": ["M02", "A01", "A02", "A03", "R01"],
+  "M4 Validation + PR Path + MVP Security Review": [
+    "A03",
+    "R01",
+    "R02",
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+  ],
+  "M5 Agent Governance + Evals": ["P03", "A02", "A03", "R02", "S04"],
+};
+
+const personaTestIdsByIssueTitle: Record<string, string[]> = {
+  "Create PRD and architecture baseline": ["P03", "R02"],
+  "Initialize Next.js, Bun, ShadCN, and repository tooling": ["P01", "R02", "S04"],
+  "Structured logging and observability foundation": ["M03", "S04"],
+  "Review foundational ADRs and decision lifecycle": ["P03", "R02"],
+  "Implement persona-derived MVP acceptance tests": [
+    "P01",
+    "P04",
+    "M01",
+    "M02",
+    "M03",
+    "A01",
+    "A02",
+    "A03",
+    "R01",
+    "R02",
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+  ],
+  "Design system direction and token planning": ["P04", "R02"],
+  "Authenticated app shell and navigation": ["P01", "P04", "M01", "A02"],
+  "GitHub SSO with owner/org allowlist": ["P01", "S03"],
+  "GitHub App webhook and dev fixture intake": ["P02", "S01", "S02"],
+  "Repo catalog MVP": ["M01", "R01"],
+  "Vercel deployment and preview visibility": ["M03", "R01"],
+  "Seed data and fixture operating model": ["M03", "S03"],
+  "Loop manifest schema and governance draft": ["M02", "A03"],
+  "Agent-ready development loop skeleton": ["P02", "M02", "A01", "A03"],
+  "Run timeline, artifacts, and approval gates": ["A01", "A02", "A03", "R01"],
+  "Initial Eve planning agent": ["P03", "A01", "A03"],
+  "Metrics and trace backend decision": ["M03", "A03", "S04"],
+  "Deterministic validation hooks": ["A03", "R02"],
+  "PR creation path": ["R01", "A03"],
+  "MVP security review": ["S01", "S02", "S03", "S04"],
+  "Agent evaluation framework": ["A03", "R02"],
+};
+
+const issues: IssueSeed[] = issueSeeds.map((issue) => {
+  const personaTestIds =
+    personaTestIdsByIssueTitle[issue.title] ?? personaTestIdsByMilestone[issue.milestone] ?? [];
+
+  return {
+    ...issue,
+    body: appendPersonaTestIds(issue.body, personaTestIds),
+  };
+});
+
 const dryRun = process.argv.includes("--dry-run");
 
 function issueBody(input: { summary: string; deliverables: string[]; acceptance: string[] }) {
@@ -559,6 +625,16 @@ function issueBody(input: { summary: string; deliverables: string[]; acceptance:
     `## Acceptance Criteria\n${input.acceptance.map((item) => `- ${item}`).join("\n")}`,
     "## Notes\nKeep GitHub as the durable planning surface. Add or update Loopworks docs, ADRs, persona test references, Storybook stories, Playwright coverage, and deterministic validation where this issue changes product behavior.",
   ].join("\n\n");
+}
+
+function appendPersonaTestIds(body: string, personaTestIds: string[]) {
+  if (personaTestIds.length === 0) {
+    return body;
+  }
+
+  return [body, `## Persona Test IDs\n${personaTestIds.map((id) => `- ${id}`).join("\n")}`].join(
+    "\n\n",
+  );
 }
 
 function runGh(args: string[], options: { allowFailure?: boolean } = {}) {

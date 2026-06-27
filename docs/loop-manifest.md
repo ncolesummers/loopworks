@@ -60,23 +60,29 @@ Every tracked item should carry:
 ### M0 Project Foundation
 
 Define the operational baseline, repo conventions, docs, and data model.
+Persona test IDs: P01, P03, R02, S04.
 
 ### M1 Design System Direction + App Shell
 
 Establish the UI vocabulary before the app becomes too broad.
+Persona test IDs: P01, P04, M01, A02, R02.
 
 ### M2 GitHub + Vercel Source Systems
 
 Wire the external systems that supply truth about work and deployment state.
+Persona test IDs: P02, M01, M03, R01, S01, S02, S03.
 
 ### M3 Durable Loop MVP
 
 Ship the first end-to-end loop with persisted history.
+Persona test IDs: M02, A01, A02, A03, R01.
 
 ### M4 Validation + PR Path + MVP Security Review
 
 Add release confidence, review visibility, and security signoff.
+Persona test IDs: A03, R01, R02, S01, S02, S03, S04.
 
 ### M5 Agent Governance + Evals
 
 Add guardrails and scenario coverage for agent behavior.
+Persona test IDs: P03, A02, A03, R02, S04.
