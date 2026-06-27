@@ -82,4 +82,61 @@ describe("Loopworks logger", () => {
       },
     });
   });
+
+  it("redacts OAuth and webhook-sensitive fields", () => {
+    const sink = createMemoryDestination();
+    const logger = createLogger(
+      {
+        level: "info",
+        base: null,
+      },
+      sink.destination,
+    );
+
+    logger.info(
+      {
+        oauthAccessToken: "oauth-access-token",
+        oauthRefreshToken: "oauth-refresh-token",
+        webhookSecret: "github-webhook-secret",
+        githubWebhookSecret: "github-webhook-secret",
+        rawWebhookBody: '{"token":"payload-token"}',
+        headers: {
+          "x-hub-signature-256": "sha256=signature",
+        },
+        request: {
+          headers: {
+            authorization: "Bearer nested-token",
+            "x-hub-signature-256": "sha256=nested-signature",
+          },
+        },
+        nested: {
+          oauth_access_token: "snake-oauth-token",
+          github_webhook_secret: "snake-webhook-secret",
+        },
+      },
+      "sensitive_redaction_test",
+    );
+
+    const entry = JSON.parse(sink.writes[0] ?? "{}") as Record<string, unknown>;
+    expect(entry).toMatchObject({
+      oauthAccessToken: "[redacted]",
+      oauthRefreshToken: "[redacted]",
+      webhookSecret: "[redacted]",
+      githubWebhookSecret: "[redacted]",
+      rawWebhookBody: "[redacted]",
+      headers: {
+        "x-hub-signature-256": "[redacted]",
+      },
+      request: {
+        headers: {
+          authorization: "[redacted]",
+          "x-hub-signature-256": "[redacted]",
+        },
+      },
+      nested: {
+        oauth_access_token: "[redacted]",
+        github_webhook_secret: "[redacted]",
+      },
+    });
+  });
 });

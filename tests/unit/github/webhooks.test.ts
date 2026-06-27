@@ -5,8 +5,14 @@ import {
   createInMemoryGithubWebhookDeliveryStore,
   evaluateGithubIssueReadiness,
   getAgentReadyTriggerFromIssuesWebhook,
+  getLoopAwareAgentReadyTriggerFromIssuesWebhook,
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
+import { POST as postGithubWebhook } from "@/app/api/github/webhooks/route";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("GitHub webhook helpers", () => {
   it("verifies the webhook signature", () => {
@@ -116,6 +122,36 @@ describe("GitHub webhook helpers", () => {
     });
   });
 
+  it("skips an agent-ready issue before queueing when the target loop is disabled", () => {
+    const trigger = getLoopAwareAgentReadyTriggerFromIssuesWebhook(
+      {
+        action: "labeled",
+        repository: {
+          full_name: "ncolesummers/loopworks",
+        },
+        issue: {
+          number: 44,
+          title: "Implement disabled loop handling",
+          body: "Disabled loops must record a skipped reason.",
+          state: "open",
+          milestone: {
+            title: "M3 Durable Loop MVP",
+          },
+          labels: [{ name: "agent-ready" }, { name: "area:loops" }, { name: "priority:p0" }],
+        },
+      },
+      {
+        enabled: false,
+      },
+    );
+
+    expect(trigger).toEqual({
+      shouldTrigger: false,
+      reason: "loop_disabled",
+      skipped: true,
+    });
+  });
+
   it("keeps the in-memory webhook store out of production", () => {
     expect(
       canUseInMemoryGithubWebhookDeliveryStore({
@@ -127,5 +163,69 @@ describe("GitHub webhook helpers", () => {
         NODE_ENV: "development",
       }),
     ).toBe(true);
+  });
+
+  it("rejects an invalid signature before parsing the webhook payload", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
+
+    const response = await postGithubWebhook(
+      new Request("https://loopworks.local/api/github/webhooks", {
+        method: "POST",
+        headers: {
+          "x-github-delivery": "invalid-json-delivery",
+          "x-github-event": "issues",
+          "x-hub-signature-256": "sha256=invalid",
+        },
+        body: "{not-valid-json",
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid GitHub webhook signature.",
+    });
+  });
+
+  it("ignores duplicate webhook deliveries at the route boundary", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
+    const payload = JSON.stringify({
+      action: "labeled",
+      repository: {
+        full_name: "ncolesummers/loopworks",
+      },
+      issue: {
+        number: 57,
+        title: "Implement persona coverage",
+        body: "Exercise webhook idempotency.",
+        state: "open",
+        milestone: {
+          title: "M1 Design System Direction + App Shell",
+        },
+        labels: [{ name: "agent-ready" }, { name: "area:validation" }, { name: "priority:p0" }],
+      },
+    });
+    const signature = createGithubWebhookSignature("secret", payload);
+    const makeRequest = () =>
+      new Request("https://loopworks.local/api/github/webhooks", {
+        method: "POST",
+        headers: {
+          "x-github-delivery": "duplicate-route-delivery",
+          "x-github-event": "issues",
+          "x-hub-signature-256": signature,
+        },
+        body: payload,
+      });
+
+    const first = await postGithubWebhook(makeRequest());
+    const second = await postGithubWebhook(makeRequest());
+
+    expect(first.status).toBe(202);
+    expect(second.status).toBe(202);
+    await expect(second.json()).resolves.toMatchObject({
+      accepted: false,
+      duplicate: true,
+      deliveryId: "duplicate-route-delivery",
+      idempotencyKey: "github:duplicate-route-delivery",
+    });
   });
 });

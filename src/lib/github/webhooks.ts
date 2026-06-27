@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { evaluateLoopTriggerDecision } from "@/lib/loops/trigger-decision";
 import { isProductionRuntime } from "@/lib/runtime";
 
 const githubSignaturePrefix = "sha256=";
@@ -62,6 +63,7 @@ export type GithubAgentReadyTrigger =
   | {
       shouldTrigger: false;
       reason: string;
+      skipped?: boolean;
     };
 
 export const defaultGithubAgentReadyRules: GithubAgentReadyRules = {
@@ -279,4 +281,30 @@ export function getAgentReadyTriggerFromIssuesWebhook(
     workflow: readiness.labels.includes("spike") ? "research" : "development",
     reason: "issue_became_agent_ready",
   };
+}
+
+export function getLoopAwareAgentReadyTriggerFromIssuesWebhook(
+  payload: GithubIssuesWebhookPayload,
+  loop: { enabled: boolean },
+  rules: GithubAgentReadyRules = defaultGithubAgentReadyRules,
+): GithubAgentReadyTrigger {
+  const trigger = getAgentReadyTriggerFromIssuesWebhook(payload, rules);
+  if (!trigger.shouldTrigger) {
+    return trigger;
+  }
+
+  const loopDecision = evaluateLoopTriggerDecision({
+    loop,
+    trigger: trigger.workflow,
+  });
+
+  if (!loopDecision.shouldTrigger) {
+    return {
+      shouldTrigger: false,
+      reason: loopDecision.reason,
+      skipped: loopDecision.skipped,
+    };
+  }
+
+  return trigger;
 }
