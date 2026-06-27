@@ -22,3 +22,15 @@ export const Empty: Story = {
     repos: [],
   },
 };
+
+export const MetadataRich: Story = {
+  args: {
+    repos: [portalFixture.repos[0]],
+  },
+};
+
+export const Disconnected: Story = {
+  args: {
+    repos: [portalFixture.repos[2]],
+  },
+};

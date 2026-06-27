@@ -1,4 +1,4 @@
-export type RepoHealth = "healthy" | "watch" | "blocked";
+export type RepoHealth = "healthy" | "watch" | "blocked" | "disconnected";
 
 export type DeploymentState = "success" | "preview" | "queued" | "failed";
 
@@ -12,9 +12,29 @@ export type LoopState =
   | "Blocked"
   | "Done";
 
-export type ApprovalState = "ready" | "needs-review" | "blocked";
+export type ApprovalState =
+  | "requested"
+  | "ready"
+  | "needs-review"
+  | "approved"
+  | "rejected"
+  | "bypassed"
+  | "expired"
+  | "blocked";
 
-export type TimelineKind = "sync" | "state" | "artifact" | "approval";
+export type TimelineKind =
+  | "sync"
+  | "state"
+  | "artifact"
+  | "approval"
+  | "planning"
+  | "test"
+  | "development"
+  | "validation"
+  | "review"
+  | "commit"
+  | "pull_request"
+  | "done";
 
 export type ArtifactState = "available" | "pending" | "failed";
 
@@ -35,6 +55,16 @@ export interface RepoRecord {
   owner: string;
   description: string;
   health: RepoHealth;
+  framework: string;
+  defaultBranch: string;
+  ciCommands: string[];
+  docsHref?: string;
+  observabilityHref?: string;
+  designSystemHref?: string;
+  enabledLoops: string[];
+  validationGates: string[];
+  vercelProjectId?: string;
+  vercelProjectHref?: string;
   milestone: string;
   area: string;
   priority: string;
@@ -61,6 +91,7 @@ export interface LoopRegistryItem {
   owner: string;
   queueDepth: number;
   risk: "low" | "medium" | "high";
+  skippedReason?: string;
 }
 
 export interface TimelineEvent {

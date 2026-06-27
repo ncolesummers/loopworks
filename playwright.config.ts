@@ -21,6 +21,12 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testMatch: /portal\.spec\.ts/,
+    },
+    {
+      name: "auth-guard",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /auth-guard\.spec\.ts/,
     },
   ],
 });
