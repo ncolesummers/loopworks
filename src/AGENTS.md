@@ -20,6 +20,10 @@ state, GitHub/Vercel integrations, approvals, and shared app contracts under
 7. Use OTel for telemetry and redact secrets, auth material, raw webhook bodies,
    OAuth tokens, and unreviewed prompts.
 8. Make fixture fallbacks explicit in API responses and structured logs.
+9. Keep durable auth policy logic in `src/lib/auth/`; reserve `src/auth.ts` for
+   Auth.js provider, adapter, callback, and session orchestration.
+10. Cache authorization results only for successful decisions unless tests prove
+    denied or missing-evidence states still fail closed.
 
 ## Tests
 

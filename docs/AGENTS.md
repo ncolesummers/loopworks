@@ -11,7 +11,9 @@ review, loop manifests, and contributor-facing documentation under `docs/`.
 2. Update the GitHub backlog/bootstrap script when new foundational work needs
    durable tracking.
 3. Use ADR proposals or issue comments for durable decisions.
-4. Keep docs Markdownlint-compliant.
+4. Update `docs/security-review.md` when auth or session behavior changes the
+   durable security expectation.
+5. Keep docs Markdownlint-compliant.
 
 ## Routing
 
