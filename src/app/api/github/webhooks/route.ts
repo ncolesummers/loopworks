@@ -7,14 +7,27 @@ import {
   getLoopAwareAgentReadyTriggerFromIssuesWebhook,
   type GithubAgentReadyLoopResolver,
   type GithubAgentReadyTrigger,
+  type GithubWebhookDeliveryStore,
   type GithubIssuesWebhookPayload,
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
+import { createDrizzleGithubWebhookDeliveryStore } from "@/lib/github/webhook-store";
 import { createRequestLogger } from "@/lib/observability/logger";
 
-const webhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
+const inMemoryWebhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
 
 export const runtime = "nodejs";
+
+type GithubWebhookPostDependencies = {
+  getAgentReadyTrigger?: (
+    payload: GithubIssuesWebhookPayload,
+    resolveLoop: GithubAgentReadyLoopResolver,
+  ) => GithubAgentReadyTrigger;
+  now?: () => Date;
+  webhookDeliveryStore?: GithubWebhookDeliveryStore;
+};
+
+type GithubWebhookDeliveryStoreMode = "drizzle" | "injected" | "memory";
 
 function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
   if (typeof payload !== "object" || payload === null) {
@@ -22,6 +35,52 @@ function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
   }
 
   return payload as GithubIssuesWebhookPayload;
+}
+
+function getGithubWebhookDeliveryStore(): {
+  mode: Exclude<GithubWebhookDeliveryStoreMode, "injected">;
+  store: GithubWebhookDeliveryStore;
+} {
+  if (canUseInMemoryGithubWebhookDeliveryStore()) {
+    return {
+      mode: "memory",
+      store: inMemoryWebhookDeliveryStore,
+    };
+  }
+
+  return {
+    mode: "drizzle",
+    store: createDrizzleGithubWebhookDeliveryStore(),
+  };
+}
+
+function compactRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== null && value !== undefined),
+  );
+}
+
+function summarizeGithubWebhookPayload(
+  event: string,
+  payload: GithubIssuesWebhookPayload | null,
+): Record<string, unknown> {
+  if (event !== "issues" || !payload?.issue) {
+    return {
+      event,
+    };
+  }
+
+  return compactRecord({
+    action: payload.action,
+    event,
+    issueNumber: payload.issue.number,
+    issueUrl: payload.issue.html_url,
+    labels: (payload.issue.labels ?? [])
+      .map((label) => label.name?.trim())
+      .filter((label): label is string => Boolean(label)),
+    milestoneTitle: payload.issue.milestone?.title,
+    repositoryFullName: payload.repository?.full_name,
+  });
 }
 
 const loopEnabledEnvKeys = {
@@ -40,10 +99,42 @@ const resolveAgentReadyLoopState: GithubAgentReadyLoopResolver = (trigger) => ({
   ),
 });
 
-export async function POST(request: Request) {
+function getNextAction(agentReadyTrigger: GithubAgentReadyTrigger): string {
+  if (agentReadyTrigger.shouldTrigger === true && agentReadyTrigger.workflow === "research") {
+    return "queue_deep_research_loop";
+  }
+
+  if (agentReadyTrigger.shouldTrigger === true) {
+    return "queue_eve_planning_agent";
+  }
+
+  return "record_and_ignore";
+}
+
+function getFailureType(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
+function getFixtureFallbackResponse(mode: GithubWebhookDeliveryStoreMode) {
+  return mode === "memory"
+    ? {
+        fixture: {
+          webhookDeliveryStore: "memory",
+        },
+      }
+    : {};
+}
+
+export async function handleGithubWebhookPost(
+  request: Request,
+  dependencies: GithubWebhookPostDependencies = {},
+) {
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
   const deliveryId = request.headers.get("x-github-delivery");
   const event = request.headers.get("x-github-event") ?? "unknown";
+  const getAgentReadyTrigger =
+    dependencies.getAgentReadyTrigger ?? getLoopAwareAgentReadyTriggerFromIssuesWebhook;
+  const now = dependencies.now ?? (() => new Date());
   const requestLogger = createRequestLogger({
     route: "api.github.webhooks",
     githubDeliveryId: deliveryId,
@@ -57,16 +148,6 @@ export async function POST(request: Request) {
         error: "Missing GITHUB_WEBHOOK_SECRET.",
       },
       { status: 500 },
-    );
-  }
-
-  if (!canUseInMemoryGithubWebhookDeliveryStore()) {
-    requestLogger.error("github_webhook_durable_store_missing");
-    return NextResponse.json(
-      {
-        error: "Durable GitHub webhook delivery store is required in production.",
-      },
-      { status: 503 },
     );
   }
 
@@ -115,18 +196,39 @@ export async function POST(request: Request) {
   const issuesPayload = asIssuesPayload(payload);
   const repositoryFullName = issuesPayload?.repository?.full_name ?? null;
   const action = issuesPayload?.action ?? null;
+  const selectedDeliveryStore = dependencies.webhookDeliveryStore
+    ? {
+        mode: "injected" as const,
+        store: dependencies.webhookDeliveryStore,
+      }
+    : getGithubWebhookDeliveryStore();
+  const webhookDeliveryStore = selectedDeliveryStore.store;
   const webhookLogger = requestLogger.child({
     githubAction: action,
     repositoryFullName,
+    webhookDeliveryStore: selectedDeliveryStore.mode,
   });
 
-  const claim = await claimGithubWebhookDelivery({
-    store: webhookDeliveryStore,
-    deliveryId,
-    event,
-    action,
-    repositoryFullName,
-  });
+  let claim: Awaited<ReturnType<typeof claimGithubWebhookDelivery>>;
+  try {
+    claim = await claimGithubWebhookDelivery({
+      store: webhookDeliveryStore,
+      deliveryId,
+      event,
+      action,
+      repositoryFullName,
+      payload: summarizeGithubWebhookPayload(event, issuesPayload),
+    });
+  } catch (error) {
+    webhookLogger.error(
+      {
+        err: error,
+        failureType: getFailureType(error),
+      },
+      "github_webhook_claim_failed",
+    );
+    throw error;
+  }
 
   if (!claim.accepted) {
     webhookLogger.info(
@@ -141,45 +243,91 @@ export async function POST(request: Request) {
         duplicate: true,
         deliveryId: claim.deliveryId,
         idempotencyKey: claim.key,
+        ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
       },
       { status: 202 },
     );
   }
 
-  const agentReadyTrigger: GithubAgentReadyTrigger =
-    event === "issues" && issuesPayload
-      ? getLoopAwareAgentReadyTriggerFromIssuesWebhook(issuesPayload, resolveAgentReadyLoopState)
-      : { shouldTrigger: false, reason: "unsupported_event" };
+  try {
+    const agentReadyTrigger: GithubAgentReadyTrigger =
+      event === "issues" && issuesPayload
+        ? getAgentReadyTrigger(issuesPayload, resolveAgentReadyLoopState)
+        : { shouldTrigger: false, reason: "unsupported_event" };
+    const nextAction = getNextAction(agentReadyTrigger);
+    const deliveryStatus = agentReadyTrigger.shouldTrigger ? "processed" : "ignored";
 
-  webhookLogger.info(
-    {
-      idempotencyKey: claim.key,
-      agentReadyTrigger,
-      nextAction:
-        agentReadyTrigger.shouldTrigger === true && agentReadyTrigger.workflow === "research"
-          ? "queue_deep_research_loop"
-          : agentReadyTrigger.shouldTrigger === true
-            ? "queue_eve_planning_agent"
-            : "record_and_ignore",
-    },
-    "github_webhook_processed",
-  );
-
-  return NextResponse.json(
-    {
-      accepted: true,
-      duplicate: false,
+    await webhookDeliveryStore.complete(claim.key, {
       deliveryId: claim.deliveryId,
-      idempotencyKey: claim.key,
-      event,
-      agentReadyTrigger,
-      nextAction:
-        agentReadyTrigger.shouldTrigger === true && agentReadyTrigger.workflow === "research"
-          ? "queue_deep_research_loop"
-          : agentReadyTrigger.shouldTrigger === true
-            ? "queue_eve_planning_agent"
-            : "record_and_ignore",
-    },
-    { status: 202 },
-  );
+      metadata: {
+        nextAction,
+        triggerReason: agentReadyTrigger.reason,
+        triggerWorkflow: agentReadyTrigger.shouldTrigger ? agentReadyTrigger.workflow : "none",
+      },
+      processedAt: now().toISOString(),
+      status: deliveryStatus,
+    });
+
+    webhookLogger.info(
+      {
+        idempotencyKey: claim.key,
+        agentReadyTrigger,
+        nextAction,
+      },
+      "github_webhook_processed",
+    );
+
+    return NextResponse.json(
+      {
+        accepted: true,
+        duplicate: false,
+        deliveryId: claim.deliveryId,
+        idempotencyKey: claim.key,
+        event,
+        agentReadyTrigger,
+        nextAction,
+        ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
+      },
+      { status: 202 },
+    );
+  } catch (error) {
+    const failureType = getFailureType(error);
+    webhookLogger.error(
+      {
+        err: error,
+        failureType,
+        idempotencyKey: claim.key,
+      },
+      "github_webhook_processing_failed",
+    );
+
+    try {
+      await webhookDeliveryStore.complete(claim.key, {
+        deliveryId: claim.deliveryId,
+        metadata: {
+          failureType,
+          nextAction: "record_and_ignore",
+          triggerWorkflow: "none",
+        },
+        processedAt: now().toISOString(),
+        status: "failed",
+      });
+    } catch (completionError) {
+      webhookLogger.error(
+        {
+          err: completionError,
+          completionFailureType: getFailureType(completionError),
+          failureType,
+          idempotencyKey: claim.key,
+        },
+        "github_webhook_failed_outcome_recording_failed",
+      );
+    }
+
+    throw error;
+  }
+}
+
+export async function POST(request: Request) {
+  return handleGithubWebhookPost(request);
 }

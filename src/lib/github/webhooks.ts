@@ -13,10 +13,20 @@ export type GithubWebhookDeliveryStore = {
       deliveryId: string;
       event: string;
       action?: string;
+      payload?: Record<string, unknown>;
       receivedAt: string;
       repositoryFullName?: string;
     },
   ) => boolean | Promise<boolean>;
+  complete: (
+    key: string,
+    record: {
+      deliveryId: string;
+      metadata?: Record<string, unknown>;
+      processedAt: string;
+      status: "processed" | "ignored" | "failed";
+    },
+  ) => void | Promise<void>;
 };
 
 export type GithubWebhookLabel = {
@@ -41,9 +51,9 @@ export type GithubIssuesWebhookPayload = {
 };
 
 export type GithubAgentReadyRules = {
-  readyLabels: string[];
-  blockedLabels: string[];
-  requiredLabelPrefixes: string[];
+  readyLabels: readonly string[];
+  blockedLabels: readonly string[];
+  requiredLabelPrefixes: readonly string[];
   requiresMilestone: boolean;
   requiresBody: boolean;
 };
@@ -70,13 +80,13 @@ export type GithubAgentReadyLoopResolver = (
   trigger: Extract<GithubAgentReadyTrigger, { shouldTrigger: true }>,
 ) => { enabled: boolean };
 
-export const defaultGithubAgentReadyRules: GithubAgentReadyRules = {
-  readyLabels: ["agent-ready"],
-  blockedLabels: ["status:blocked"],
-  requiredLabelPrefixes: ["area:", "priority:"],
+export const defaultGithubAgentReadyRules: GithubAgentReadyRules = Object.freeze({
+  readyLabels: Object.freeze(["agent-ready"]),
+  blockedLabels: Object.freeze(["status:blocked"]),
+  requiredLabelPrefixes: Object.freeze(["area:", "priority:"]),
   requiresMilestone: true,
   requiresBody: true,
-};
+});
 
 function toBuffer(payload: string | Uint8Array): Buffer {
   return typeof payload === "string" ? Buffer.from(payload) : Buffer.from(payload);
@@ -133,6 +143,7 @@ export async function claimGithubWebhookDelivery(input: {
   deliveryId: string;
   event: string;
   action?: string | null;
+  payload?: Record<string, unknown>;
   repositoryFullName?: string | null;
   receivedAt?: Date;
 }): Promise<{
@@ -146,6 +157,7 @@ export async function claimGithubWebhookDelivery(input: {
     deliveryId: normalizedDeliveryId,
     event: input.event,
     ...(input.action ? { action: input.action } : {}),
+    ...(input.payload ? { payload: input.payload } : {}),
     receivedAt: (input.receivedAt ?? new Date()).toISOString(),
     ...(input.repositoryFullName ? { repositoryFullName: input.repositoryFullName } : {}),
   });
@@ -158,16 +170,20 @@ export async function claimGithubWebhookDelivery(input: {
 }
 
 export function createInMemoryGithubWebhookDeliveryStore(): GithubWebhookDeliveryStore {
-  const claimedKeys = new Set<string>();
+  const deliveryStatuses = new Map<string, "acquired" | "processed" | "ignored" | "failed">();
 
   return {
     claim(key) {
-      if (claimedKeys.has(key)) {
+      const status = deliveryStatuses.get(key);
+      if (status && status !== "failed") {
         return false;
       }
 
-      claimedKeys.add(key);
+      deliveryStatuses.set(key, "acquired");
       return true;
+    },
+    complete(key, record) {
+      deliveryStatuses.set(key, record.status);
     },
   };
 }
