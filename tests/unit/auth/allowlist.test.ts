@@ -84,4 +84,23 @@ describe("auth allowlist", () => {
       reason: "missing_github_login",
     });
   });
+
+  it("rejects a GitHub identity outside the configured user and org allowlists", () => {
+    expect(
+      evaluateAuthAllowlist(
+        {
+          githubLogin: "unknown-operator",
+          githubOrganizations: ["external-org"],
+        },
+        {
+          bypass: false,
+          allowedGithubUsers: ["ncolesummers"],
+          allowedGithubOrgs: ["loopworks"],
+        },
+      ),
+    ).toEqual({
+      allowed: false,
+      reason: "not_allowlisted",
+    });
+  });
 });
