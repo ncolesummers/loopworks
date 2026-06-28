@@ -34,8 +34,8 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 3. Username and organization allowlists fail closed when
    `LOOPWORKS_AUTH_BYPASS` is not active.
 4. Active organization-allowlist sessions revalidate membership through the
-   persisted GitHub OAuth token and fail closed when token or org evidence is
-   unavailable.
+   persisted GitHub OAuth token with a short successful-result cache and fail
+   closed when token or org evidence is unavailable.
 5. `LOOPWORKS_AUTH_BYPASS` is a local fixture path only and must remain disabled
    in production.
 6. OAuth access tokens may exist in the Auth.js accounts table; logs and UI must
