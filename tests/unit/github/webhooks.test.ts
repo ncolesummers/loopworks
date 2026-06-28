@@ -3,6 +3,7 @@ import {
   claimGithubWebhookDelivery,
   createGithubWebhookSignature,
   createInMemoryGithubWebhookDeliveryStore,
+  defaultGithubAgentReadyRules,
   evaluateGithubIssueReadiness,
   getAgentReadyTriggerFromIssuesWebhook,
   getLoopAwareAgentReadyTriggerFromIssuesWebhook,
@@ -50,6 +51,53 @@ describe("GitHub webhook helpers", () => {
     expect(first.accepted).toBe(true);
     expect(second.accepted).toBe(false);
     expect(first.key).toBe(second.key);
+  });
+
+  it("keeps in-memory delivery completion behavior aligned with durable stores", async () => {
+    const store = createInMemoryGithubWebhookDeliveryStore();
+    const first = await claimGithubWebhookDelivery({
+      store,
+      deliveryId: "memory-redelivery",
+      event: "issues",
+    });
+
+    expect(store.complete).toBeDefined();
+    if (!store.complete) {
+      throw new Error("Expected in-memory webhook delivery store to implement complete().");
+    }
+
+    await store.complete(first.key, {
+      deliveryId: first.deliveryId,
+      processedAt: "2026-06-28T01:00:00.000Z",
+      status: "failed",
+    });
+    const retry = await claimGithubWebhookDelivery({
+      store,
+      deliveryId: "memory-redelivery",
+      event: "issues",
+    });
+
+    await store.complete(retry.key, {
+      deliveryId: retry.deliveryId,
+      processedAt: "2026-06-28T01:00:01.000Z",
+      status: "processed",
+    });
+    const duplicate = await claimGithubWebhookDelivery({
+      store,
+      deliveryId: "memory-redelivery",
+      event: "issues",
+    });
+
+    expect(first.accepted).toBe(true);
+    expect(retry.accepted).toBe(true);
+    expect(duplicate.accepted).toBe(false);
+  });
+
+  it("does not expose mutable default agent-ready readiness rules", () => {
+    expect(Object.isFrozen(defaultGithubAgentReadyRules)).toBe(true);
+    expect(Object.isFrozen(defaultGithubAgentReadyRules.readyLabels)).toBe(true);
+    expect(Object.isFrozen(defaultGithubAgentReadyRules.blockedLabels)).toBe(true);
+    expect(Object.isFrozen(defaultGithubAgentReadyRules.requiredLabelPrefixes)).toBe(true);
   });
 
   it("detects an agent-ready issue", () => {
@@ -381,6 +429,45 @@ describe("GitHub webhook helpers", () => {
       },
       processedAt: "2026-06-28T01:00:03.000Z",
       status: "failed",
+    });
+  });
+
+  it("records a processed outcome on the accepted success path", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    const complete = vi.fn();
+    const store: GithubWebhookDeliveryStore = {
+      claim: vi.fn(() => true),
+      complete,
+    };
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "successful-processing-route-delivery",
+      kind: "agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        now: () => new Date("2026-06-28T01:00:04.000Z"),
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(complete).toHaveBeenCalledWith("github:successful-processing-route-delivery", {
+      deliveryId: "successful-processing-route-delivery",
+      metadata: {
+        nextAction: "queue_eve_planning_agent",
+        triggerReason: "issue_became_agent_ready",
+        triggerWorkflow: "development",
+      },
+      processedAt: "2026-06-28T01:00:04.000Z",
+      status: "processed",
     });
   });
 });

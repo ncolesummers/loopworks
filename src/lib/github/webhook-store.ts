@@ -1,40 +1,17 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { idempotencyLocks, webhookDeliveries } from "@/db/schema";
+import { idempotencyLocks, type webhookDeliveryStatusEnum, webhookDeliveries } from "@/db/schema";
 import type { GithubWebhookDeliveryStore } from "@/lib/github/webhooks";
 
-type InsertReturningBuilder = {
-  returning: (selection: Record<string, unknown>) => Promise<unknown[]>;
-};
+export type GithubWebhookDatabase = Pick<typeof db, "transaction">;
 
-type InsertConflictBuilder = {
-  onConflictDoNothing: (config: { target: unknown }) => InsertReturningBuilder;
-};
-
-type InsertValuesBuilder = {
-  values: (value: Record<string, unknown>) => InsertConflictBuilder;
-};
-
-type UpdateWhereBuilder = {
-  where: (condition: unknown) => Promise<unknown>;
-};
-
-type UpdateSetBuilder = {
-  set: (value: Record<string, unknown>) => UpdateWhereBuilder;
-};
-
-type GithubWebhookTransaction = {
-  insert: (table: unknown) => InsertValuesBuilder;
-  update: (table: unknown) => UpdateSetBuilder;
-};
-
-export type GithubWebhookDatabase = {
-  transaction: <T>(callback: (tx: GithubWebhookTransaction) => Promise<T> | T) => Promise<T>;
-};
+type WebhookDeliveryStatus = (typeof webhookDeliveryStatusEnum.enumValues)[number];
+type RetryableWebhookDeliveryStatus = Extract<WebhookDeliveryStatus, "failed" | "received">;
 
 const defaultLockTtlMs = 5 * 60 * 1000;
 const webhookDeliveryScope = "github:webhook-delivery";
+const retryableDeliveryStatuses = ["failed", "received"] satisfies RetryableWebhookDeliveryStatus[];
 
 function parseTimestamp(value: string): Date {
   const parsed = new Date(value);
@@ -57,8 +34,26 @@ function buildLockMetadata(record: {
   };
 }
 
+async function hasRetryableDelivery(
+  tx: Parameters<Parameters<GithubWebhookDatabase["transaction"]>[0]>[0],
+  deliveryId: string,
+): Promise<boolean> {
+  const retryableDeliveries = await tx
+    .select({ id: webhookDeliveries.id })
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.deliveryId, deliveryId),
+        inArray(webhookDeliveries.status, retryableDeliveryStatuses),
+      ),
+    )
+    .limit(1);
+
+  return retryableDeliveries.length > 0;
+}
+
 export function createDrizzleGithubWebhookDeliveryStore(
-  database: GithubWebhookDatabase = db as unknown as GithubWebhookDatabase,
+  database: GithubWebhookDatabase = db,
   options: {
     lockTtlMs?: number;
   } = {},
@@ -69,43 +64,78 @@ export function createDrizzleGithubWebhookDeliveryStore(
     async claim(key, record) {
       const receivedAt = parseTimestamp(record.receivedAt);
       const expiresAt = new Date(receivedAt.getTime() + lockTtlMs);
+      const lockRecord = {
+        expiresAt,
+        key,
+        metadata: buildLockMetadata(record),
+        owner: record.deliveryId,
+        scope: webhookDeliveryScope,
+        status: "acquired" as const,
+      };
+      const deliveryRecord = {
+        ...(record.action ? { action: record.action } : {}),
+        deliveryId: record.deliveryId,
+        event: record.event,
+        ...(record.payload ? { payload: record.payload } : {}),
+        receivedAt,
+        ...(record.repositoryFullName ? { repositoryFullName: record.repositoryFullName } : {}),
+        source: "github",
+        status: "received" as const,
+      };
 
       return database.transaction(async (tx) => {
         const insertedLocks = await tx
           .insert(idempotencyLocks)
-          .values({
-            expiresAt,
-            key,
-            metadata: buildLockMetadata(record),
-            owner: record.deliveryId,
-            scope: webhookDeliveryScope,
-            status: "acquired",
-          })
+          .values(lockRecord)
           .onConflictDoNothing({ target: idempotencyLocks.key })
           .returning({ id: idempotencyLocks.id });
 
         if (insertedLocks.length === 0) {
-          return false;
-        }
+          if (!(await hasRetryableDelivery(tx, record.deliveryId))) {
+            return false;
+          }
 
-        const deliveryRecord = {
-          ...(record.action ? { action: record.action } : {}),
-          deliveryId: record.deliveryId,
-          event: record.event,
-          ...(record.payload ? { payload: record.payload } : {}),
-          receivedAt,
-          ...(record.repositoryFullName ? { repositoryFullName: record.repositoryFullName } : {}),
-          source: "github",
-          status: "received",
-        };
+          const reclaimedLocks = await tx
+            .update(idempotencyLocks)
+            .set({
+              ...lockRecord,
+              acquiredAt: receivedAt,
+              releasedAt: null,
+            })
+            .where(
+              and(
+                eq(idempotencyLocks.key, key),
+                or(
+                  eq(idempotencyLocks.status, "released"),
+                  eq(idempotencyLocks.status, "expired"),
+                  lt(idempotencyLocks.expiresAt, receivedAt),
+                ),
+              ),
+            )
+            .returning({ id: idempotencyLocks.id });
 
-        const insertedDeliveries = await tx
-          .insert(webhookDeliveries)
-          .values(deliveryRecord)
-          .onConflictDoNothing({ target: webhookDeliveries.deliveryId })
-          .returning({ id: webhookDeliveries.id });
+          if (reclaimedLocks.length === 0) {
+            return false;
+          }
 
-        if (insertedDeliveries.length === 0) {
+          const resetDeliveries = await tx
+            .update(webhookDeliveries)
+            .set({
+              ...deliveryRecord,
+              processedAt: null,
+            })
+            .where(
+              and(
+                eq(webhookDeliveries.deliveryId, record.deliveryId),
+                inArray(webhookDeliveries.status, retryableDeliveryStatuses),
+              ),
+            )
+            .returning({ id: webhookDeliveries.id });
+
+          if (resetDeliveries.length > 0) {
+            return true;
+          }
+
           await tx
             .update(idempotencyLocks)
             .set({
@@ -116,7 +146,48 @@ export function createDrizzleGithubWebhookDeliveryStore(
               releasedAt: receivedAt,
               status: "released",
             })
-            .where(eq(idempotencyLocks.key, key));
+            .where(eq(idempotencyLocks.key, key))
+            .returning({ id: idempotencyLocks.id });
+          return false;
+        }
+
+        const insertedDeliveries = await tx
+          .insert(webhookDeliveries)
+          .values(deliveryRecord)
+          .onConflictDoNothing({ target: webhookDeliveries.deliveryId })
+          .returning({ id: webhookDeliveries.id });
+
+        if (insertedDeliveries.length === 0) {
+          const resetDeliveries = await tx
+            .update(webhookDeliveries)
+            .set({
+              ...deliveryRecord,
+              processedAt: null,
+            })
+            .where(
+              and(
+                eq(webhookDeliveries.deliveryId, record.deliveryId),
+                inArray(webhookDeliveries.status, retryableDeliveryStatuses),
+              ),
+            )
+            .returning({ id: webhookDeliveries.id });
+
+          if (resetDeliveries.length > 0) {
+            return true;
+          }
+
+          await tx
+            .update(idempotencyLocks)
+            .set({
+              metadata: {
+                ...buildLockMetadata(record),
+                deliveryStatus: "duplicate",
+              },
+              releasedAt: receivedAt,
+              status: "released",
+            })
+            .where(eq(idempotencyLocks.key, key))
+            .returning({ id: idempotencyLocks.id });
           return false;
         }
 
@@ -134,7 +205,8 @@ export function createDrizzleGithubWebhookDeliveryStore(
             processedAt,
             status: record.status,
           })
-          .where(eq(webhookDeliveries.deliveryId, record.deliveryId));
+          .where(eq(webhookDeliveries.deliveryId, record.deliveryId))
+          .returning({ id: webhookDeliveries.id });
 
         await tx
           .update(idempotencyLocks)
@@ -146,7 +218,8 @@ export function createDrizzleGithubWebhookDeliveryStore(
             releasedAt: processedAt,
             status: "released",
           })
-          .where(eq(idempotencyLocks.key, key));
+          .where(eq(idempotencyLocks.key, key))
+          .returning({ id: idempotencyLocks.id });
       });
     },
   };

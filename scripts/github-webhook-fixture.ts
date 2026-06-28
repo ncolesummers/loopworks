@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { createHmac } from "node:crypto";
+import { isIP } from "node:net";
 
 export type GithubWebhookFixtureKind = "agent-ready" | "spike-agent-ready";
 
@@ -41,6 +42,10 @@ const defaultUrl = "http://127.0.0.1:3000/api/github/webhooks";
 const defaultRepository = "ncolesummers/loopworks";
 const validKinds = new Set<GithubWebhookFixtureKind>(["agent-ready", "spike-agent-ready"]);
 
+function isGithubWebhookFixtureKind(value: string): value is GithubWebhookFixtureKind {
+  return validKinds.has(value as GithubWebhookFixtureKind);
+}
+
 function createSignature(secret: string, payloadText: string): string {
   return `sha256=${createHmac("sha256", secret).update(payloadText).digest("hex")}`;
 }
@@ -76,7 +81,7 @@ function createPayload(kind: GithubWebhookFixtureKind): GithubWebhookFixturePayl
 export function createGithubWebhookFixture(
   options: GithubWebhookFixtureOptions,
 ): GithubWebhookFixture {
-  if (!validKinds.has(options.kind)) {
+  if (!isGithubWebhookFixtureKind(options.kind)) {
     throw new Error("Fixture kind must be agent-ready or spike-agent-ready.");
   }
 
@@ -154,10 +159,10 @@ export function parseGithubWebhookFixtureArgs(args: string[]): ParsedArgs {
         break;
       case "--kind": {
         const value = readValue(args, index, arg);
-        if (!validKinds.has(value as GithubWebhookFixtureKind)) {
+        if (!isGithubWebhookFixtureKind(value)) {
           throw new Error("--kind must be agent-ready or spike-agent-ready.");
         }
-        kind = value as GithubWebhookFixtureKind;
+        kind = value;
         index += 1;
         break;
       }
@@ -201,14 +206,29 @@ function isLoopbackWebhookUrl(value: string): boolean {
     parsed.hostname === "localhost" ||
     parsed.hostname === "::1" ||
     parsed.hostname === "[::1]" ||
-    parsed.hostname.startsWith("127.")
+    (isIP(parsed.hostname) === 4 && parsed.hostname.split(".")[0] === "127")
   );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function formatWebhookUrlForLog(value: string): string {
+  try {
+    const parsed = new URL(value);
+    parsed.password = "";
+    parsed.username = "";
+    return parsed.toString();
+  } catch {
+    return "[invalid-url]";
+  }
 }
 
 function printFixtureDryRun(fixture: GithubWebhookFixture) {
   console.log("LoopWorks GitHub webhook fixture dry run");
   console.log(`Kind: ${fixture.kind}`);
-  console.log(`URL: ${fixture.url}`);
+  console.log(`URL: ${formatWebhookUrlForLog(fixture.url)}`);
   console.log("Headers:");
   console.log(`x-github-delivery: ${fixture.headers["x-github-delivery"]}`);
   console.log(`x-github-event: ${fixture.headers["x-github-event"]}`);
@@ -250,21 +270,27 @@ export async function runGithubWebhookFixtureCli(args: string[]): Promise<number
   }
 
   if (!isLoopbackWebhookUrl(fixture.url)) {
-    console.error(`Refusing to send signed webhook fixtures to non-loopback URL: ${fixture.url}`);
+    console.error(
+      `Refusing to send signed webhook fixtures to non-loopback URL: ${formatWebhookUrlForLog(fixture.url)}`,
+    );
     return 1;
   }
 
-  const response = await fetch(fixture.url, {
-    body: fixture.payloadText,
-    headers: fixture.headers,
-    method: "POST",
-  });
-  const responseText = await response.text();
+  let response: Response;
+  try {
+    response = await fetch(fixture.url, {
+      body: fixture.payloadText,
+      headers: fixture.headers,
+      method: "POST",
+    });
+  } catch (error) {
+    console.error(
+      `Failed to reach ${formatWebhookUrlForLog(fixture.url)}: ${getErrorMessage(error)}. Is the dev server running (bun run dev)?`,
+    );
+    return 1;
+  }
 
   console.log(`GitHub webhook fixture response: ${response.status}`);
-  if (responseText) {
-    console.log(responseText);
-  }
 
   return response.ok ? 0 : 1;
 }

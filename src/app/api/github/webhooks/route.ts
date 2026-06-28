@@ -27,6 +27,8 @@ type GithubWebhookPostDependencies = {
   webhookDeliveryStore?: GithubWebhookDeliveryStore;
 };
 
+type GithubWebhookDeliveryStoreMode = "drizzle" | "injected" | "memory";
+
 function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
   if (typeof payload !== "object" || payload === null) {
     return null;
@@ -35,12 +37,21 @@ function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
   return payload as GithubIssuesWebhookPayload;
 }
 
-function getGithubWebhookDeliveryStore() {
+function getGithubWebhookDeliveryStore(): {
+  mode: Exclude<GithubWebhookDeliveryStoreMode, "injected">;
+  store: GithubWebhookDeliveryStore;
+} {
   if (canUseInMemoryGithubWebhookDeliveryStore()) {
-    return inMemoryWebhookDeliveryStore;
+    return {
+      mode: "memory",
+      store: inMemoryWebhookDeliveryStore,
+    };
   }
 
-  return createDrizzleGithubWebhookDeliveryStore();
+  return {
+    mode: "drizzle",
+    store: createDrizzleGithubWebhookDeliveryStore(),
+  };
 }
 
 function compactRecord(record: Record<string, unknown>): Record<string, unknown> {
@@ -102,6 +113,16 @@ function getNextAction(agentReadyTrigger: GithubAgentReadyTrigger): string {
 
 function getFailureType(error: unknown): string {
   return error instanceof Error ? error.name : typeof error;
+}
+
+function getFixtureFallbackResponse(mode: GithubWebhookDeliveryStoreMode) {
+  return mode === "memory"
+    ? {
+        fixture: {
+          webhookDeliveryStore: "memory",
+        },
+      }
+    : {};
 }
 
 export async function handleGithubWebhookPost(
@@ -175,20 +196,39 @@ export async function handleGithubWebhookPost(
   const issuesPayload = asIssuesPayload(payload);
   const repositoryFullName = issuesPayload?.repository?.full_name ?? null;
   const action = issuesPayload?.action ?? null;
-  const webhookDeliveryStore = dependencies.webhookDeliveryStore ?? getGithubWebhookDeliveryStore();
+  const selectedDeliveryStore = dependencies.webhookDeliveryStore
+    ? {
+        mode: "injected" as const,
+        store: dependencies.webhookDeliveryStore,
+      }
+    : getGithubWebhookDeliveryStore();
+  const webhookDeliveryStore = selectedDeliveryStore.store;
   const webhookLogger = requestLogger.child({
     githubAction: action,
     repositoryFullName,
+    webhookDeliveryStore: selectedDeliveryStore.mode,
   });
 
-  const claim = await claimGithubWebhookDelivery({
-    store: webhookDeliveryStore,
-    deliveryId,
-    event,
-    action,
-    repositoryFullName,
-    payload: summarizeGithubWebhookPayload(event, issuesPayload),
-  });
+  let claim: Awaited<ReturnType<typeof claimGithubWebhookDelivery>>;
+  try {
+    claim = await claimGithubWebhookDelivery({
+      store: webhookDeliveryStore,
+      deliveryId,
+      event,
+      action,
+      repositoryFullName,
+      payload: summarizeGithubWebhookPayload(event, issuesPayload),
+    });
+  } catch (error) {
+    webhookLogger.error(
+      {
+        err: error,
+        failureType: getFailureType(error),
+      },
+      "github_webhook_claim_failed",
+    );
+    throw error;
+  }
 
   if (!claim.accepted) {
     webhookLogger.info(
@@ -203,6 +243,7 @@ export async function handleGithubWebhookPost(
         duplicate: true,
         deliveryId: claim.deliveryId,
         idempotencyKey: claim.key,
+        ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
       },
       { status: 202 },
     );
@@ -216,7 +257,7 @@ export async function handleGithubWebhookPost(
     const nextAction = getNextAction(agentReadyTrigger);
     const deliveryStatus = agentReadyTrigger.shouldTrigger ? "processed" : "ignored";
 
-    await webhookDeliveryStore.complete?.(claim.key, {
+    await webhookDeliveryStore.complete(claim.key, {
       deliveryId: claim.deliveryId,
       metadata: {
         nextAction,
@@ -245,6 +286,7 @@ export async function handleGithubWebhookPost(
         event,
         agentReadyTrigger,
         nextAction,
+        ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
       },
       { status: 202 },
     );
@@ -252,6 +294,7 @@ export async function handleGithubWebhookPost(
     const failureType = getFailureType(error);
     webhookLogger.error(
       {
+        err: error,
         failureType,
         idempotencyKey: claim.key,
       },
@@ -259,7 +302,7 @@ export async function handleGithubWebhookPost(
     );
 
     try {
-      await webhookDeliveryStore.complete?.(claim.key, {
+      await webhookDeliveryStore.complete(claim.key, {
         deliveryId: claim.deliveryId,
         metadata: {
           failureType,
@@ -272,6 +315,7 @@ export async function handleGithubWebhookPost(
     } catch (completionError) {
       webhookLogger.error(
         {
+          err: completionError,
           completionFailureType: getFailureType(completionError),
           failureType,
           idempotencyKey: claim.key,
