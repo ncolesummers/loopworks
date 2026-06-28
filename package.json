@@ -62,6 +62,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
     "@biomejs/biome": "^2.3.7",
+    "@electric-sql/pglite": "^0.5.3",
     "@playwright/test": "^1.57.0",
     "@storybook/addon-a11y": "^10.4.6",
     "@storybook/addon-docs": "^10.4.6",

@@ -21,6 +21,10 @@ test helpers under `tests/`.
 7. For auth allowlist or session-policy changes, add focused unit tests under
    `tests/unit/auth/` that cover allow, deny, and fail-closed paths before
    editing production code.
+8. For Drizzle store behavior that depends on real Postgres semantics (conflict
+   targets, `where` predicates, transaction rollback), add pglite-backed
+   integration tests via `createPgliteTestDatabase` (`tests/helpers/pglite.ts`)
+   instead of relying on hand-rolled in-memory fakes.
 
 ## Validation
 
