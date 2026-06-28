@@ -3,7 +3,8 @@
 ## Scope
 
 This guide applies to GitHub Actions workflows, issue templates, and repository
-automation under `.github/`.
+automation under `.github/`, plus GitHub review-thread operations performed
+while maintaining pull requests.
 
 ## Rules
 
@@ -15,3 +16,6 @@ automation under `.github/`.
    workflows or templates.
 5. Update `scripts/bootstrap-github.ts` when foundational labels, milestones,
    issues, or project setup change.
+6. To resolve an inline PR review comment through the GitHub API, query
+   `pullRequest.reviewThreads` and resolve the review-thread node ID; the review
+   comment database ID is not directly resolvable.

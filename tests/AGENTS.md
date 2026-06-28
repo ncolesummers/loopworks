@@ -18,8 +18,13 @@ test helpers under `tests/`.
 5. Use explicit fixtures. Do not add silent production fallbacks.
 6. Keep e2e tests runnable with `LOOPWORKS_AUTH_BYPASS=true` unless the test is
    specifically covering real auth.
+7. For auth allowlist or session-policy changes, add focused unit tests under
+   `tests/unit/auth/` that cover allow, deny, and fail-closed paths before
+   editing production code.
 
 ## Validation
 
 Include `bun run test` and relevant Playwright, Storybook, or Storybook-native
 component checks in final validation evidence.
+For auth changes, run the focused auth tests, `bun run typecheck`, and
+`bun run format:check` before the final aggregate validation.
