@@ -26,6 +26,17 @@ For local UI work without GitHub OAuth credentials:
 bun run dev:fixture
 ```
 
+To inspect a signed GitHub issue webhook fixture without sending it:
+
+```bash
+bun run github:webhook-fixture -- --kind agent-ready
+bun run github:webhook-fixture -- --kind spike-agent-ready
+```
+
+The fixture defaults to `http://127.0.0.1:3000/api/github/webhooks`, uses
+`GITHUB_WEBHOOK_SECRET`, and only posts to the local webhook route when
+`--send` is provided. Sending is restricted to loopback URLs.
+
 ## Environment
 
 Copy `.env.example` to `.env.local` for local development. The fixture server only needs the defaults from `.env.example`; real GitHub SSO, webhooks, database persistence, and Vercel deployment visibility use these variables:

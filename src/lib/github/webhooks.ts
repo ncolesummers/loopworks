@@ -13,10 +13,20 @@ export type GithubWebhookDeliveryStore = {
       deliveryId: string;
       event: string;
       action?: string;
+      payload?: Record<string, unknown>;
       receivedAt: string;
       repositoryFullName?: string;
     },
   ) => boolean | Promise<boolean>;
+  complete?: (
+    key: string,
+    record: {
+      deliveryId: string;
+      metadata?: Record<string, unknown>;
+      processedAt: string;
+      status: "processed" | "ignored" | "failed";
+    },
+  ) => void | Promise<void>;
 };
 
 export type GithubWebhookLabel = {
@@ -133,6 +143,7 @@ export async function claimGithubWebhookDelivery(input: {
   deliveryId: string;
   event: string;
   action?: string | null;
+  payload?: Record<string, unknown>;
   repositoryFullName?: string | null;
   receivedAt?: Date;
 }): Promise<{
@@ -146,6 +157,7 @@ export async function claimGithubWebhookDelivery(input: {
     deliveryId: normalizedDeliveryId,
     event: input.event,
     ...(input.action ? { action: input.action } : {}),
+    ...(input.payload ? { payload: input.payload } : {}),
     receivedAt: (input.receivedAt ?? new Date()).toISOString(),
     ...(input.repositoryFullName ? { repositoryFullName: input.repositoryFullName } : {}),
   });
