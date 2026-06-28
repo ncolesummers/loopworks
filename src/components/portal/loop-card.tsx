@@ -39,6 +39,11 @@ export function LoopCard({
         <div className="mt-1 text-sm text-muted-foreground">
           Owner {loop.owner} / queue depth {loop.queueDepth}
         </div>
+        {loop.skippedReason ? (
+          <div className="mt-2">
+            <StatusBadge status="skipped" label={`Skipped: ${loop.skippedReason}`} />
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center gap-3">
         <Label htmlFor={switchId} className="sr-only">

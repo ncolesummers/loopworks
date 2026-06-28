@@ -21,6 +21,25 @@ export const requiredMetadataValues = [
   "source_links",
 ] as const;
 
+export const personaTestIdValues = [
+  "P01",
+  "P02",
+  "P03",
+  "P04",
+  "M01",
+  "M02",
+  "M03",
+  "A01",
+  "A02",
+  "A03",
+  "R01",
+  "R02",
+  "S01",
+  "S02",
+  "S03",
+  "S04",
+] as const;
+
 export const labelCategoryValues = [
   "kind",
   "priority",
@@ -38,6 +57,7 @@ const issueTemplateSchema = z.object({
   title: z.string().min(1),
   labels: z.array(z.string().min(1)).min(1),
   template: z.string().min(1),
+  personaTestIds: z.array(z.enum(personaTestIdValues)).min(1),
 });
 
 const labelSchema = z.object({
@@ -51,6 +71,7 @@ const milestoneSchema = z.object({
   key: z.string().regex(/^M\d+$/),
   name: z.string().min(1),
   description: z.string().min(1),
+  personaTestIds: z.array(z.enum(personaTestIdValues)).min(1),
   issues: z.array(issueTemplateSchema).default([]),
 });
 
@@ -86,5 +107,6 @@ export const loopManifestSchema = z.object({
 
 export type LoopState = (typeof loopStateValues)[number];
 export type RequiredMetadata = (typeof requiredMetadataValues)[number];
+export type PersonaTestId = (typeof personaTestIdValues)[number];
 export type LabelCategory = (typeof labelCategoryValues)[number];
 export type LoopManifest = z.infer<typeof loopManifestSchema>;

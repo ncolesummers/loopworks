@@ -44,7 +44,15 @@ describe("portal status mapping", () => {
   });
 
   it("maps approval and checklist states", () => {
+    expect(getApprovalStatus("requested")).toEqual({
+      status: "needsApproval",
+      label: "Requested",
+    });
     expect(getApprovalStatus("ready")).toEqual({ status: "ready", label: "Ready" });
+    expect(getApprovalStatus("approved")).toEqual({ status: "approved", label: "Approved" });
+    expect(getApprovalStatus("rejected")).toEqual({ status: "rejected", label: "Rejected" });
+    expect(getApprovalStatus("bypassed")).toEqual({ status: "skipped", label: "Bypassed" });
+    expect(getApprovalStatus("expired")).toEqual({ status: "blocked", label: "Expired" });
     expect(getApprovalStatus("needs-review")).toEqual({
       status: "needsApproval",
       label: "Needs Approval",

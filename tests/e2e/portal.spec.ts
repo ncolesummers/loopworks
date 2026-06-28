@@ -41,7 +41,7 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByRole("switch", { name: "Intake and triage" })).toBeChecked();
     await expect(page.getByText("Needs Approval").first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Validation results" })).toBeVisible();
-    await expect(page.getByText("Typecheck", { exact: true })).toBeVisible();
+    await expect(page.getByText("Typecheck", { exact: true }).last()).toBeVisible();
     await expect(page.getByRole("link", { name: "Open Typecheck evidence" })).toHaveAttribute(
       "href",
       "https://github.com/ncolesummers/loopworks/actions",
@@ -77,6 +77,85 @@ test.describe("Loopworks portal", () => {
       await expect(page.getByText("Fixture session")).toBeVisible();
       await expect(page.getByText("Operator workspace", { exact: true })).toBeVisible();
     }
+  });
+
+  // Persona M01/R01: maintainers and reviewers can inspect repo and Vercel evidence.
+  test("catalog and deployment workflows expose persona-critical metadata", async ({ page }) => {
+    await page.goto("/catalog");
+
+    await expect(page.getByRole("heading", { name: "Repo catalog" })).toBeVisible();
+    await expect(page.getByText("ncolesummers/loopworks-web")).toBeVisible();
+    await expect(page.getByText("Next.js")).toBeVisible();
+    await expect(page.getByText("bun run validate")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Vercel project prj_loopworks" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Deployments", exact: true }).click();
+    await expect(page).toHaveURL("/deployments");
+    await expect(page.getByText("preview/portal-shell")).toBeVisible();
+    await expect(page.getByText("Playwright passed")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open preview/portal-shell" })).toBeVisible();
+  });
+
+  // Persona M02: pausing a loop records a skipped reason instead of silently triggering.
+  test("pausing a loop records the disabled trigger reason", async ({ page }) => {
+    await page.goto("/loops");
+
+    const intakeLoop = page.getByRole("switch", { name: "Intake and triage" });
+    await expect(intakeLoop).toBeChecked();
+    await intakeLoop.click();
+
+    await expect(intakeLoop).not.toBeChecked();
+    await expect(page.getByText("Skipped: loop_disabled")).toBeVisible();
+  });
+
+  // Persona A01/A03/R01: deterministic evidence is visible before PR/review stages.
+  test("run timeline shows ordered stages and validation evidence before review", async ({
+    page,
+  }) => {
+    await page.goto("/runs");
+
+    const stages = [
+      "Planning",
+      "Test writing",
+      "Development",
+      "Validation",
+      "Code review",
+      "Commit",
+      "PR created",
+      "Done",
+    ];
+    let previousY = -1;
+    for (const stage of stages) {
+      const item = page.getByText(stage, { exact: true }).last();
+      await expect(item).toBeVisible();
+      const box = await item.boundingBox();
+      expect(box, stage).not.toBeNull();
+      if (box) {
+        expect(box.y, `${stage} should appear after prior stage`).toBeGreaterThan(previousY);
+        previousY = box.y;
+      }
+    }
+
+    const validationBox = await page.getByText("Validation", { exact: true }).last().boundingBox();
+    const codeReviewBox = await page.getByText("Code review", { exact: true }).last().boundingBox();
+    expect(validationBox?.y ?? 0).toBeLessThan(codeReviewBox?.y ?? 0);
+    await expect(page.getByRole("link", { name: "Validation report" })).toBeVisible();
+  });
+
+  // Persona A02: approval gates preserve actor/evidence context through the request flow.
+  test("approval request flow keeps reviewer evidence visible", async ({ page }) => {
+    await page.goto("/approvals");
+
+    await expect(page.getByText("Owner Priya")).toBeVisible();
+    await expect(page.getByText("Write paths require explicit approval")).toBeVisible();
+
+    await page.getByRole("button", { name: "Request approval" }).click();
+    await expect(page.getByRole("dialog", { name: "Request security approval" })).toBeVisible();
+    await expect(page.getByLabel("Reviewer notes")).toContainText(
+      "Verified GitHub scoping, preview visibility, and redaction rules",
+    );
+    await page.getByRole("button", { name: "Submit request" }).click();
+    await expect(page.getByRole("dialog", { name: "Request security approval" })).toBeHidden();
   });
 
   test("keeps the legacy GitHub settings route as a settings alias", async ({ page }) => {

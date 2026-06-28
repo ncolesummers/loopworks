@@ -1,11 +1,41 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Settings2 } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { getRepoHealthStatus } from "@/components/portal/status-mapping";
 import type { RepoRecord } from "@/lib/types";
+
+function RepoLink({
+  href,
+  children,
+  ariaLabel,
+}: Readonly<{
+  href: string | undefined;
+  children: ReactNode;
+  ariaLabel?: string;
+}>) {
+  const safeHref = getSafeExternalHref(href);
+
+  if (!safeHref) {
+    return null;
+  }
+
+  return (
+    <a
+      href={safeHref}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={ariaLabel}
+      className="rounded-md border bg-background px-2 py-0.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+    >
+      {children}
+    </a>
+  );
+}
 
 export function RepoCatalog({ repos }: Readonly<{ repos: RepoRecord[] }>) {
   return (
@@ -61,6 +91,39 @@ export function RepoCatalog({ repos }: Readonly<{ repos: RepoRecord[] }>) {
                         <div className="mt-1 max-w-xl text-xs text-muted-foreground">
                           {repo.description}
                         </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <StatusBadge status="ready" label={repo.framework} showIcon={false} />
+                          <StatusBadge
+                            status="queued"
+                            label={repo.defaultBranch}
+                            showIcon={false}
+                          />
+                          {repo.ciCommands.map((command) => (
+                            <span
+                              key={command}
+                              className="rounded-md border bg-background px-2 py-0.5 font-mono text-xs"
+                            >
+                              {command}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <RepoLink href={repo.docsHref}>Docs</RepoLink>
+                          <RepoLink href={repo.observabilityHref}>Observability</RepoLink>
+                          <RepoLink href={repo.designSystemHref}>Design system</RepoLink>
+                          <RepoLink
+                            href={repo.vercelProjectHref}
+                            ariaLabel={
+                              repo.vercelProjectId
+                                ? `Vercel project ${repo.vercelProjectId}`
+                                : undefined
+                            }
+                          >
+                            {repo.vercelProjectId
+                              ? `Vercel project ${repo.vercelProjectId}`
+                              : "Vercel project"}
+                          </RepoLink>
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-col gap-1">
@@ -75,11 +138,45 @@ export function RepoCatalog({ repos }: Readonly<{ repos: RepoRecord[] }>) {
                         <div className="mt-2 text-xs text-muted-foreground">
                           Priority {repo.priority}
                         </div>
+                        <div className="mt-3 space-y-2">
+                          <div className="text-xs uppercase text-muted-foreground">
+                            Enabled loops
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {repo.enabledLoops.length > 0 ? (
+                              repo.enabledLoops.map((loop) => (
+                                <StatusBadge
+                                  key={loop}
+                                  status="ready"
+                                  label={loop}
+                                  showIcon={false}
+                                />
+                              ))
+                            ) : (
+                              <StatusBadge status="disabled" label="No loops enabled" />
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="font-medium">{repo.openIssues}</div>
                         <div className="text-xs text-muted-foreground">
                           Stale {repo.staleDays} days
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          <div className="text-xs uppercase text-muted-foreground">
+                            Validation gates
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {repo.validationGates.map((gate) => (
+                              <StatusBadge
+                                key={gate}
+                                status="succeeded"
+                                label={gate}
+                                showIcon={false}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-4 text-muted-foreground">{repo.lastSynced}</td>

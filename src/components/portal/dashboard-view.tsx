@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { portalFixture } from "@/lib/fixtures";
+import { evaluateLoopTriggerDecision } from "@/lib/loops/trigger-decision";
 
 function Metric({
   label,
@@ -77,9 +78,25 @@ export function LoopRegistry() {
             loop={loop}
             onEnabledChange={(checked) => {
               setLoops((current) =>
-                current.map((item, itemIndex) =>
-                  itemIndex === index ? { ...item, enabled: checked } : item,
-                ),
+                current.map((item, itemIndex) => {
+                  if (itemIndex !== index) {
+                    return item;
+                  }
+
+                  if (checked) {
+                    return { ...item, enabled: true, skippedReason: undefined };
+                  }
+
+                  const decision = evaluateLoopTriggerDecision({
+                    loop: { ...item, enabled: false },
+                  });
+
+                  return {
+                    ...item,
+                    enabled: false,
+                    skippedReason: decision.skipped ? decision.reason : undefined,
+                  };
+                }),
               );
             }}
           />

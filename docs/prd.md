@@ -168,6 +168,7 @@ Exit criteria:
 3. GitHub repo, labels, milestones, issues, and backlog project exist.
 4. PRD and architecture docs are checked in.
 5. Foundational ADRs and persona-derived test scenarios are checked in.
+6. Persona test IDs P01, P03, R02, and S04 are referenced by the milestone and seeded issues.
 
 ### M1 Design System Direction + App Shell
 
@@ -178,6 +179,7 @@ Exit criteria:
 1. Design principles and temporary-vs-final token stance are documented.
 2. Shared ShadCN-based primitives have stories.
 3. Shell, navigation, empty/loading/error states, and responsive behavior are covered.
+4. Persona test IDs P01, P04, M01, A02, and R02 are referenced by the milestone and seeded issues.
 
 ### M2 GitHub + Vercel Source Systems
 
@@ -189,6 +191,7 @@ Exit criteria:
 2. Signed GitHub issue fixtures can create normalized events.
 3. Repos can link to Vercel projects.
 4. Deployments/previews are visible in catalog and detail views.
+5. Persona test IDs P02, M01, M03, R01, S01, S02, and S03 are referenced by the milestone and seeded issues.
 
 ### M3 Durable Loop MVP
 
@@ -200,6 +203,7 @@ Exit criteria:
 2. `agent-ready` issues can start or simulate the development loop.
 3. Runs record stages, artifacts, validation evidence, approvals, and retryable failures.
 4. The planning agent can create and update an executable plan artifact.
+5. Persona test IDs M02, A01, A02, A03, and R01 are referenced by the milestone and seeded issues.
 
 ### M4 Validation + PR Path + MVP Security Review
 
@@ -210,6 +214,7 @@ Exit criteria:
 1. Validation gates run before LLM judgment and before PR creation.
 2. PR creation path records branch, commit, PR, checks, and review state.
 3. MVP security review issue is completed or follow-ups are created.
+4. Persona test IDs A03, R01, R02, S01, S02, S03, and S04 are referenced by the milestone and seeded issues.
 
 ### M5 Agent Governance + Evals
 
@@ -220,6 +225,7 @@ Exit criteria:
 1. Loop changes require reviewable diffs.
 2. Agent prompt/model/tool changes have eval scenarios.
 3. Governance policy is visible in the portal and in PR checks.
+4. Persona test IDs P03, A02, A03, R02, and S04 are referenced by the milestone and seeded issues.
 
 ## Success Metrics
 

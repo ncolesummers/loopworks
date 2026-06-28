@@ -26,3 +26,13 @@ export const Disabled: Story = {
     },
   },
 };
+
+export const DisabledWithSkippedReason: Story = {
+  args: {
+    loop: {
+      ...portalFixture.loops[2],
+      enabled: false,
+      skippedReason: "loop_disabled",
+    },
+  },
+};

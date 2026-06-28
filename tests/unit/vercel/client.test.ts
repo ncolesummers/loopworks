@@ -82,6 +82,33 @@ describe("Vercel deployment helpers", () => {
     );
   });
 
+  it("does not silently return deployment fixtures in production", async () => {
+    const logger = createMockLogger();
+    const client = createVercelDeploymentClient({
+      env: {
+        NODE_ENV: "production",
+      },
+      logger,
+    });
+    const result = await client.listDeployments({
+      projectId: null,
+    });
+
+    expect(result).toEqual({
+      source: "unavailable",
+      usedFallback: false,
+      fallbackReason: "missing_access_token",
+      error: "Vercel deployment credentials are required in production.",
+      deployments: [],
+    });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "missing_access_token",
+      }),
+      "vercel_deployments_unavailable",
+    );
+  });
+
   it("uses API data when fetch succeeds", async () => {
     const logger = createMockLogger();
     const client = createVercelDeploymentClient({

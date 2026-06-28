@@ -1,4 +1,5 @@
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { isProductionRuntime } from "@/lib/runtime";
 
 import { vercelDeploymentFixtures } from "./fixtures";
 import type {
@@ -14,6 +15,7 @@ export type VercelDeploymentClientConfig = {
   teamSlug?: string;
   apiBaseUrl?: string;
   preferFixtures?: boolean;
+  env?: Partial<NodeJS.ProcessEnv>;
   fetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   logger?: LoopworksLogger;
 };
@@ -169,6 +171,29 @@ function mapFixtureResult(reason: string, logger?: LoopworksLogger): VercelDeplo
   };
 }
 
+function mapUnavailableResult(
+  reason: string,
+  logger?: LoopworksLogger,
+): VercelDeploymentListResult {
+  logger?.error(
+    {
+      reason,
+    },
+    "vercel_deployments_unavailable",
+  );
+
+  return {
+    source: "unavailable",
+    usedFallback: false,
+    fallbackReason: reason,
+    error:
+      reason === "missing_access_token"
+        ? "Vercel deployment credentials are required in production."
+        : "Vercel deployments are unavailable in production without live API data.",
+    deployments: [],
+  };
+}
+
 export function createVercelDeploymentClient(config: VercelDeploymentClientConfig = {}) {
   return {
     async listDeployments(input: {
@@ -180,17 +205,21 @@ export function createVercelDeploymentClient(config: VercelDeploymentClientConfi
         vercelProjectId: input.projectId,
         limit,
       });
+      const fallbackOrUnavailable = (reason: string) =>
+        isProductionRuntime(config.env)
+          ? mapUnavailableResult(reason, log)
+          : mapFixtureResult(reason, log);
 
       if (config.preferFixtures) {
-        return mapFixtureResult("prefer_fixtures", log);
+        return fallbackOrUnavailable("prefer_fixtures");
       }
 
       if (!config.accessToken) {
-        return mapFixtureResult("missing_access_token", log);
+        return fallbackOrUnavailable("missing_access_token");
       }
 
       if (!input.projectId) {
-        return mapFixtureResult("missing_project_id", log);
+        return fallbackOrUnavailable("missing_project_id");
       }
 
       const fetchImpl = config.fetchImpl ?? fetch;
@@ -216,7 +245,7 @@ export function createVercelDeploymentClient(config: VercelDeploymentClientConfi
             },
             "vercel_deployments_api_error",
           );
-          return mapFixtureResult("api_response_not_ok", log);
+          return fallbackOrUnavailable("api_response_not_ok");
         }
 
         const body = (await response.json()) as {
@@ -242,7 +271,7 @@ export function createVercelDeploymentClient(config: VercelDeploymentClientConfi
           },
           "vercel_deployments_api_exception",
         );
-        return mapFixtureResult("api_exception", log);
+        return fallbackOrUnavailable("api_exception");
       }
     },
   };

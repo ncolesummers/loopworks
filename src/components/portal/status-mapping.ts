@@ -21,6 +21,7 @@ export function getRepoHealthStatus(health: RepoHealth): PortalStatusMeta {
     healthy: { status: "ready", label: "Healthy" },
     watch: { status: "blocked", label: "Watch" },
     blocked: { status: "blocked", label: "Blocked" },
+    disconnected: { status: "disabled", label: "Disconnected" },
   } satisfies Record<RepoHealth, PortalStatusMeta>;
 
   return statuses[health];
@@ -74,8 +75,13 @@ export function getLoopRiskStatus(risk: LoopRegistryItem["risk"]): PortalStatusM
 
 export function getApprovalStatus(state: ApprovalState): PortalStatusMeta {
   const statuses = {
+    requested: { status: "needsApproval", label: "Requested" },
     ready: { status: "ready", label: "Ready" },
     "needs-review": { status: "needsApproval", label: "Needs Approval" },
+    approved: { status: "approved", label: "Approved" },
+    rejected: { status: "rejected", label: "Rejected" },
+    bypassed: { status: "skipped", label: "Bypassed" },
+    expired: { status: "blocked", label: "Expired" },
     blocked: { status: "blocked", label: "Blocked" },
   } satisfies Record<ApprovalState, PortalStatusMeta>;
 
@@ -116,6 +122,14 @@ export function getTimelineKindStatus(kind: TimelineKind): PortalStatusMeta {
     state: { status: "running", label: "State" },
     artifact: { status: "ready", label: "Artifact" },
     approval: { status: "needsApproval", label: "Approval" },
+    planning: { status: "pending", label: "Planning" },
+    test: { status: "running", label: "Test" },
+    development: { status: "running", label: "Development" },
+    validation: { status: "succeeded", label: "Validation" },
+    review: { status: "needsApproval", label: "Review" },
+    commit: { status: "done", label: "Commit" },
+    pull_request: { status: "preview", label: "PR" },
+    done: { status: "done", label: "Done" },
   } satisfies Record<TimelineKind, PortalStatusMeta>;
 
   return statuses[kind];

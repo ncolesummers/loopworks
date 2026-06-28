@@ -1,4 +1,4 @@
-const HTTPS_HOSTS = new Set(["github.com", "www.github.com"]);
+const HTTPS_HOSTS = new Set(["github.com", "www.github.com", "vercel.com", "www.vercel.com"]);
 const LOCAL_HTTP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 function isAllowedHttpsHost(hostname: string) {

@@ -57,7 +57,12 @@ export function DeploymentSummary({ deployments }: Readonly<{ deployments: Deplo
                   </div>
                   {href ? (
                     <Button variant="ghost" size="sm" className="gap-2" asChild>
-                      <a href={href} target="_blank" rel="noreferrer">
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Open ${deployment.name}`}
+                      >
                         <ExternalLink className="h-4 w-4" />
                         Open
                       </a>

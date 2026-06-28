@@ -53,8 +53,9 @@ export type VercelDeploymentSummary = {
 };
 
 export type VercelDeploymentListResult = {
-  source: "api" | "fixtures";
+  source: "api" | "fixtures" | "unavailable";
   usedFallback: boolean;
   fallbackReason?: string;
+  error?: string;
   deployments: VercelDeploymentSummary[];
 };

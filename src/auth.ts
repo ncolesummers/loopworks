@@ -36,9 +36,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    authorized({ auth: session }) {
+    authorized({ auth: session, request }) {
       const config = readAuthAllowlistConfig();
-      return config.bypass || Boolean(session?.user);
+      const bypassSuppressed = request.headers.get("x-loopworks-disable-auth-bypass") === "true";
+      return (config.bypass && !bypassSuppressed) || Boolean(session?.user);
     },
     async signIn({ account, profile }) {
       const config = readAuthAllowlistConfig();

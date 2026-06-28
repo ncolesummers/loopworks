@@ -4,7 +4,8 @@ import {
   canUseInMemoryGithubWebhookDeliveryStore,
   claimGithubWebhookDelivery,
   createInMemoryGithubWebhookDeliveryStore,
-  getAgentReadyTriggerFromIssuesWebhook,
+  getLoopAwareAgentReadyTriggerFromIssuesWebhook,
+  type GithubAgentReadyLoopResolver,
   type GithubAgentReadyTrigger,
   type GithubIssuesWebhookPayload,
   verifyGithubWebhookSignature,
@@ -22,6 +23,22 @@ function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
 
   return payload as GithubIssuesWebhookPayload;
 }
+
+const loopEnabledEnvKeys = {
+  development: "LOOPWORKS_DEVELOPMENT_LOOP_ENABLED",
+  research: "LOOPWORKS_RESEARCH_LOOP_ENABLED",
+} as const;
+
+function readLoopEnabledFlag(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() !== "false";
+}
+
+const resolveAgentReadyLoopState: GithubAgentReadyLoopResolver = (trigger) => ({
+  enabled: readLoopEnabledFlag(
+    process.env[loopEnabledEnvKeys[trigger.workflow]] ??
+      process.env.LOOPWORKS_AGENT_READY_LOOP_ENABLED,
+  ),
+});
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -131,7 +148,7 @@ export async function POST(request: Request) {
 
   const agentReadyTrigger: GithubAgentReadyTrigger =
     event === "issues" && issuesPayload
-      ? getAgentReadyTriggerFromIssuesWebhook(issuesPayload)
+      ? getLoopAwareAgentReadyTriggerFromIssuesWebhook(issuesPayload, resolveAgentReadyLoopState)
       : { shouldTrigger: false, reason: "unsupported_event" };
 
   webhookLogger.info(
