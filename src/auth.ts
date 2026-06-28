@@ -1,28 +1,35 @@
 import NextAuth from "next-auth";
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import GitHub from "next-auth/providers/github";
 
+import { db } from "@/db/client";
+import { accounts, sessions, users, verificationTokens } from "@/db/schema";
+import { readGithubAccessTokenForUser } from "@/lib/auth/accounts";
 import { evaluateAuthAllowlist, readAuthAllowlistConfig } from "@/lib/auth/allowlist";
 import { fetchGithubOrganizationLogins } from "@/lib/auth/github";
+import {
+  applyGithubLoginToSession,
+  mapGithubProfileToAuthUser,
+  readGithubLoginFromProfile,
+} from "@/lib/auth/identity";
+import { authorizeGithubSession } from "@/lib/auth/session-policy";
 import { logger } from "@/lib/observability/logger";
 
 const authSecret =
   process.env.AUTH_SECRET ??
   (process.env.NODE_ENV === "production" ? undefined : "loopworks-local-development-secret");
 
-function readStringProperty(source: unknown, key: string): string | null {
-  if (!source || typeof source !== "object") {
-    return null;
-  }
-
-  const value = (source as Record<string, unknown>)[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: DrizzleAdapter(db, {
+    usersTable: users,
+    accountsTable: accounts,
+    sessionsTable: sessions,
+    verificationTokensTable: verificationTokens,
+  }),
   trustHost: true,
   secret: authSecret,
   session: {
-    strategy: "jwt",
+    strategy: "database",
   },
   providers: [
     GitHub({
@@ -33,17 +40,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: "read:user user:email read:org",
         },
       },
+      profile: mapGithubProfileToAuthUser,
     }),
   ],
   callbacks: {
-    authorized({ auth: session, request }) {
+    async authorized({ auth: session, request }) {
       const config = readAuthAllowlistConfig();
       const bypassSuppressed = request.headers.get("x-loopworks-disable-auth-bypass") === "true";
-      return (config.bypass && !bypassSuppressed) || Boolean(session?.user);
+      if (config.bypass && !bypassSuppressed) {
+        return true;
+      }
+
+      const authorization = await authorizeGithubSession({
+        session,
+        config: {
+          ...config,
+          bypass: false,
+        },
+        readGithubAccessToken: readGithubAccessTokenForUser,
+      });
+
+      return authorization.authorized;
     },
     async signIn({ account, profile }) {
       const config = readAuthAllowlistConfig();
-      const githubLogin = readStringProperty(profile, "login");
+      const githubLogin = readGithubLoginFromProfile(profile);
       const githubOrganizations =
         config.allowedGithubOrgs.length > 0 && account?.access_token
           ? await fetchGithubOrganizationLogins({
@@ -70,20 +91,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return decision.allowed;
     },
-    jwt({ token, profile }) {
-      const githubLogin = readStringProperty(profile, "login");
-      if (githubLogin) {
-        token.githubLogin = githubLogin;
-      }
-
-      return token;
-    },
-    session({ session, token }) {
-      session.user.githubLogin =
-        typeof token.githubLogin === "string" && token.githubLogin.length > 0
-          ? token.githubLogin
-          : null;
-      return session;
+    session({ session, user }) {
+      return applyGithubLoginToSession(session, user);
     },
   },
 });

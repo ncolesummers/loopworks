@@ -74,7 +74,7 @@ Reviews the MVP before it is called shippable and checks high-risk integration p
 
 Needs:
 
-1. Auth/session boundaries, GitHub webhook verification, token handling, and approval paths documented.
+1. Auth/session boundaries, username/org allowlists, GitHub webhook verification, token handling, and approval paths documented.
 2. Logs that prove behavior without exposing secrets.
 3. Follow-up issues for unresolved findings.
 
@@ -104,6 +104,7 @@ Risks:
 | S02 | Security Reviewer | Repeated delivery ids do not create duplicate runs. | Unit, integration |
 | S03 | Security Reviewer | Local auth bypass cannot work in production environments. | Unit |
 | S04 | Security Reviewer | Logger redaction removes token, secret, authorization, OAuth, and webhook-sensitive fields. | Unit |
+| S05 | Security Reviewer | GitHub SSO allowlists reject unauthorized identities and persist the GitHub login used for approval attribution. | Unit, Playwright |
 
 ## MVP Milestone Map
 
@@ -111,7 +112,7 @@ Risks:
 | --- | --- |
 | M0 Project Foundation | P01, P03, R02, S04 |
 | M1 Design System Direction + App Shell | P01, P04, M01, A02, R02 |
-| M2 GitHub + Vercel Source Systems | P02, M01, M03, R01, S01, S02, S03 |
+| M2 GitHub + Vercel Source Systems | P02, M01, M03, R01, S01, S02, S03, S05 |
 | M3 Durable Loop MVP | M02, A01, A02, A03, R01 |
 | M4 Validation + PR Path + MVP Security Review | A03, R01, R02, S01, S02, S03, S04 |
 | M5 Agent Governance + Evals | P03, A02, A03, R02, S04 |

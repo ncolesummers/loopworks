@@ -25,6 +25,22 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 6. Is there a clear rollback or containment path for bad automation?
 7. Do Pino logs preserve useful correlation ids without leaking tokens, payload bodies, OAuth data, or private keys?
 
+## Auth And Session Notes
+
+1. Real portal sessions use Auth.js GitHub SSO with database-backed Drizzle
+   sessions.
+2. The GitHub `login` is persisted as `users.github_login` and is the operator
+   identity used for approval and future run attribution.
+3. Username and organization allowlists fail closed when
+   `LOOPWORKS_AUTH_BYPASS` is not active.
+4. Active organization-allowlist sessions revalidate membership through the
+   persisted GitHub OAuth token and fail closed when token or org evidence is
+   unavailable.
+5. `LOOPWORKS_AUTH_BYPASS` is a local fixture path only and must remain disabled
+   in production.
+6. OAuth access tokens may exist in the Auth.js accounts table; logs and UI must
+   never expose tokens, raw OAuth profiles, or authorization headers.
+
 ## Required Checks
 
 1. Session validation and CSRF protections.
@@ -34,6 +50,7 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 5. Auditable records for approvals and automation actions.
 6. Basic rate limiting or abuse controls where applicable.
 7. Structured log samples for webhook rejection, duplicate delivery, approval rejection, and Vercel API fallback.
+8. Username/org allowlist coverage for allowed and denied GitHub identities.
 
 ## Exit Criteria
 

@@ -22,13 +22,21 @@ The repo must avoid pretending in-memory stores are production-ready. In-memory 
 ## Validation
 
 1. Durable workflow state has Drizzle schema coverage before production use.
-2. Webhook idempotency and approval transitions are backed by transactional records before MVP completion.
-3. Tests cover schema-dependent behavior through focused unit or integration tests.
-4. Migration commands are documented and run in CI or release checks when migrations exist.
+2. Auth.js uses the Drizzle adapter for database-backed sessions, and
+   `users.github_login` persists the GitHub identity used for audit and approval
+   attribution.
+3. Webhook idempotency and approval transitions are backed by transactional
+   records before MVP completion.
+4. Tests cover schema-dependent behavior through focused unit or integration
+   tests.
+5. Migration commands are documented and run in CI or release checks when
+   migrations exist.
 
 ## Follow-Ups
 
-1. Wire Auth.js to the Drizzle adapter for persisted sessions.
-2. Add the first migration and database bootstrap path.
-3. Define transaction boundaries for webhook intake, run creation, approval transitions, and PR creation.
-4. Decide whether event sourcing remains append-only events plus projections or simpler current-state rows plus audit events.
+1. Add a database health check and local bootstrap path around the generated
+   initial migration.
+2. Define transaction boundaries for webhook intake, run creation, approval
+   transitions, and PR creation.
+3. Decide whether event sourcing remains append-only events plus projections or
+   simpler current-state rows plus audit events.

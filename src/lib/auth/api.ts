@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { Session } from "next-auth";
 
 import { auth } from "@/auth";
+import { readGithubAccessTokenForUser } from "@/lib/auth/accounts";
 import { readAuthAllowlistConfig } from "@/lib/auth/allowlist";
+import { getGithubLoginFromAuthUser } from "@/lib/auth/identity";
+import { authorizeGithubSession } from "@/lib/auth/session-policy";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 
 export type ApiSession =
@@ -18,7 +21,12 @@ export type ApiSession =
     };
 
 function actorIdFromSession(session: Session): string {
-  return session.user.githubLogin ?? session.user.email ?? session.user.name ?? "github-user";
+  const githubLogin = getGithubLoginFromAuthUser(session.user);
+  if (!githubLogin) {
+    throw new Error("Authenticated GitHub API sessions require a persisted githubLogin.");
+  }
+
+  return githubLogin;
 }
 
 export async function requireApiSession(input: {
@@ -26,8 +34,39 @@ export async function requireApiSession(input: {
   logger?: LoopworksLogger;
 }): Promise<ApiSession> {
   const session = await auth();
+  const config = readAuthAllowlistConfig();
 
   if (session?.user) {
+    const authorization = await authorizeGithubSession({
+      session,
+      config: {
+        ...config,
+        bypass: false,
+      },
+      readGithubAccessToken: readGithubAccessTokenForUser,
+    });
+    if (!authorization.authorized) {
+      input.logger?.warn(
+        {
+          route: input.route,
+          githubLogin: authorization.githubLogin,
+          reason: authorization.reason,
+        },
+        "api_auth_denied",
+      );
+
+      return {
+        authenticated: false,
+        response: NextResponse.json(
+          {
+            error: "GitHub identity is not authorized.",
+            reason: authorization.reason,
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
     return {
       authenticated: true,
       actorId: actorIdFromSession(session),
@@ -36,7 +75,6 @@ export async function requireApiSession(input: {
     };
   }
 
-  const config = readAuthAllowlistConfig();
   if (config.bypass) {
     return {
       authenticated: true,
