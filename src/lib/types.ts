@@ -55,6 +55,7 @@ export interface RepoRecord {
   owner: string;
   description: string;
   health: RepoHealth;
+  githubHref?: string;
   framework: string;
   defaultBranch: string;
   ciCommands: string[];

@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { expect, test } from "@playwright/test";
 
 const portalRoutes = [
   {
@@ -84,10 +84,47 @@ test.describe("Loopworks portal", () => {
     await page.goto("/catalog");
 
     await expect(page.getByRole("heading", { name: "Repo catalog" })).toBeVisible();
-    await expect(page.getByText("ncolesummers/loopworks-web")).toBeVisible();
-    await expect(page.getByText("Next.js")).toBeVisible();
-    await expect(page.getByText("bun run validate")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Vercel project prj_loopworks" })).toBeVisible();
+    const loopworksRow = page.getByRole("row", { name: /ncolesummers\/loopworks-web/ });
+    await expect(
+      loopworksRow.getByRole("link", { name: "ncolesummers/loopworks-web" }),
+    ).toHaveAttribute("href", "https://github.com/ncolesummers/loopworks-web");
+    await expect(loopworksRow.getByText("Next.js")).toBeVisible();
+    await expect(loopworksRow.getByText("main", { exact: true })).toBeVisible();
+    await expect(loopworksRow.getByText("bun run validate")).toBeVisible();
+    await expect(loopworksRow.getByText("Intake and triage")).toBeVisible();
+    await expect(loopworksRow.getByText("Typecheck")).toBeVisible();
+    await expect(loopworksRow.getByRole("link", { name: "Docs" })).toHaveAttribute(
+      "href",
+      "https://github.com/ncolesummers/loopworks/tree/main/docs",
+    );
+    await expect(loopworksRow.getByRole("link", { name: "Observability" })).toBeVisible();
+    await expect(loopworksRow.getByRole("link", { name: "Design system" })).toBeVisible();
+    await expect(
+      loopworksRow.getByRole("link", { name: "Vercel project prj_loopworks" }),
+    ).toBeVisible();
+
+    await expect(
+      page.getByRole("row", { name: /ncolesummers\/delivery-ops/ }).getByText("Blocked", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("row", { name: /ncolesummers\/integration-playground/ })
+        .getByText("Disconnected"),
+    ).toBeVisible();
+
+    await page.getByLabel("Search repositories").fill("factory");
+    await expect(page.getByText("ncolesummers/factory-core")).toBeVisible();
+    await expect(page.getByText("ncolesummers/loopworks-web")).toHaveCount(0);
+
+    await page.getByLabel("Search repositories").fill("");
+    await page.getByLabel("Filter by health").selectOption("blocked");
+    await expect(page.getByText("ncolesummers/delivery-ops")).toBeVisible();
+    await expect(page.getByText("ncolesummers/factory-core")).toHaveCount(0);
+
+    await page.getByLabel("Search repositories").fill("missing-repo");
+    await expect(page.getByText("No repositories match the current filters")).toBeVisible();
 
     await page.getByRole("link", { name: "Deployments", exact: true }).click();
     await expect(page).toHaveURL("/deployments");

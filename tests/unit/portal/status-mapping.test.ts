@@ -14,6 +14,10 @@ describe("portal status mapping", () => {
     expect(getRepoHealthStatus("healthy")).toEqual({ status: "ready", label: "Healthy" });
     expect(getRepoHealthStatus("watch")).toEqual({ status: "blocked", label: "Watch" });
     expect(getRepoHealthStatus("blocked")).toEqual({ status: "blocked", label: "Blocked" });
+    expect(getRepoHealthStatus("disconnected")).toEqual({
+      status: "disabled",
+      label: "Disconnected",
+    });
   });
 
   it("maps deployment state into deployment statuses", () => {
