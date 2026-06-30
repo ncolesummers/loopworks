@@ -11,7 +11,7 @@ export type DeploymentSummaryStatus = (typeof deploymentSummaryStatusValues)[num
 export type VercelDeploymentPayload = {
   uid: string;
   name: string;
-  url: string;
+  url?: string | null;
   state?: string | null;
   readyState?: string | null;
   createdAt: number;
@@ -40,7 +40,7 @@ export type VercelDeploymentSummary = {
   projectName: string;
   environment: "production" | "preview" | "development";
   status: DeploymentSummaryStatus;
-  url: string;
+  url?: string;
   branch?: string;
   commitSha?: string;
   createdAt: string;

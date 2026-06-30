@@ -1,5 +1,7 @@
 import { createVercelDeploymentClient, mapVercelDeployment } from "@/lib/vercel/client";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { vercelDeploymentFixtures } from "@/lib/vercel/fixtures";
+import type { DeploymentSummaryStatus, VercelDeploymentPayload } from "@/lib/vercel/types";
 
 function createMockLogger() {
   const logger = {
@@ -59,6 +61,70 @@ describe("Vercel deployment helpers", () => {
       pullRequestNumber: 11,
     });
     expect(summary.url).toBe("https://loopworks-git-issue-77.vercel.app");
+  });
+
+  it("normalizes Vercel states and meta-only commit metadata", () => {
+    const cases = [
+      { state: "READY", readyState: "READY", expectedStatus: "ready" },
+      { state: "BUILDING", readyState: "BUILDING", expectedStatus: "building" },
+      { state: "ERROR", readyState: "ERROR", expectedStatus: "error" },
+      { state: "QUEUED", readyState: "QUEUED", expectedStatus: "queued" },
+      { state: "CANCELED", readyState: "CANCELED", expectedStatus: "canceled" },
+    ] satisfies {
+      state: string;
+      readyState: string;
+      expectedStatus: DeploymentSummaryStatus;
+    }[];
+
+    for (const item of cases) {
+      const summary = mapVercelDeployment({
+        uid: `dpl_${item.expectedStatus}`,
+        name: "loopworks",
+        url: `loopworks-${item.expectedStatus}.vercel.app`,
+        state: item.state,
+        readyState: item.readyState,
+        createdAt: Date.parse("2026-06-18T18:05:00.000Z"),
+        target: item.expectedStatus === "ready" ? "production" : "preview",
+        meta: {
+          githubCommitRef: `codex/${item.expectedStatus}`,
+          githubCommitSha: `${item.expectedStatus}123`,
+        },
+      });
+
+      expect(summary.status).toBe(item.expectedStatus);
+      expect(summary.branch).toBe(`codex/${item.expectedStatus}`);
+      expect(summary.commitSha).toBe(`${item.expectedStatus}123`);
+    }
+  });
+
+  it("preserves missing deployment URLs for queued builds", () => {
+    const summary = mapVercelDeployment({
+      uid: "dpl_queued_without_url",
+      name: "loopworks",
+      url: null,
+      state: "QUEUED",
+      readyState: "QUEUED",
+      createdAt: Date.parse("2026-06-18T18:05:00.000Z"),
+      target: "preview",
+      gitSource: {
+        ref: "codex/9-vercel-deploy",
+        sha: "pending",
+      },
+    } as VercelDeploymentPayload);
+
+    expect(summary.status).toBe("queued");
+    expect(summary.url).toBeUndefined();
+  });
+
+  it("keeps fixture deployments broad enough for the Issue #9 overview", () => {
+    const summaries = vercelDeploymentFixtures.map(mapVercelDeployment);
+
+    expect(summaries.map((summary) => summary.status)).toEqual(
+      expect.arrayContaining(["ready", "building", "error"]),
+    );
+    expect(summaries.map((summary) => summary.environment)).toEqual(
+      expect.arrayContaining(["preview", "production"]),
+    );
   });
 
   it("falls back to fixtures when credentials are missing", async () => {
@@ -163,5 +229,40 @@ describe("Vercel deployment helpers", () => {
       }),
       "vercel_deployments_api_success",
     );
+  });
+
+  it("requests the Vercel deployments endpoint with project and team scope", async () => {
+    const logger = createMockLogger();
+    let requestedUrl = "";
+    let requestedInit: RequestInit | undefined;
+    const client = createVercelDeploymentClient({
+      accessToken: "token",
+      teamId: "team_loopworks",
+      teamSlug: "loopworks-team",
+      apiBaseUrl: "https://api.vercel.test",
+      logger,
+      fetchImpl: async (input, init) => {
+        requestedUrl = String(input);
+        requestedInit = init;
+        return new Response(JSON.stringify({ deployments: [] }), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        });
+      },
+    });
+
+    await client.listDeployments({
+      projectId: "prj_loopworks",
+      limit: 100,
+    });
+
+    expect(requestedUrl).toBe(
+      "https://api.vercel.test/v7/deployments?projectId=prj_loopworks&limit=50&teamId=team_loopworks&slug=loopworks-team",
+    );
+    expect(requestedInit?.headers).toEqual({
+      Authorization: "Bearer token",
+    });
   });
 });

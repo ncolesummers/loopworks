@@ -133,6 +133,33 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByRole("link", { name: "Open preview/portal-shell" })).toBeVisible();
   });
 
+  test("deployment overview shows Vercel states, metadata, and safe links", async ({ page }) => {
+    await page.goto("/deployments");
+
+    const overview = page.locator("#deployments");
+    await expect(
+      page.getByRole("heading", { name: "Vercel deployments and previews" }),
+    ).toBeVisible();
+    await expect(overview.getByText("Production", { exact: true })).toBeVisible();
+    await expect(overview.getByText("Preview", { exact: true }).first()).toBeVisible();
+    await expect(overview.getByText("Ready", { exact: true }).first()).toBeVisible();
+    await expect(overview.getByText("Building", { exact: true })).toBeVisible();
+    await expect(overview.getByText("Errored", { exact: true })).toBeVisible();
+    await expect(overview.getByText("main", { exact: true })).toBeVisible();
+    await expect(overview.getByText("codex/9-vercel-deploy", { exact: true })).toBeVisible();
+    await expect(overview.getByText("badc0de", { exact: true })).toBeVisible();
+    await expect(overview.getByText("Build failed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open production/main" })).toHaveAttribute(
+      "href",
+      "https://loopworks.vercel.app/",
+    );
+    await expect(
+      page.getByRole("link", { name: "Open Vercel details for production/main" }),
+    ).toHaveAttribute("href", "https://vercel.com/ncolesummers/loopworks/dpl_prod");
+    await expect(page.getByRole("button", { name: "Open preview/building" })).toBeDisabled();
+    await expect(overview.getByText("No preview URL yet")).toHaveCount(2);
+  });
+
   // Persona M02: pausing a loop records a skipped reason instead of silently triggering.
   test("pausing a loop records the disabled trigger reason", async ({ page }) => {
     await page.goto("/loops");

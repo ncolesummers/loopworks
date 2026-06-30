@@ -2,6 +2,7 @@ import type { Status } from "@/components/ui/status-badge";
 import type {
   ApprovalState,
   ArtifactState,
+  DeploymentEnvironment,
   DeploymentState,
   LoopRegistryItem,
   LoopState,
@@ -31,10 +32,7 @@ export function getDeploymentStatus(
   state: DeploymentState | DeploymentSummaryStatus,
 ): PortalStatusMeta {
   const statuses = {
-    success: { status: "ready", label: "Ready" },
-    preview: { status: "preview", label: "Preview" },
     queued: { status: "queued", label: "Queued" },
-    failed: { status: "errored", label: "Errored" },
     building: { status: "building", label: "Building" },
     ready: { status: "ready", label: "Ready" },
     error: { status: "errored", label: "Errored" },
@@ -42,6 +40,18 @@ export function getDeploymentStatus(
   } satisfies Record<DeploymentState | DeploymentSummaryStatus, PortalStatusMeta>;
 
   return statuses[state];
+}
+
+export function getDeploymentEnvironmentStatus(
+  environment: DeploymentEnvironment,
+): PortalStatusMeta {
+  const statuses = {
+    production: { status: "production", label: "Production" },
+    preview: { status: "preview", label: "Preview" },
+    development: { status: "running", label: "Development" },
+  } satisfies Record<DeploymentEnvironment, PortalStatusMeta>;
+
+  return statuses[environment];
 }
 
 export function getLoopEnabledStatus(enabled: boolean): PortalStatusMeta {

@@ -69,6 +69,16 @@ function toHttpsUrl(value: string): string {
   return value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`;
 }
 
+function toOptionalHttpsUrl(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return toHttpsUrl(trimmed);
+}
+
 function extractIssueNumbers(input: string | null | undefined): number[] {
   if (!input) {
     return [];
@@ -106,6 +116,7 @@ export function mapVercelDeployment(payload: VercelDeploymentPayload): VercelDep
   const commitSha = payload.gitSource?.sha ?? payload.meta?.githubCommitSha;
   const readyAt = toIsoDate(payload.ready);
   const pullRequestNumber = extractPullRequestNumber(payload);
+  const deploymentUrl = toOptionalHttpsUrl(payload.url);
   const issueNumbers = [
     ...new Set([
       ...extractIssueNumbers(payload.meta?.loopworksIssue),
@@ -119,7 +130,7 @@ export function mapVercelDeployment(payload: VercelDeploymentPayload): VercelDep
     projectName: payload.name,
     environment: normalizeEnvironment(payload.target),
     status: normalizeState(payload.state, payload.readyState),
-    url: toHttpsUrl(payload.url),
+    ...(deploymentUrl ? { url: deploymentUrl } : {}),
     ...(branch ? { branch } : {}),
     ...(commitSha ? { commitSha } : {}),
     createdAt: new Date(payload.createdAt).toISOString(),
@@ -139,7 +150,7 @@ function buildDeploymentsUrl(input: {
   teamSlug?: string;
   limit: number;
 }): string {
-  const url = new URL(`/v6/deployments`, input.apiBaseUrl);
+  const url = new URL(`/v7/deployments`, input.apiBaseUrl);
   url.searchParams.set("projectId", input.projectId);
   url.searchParams.set("limit", String(input.limit));
 
