@@ -2,6 +2,7 @@ import {
   getApprovalChecklistStatus,
   getApprovalStatus,
   getArtifactStatus,
+  getDeploymentEnvironmentStatus,
   getDeploymentStatus,
   getLoopEnabledStatus,
   getLoopStateStatus,
@@ -21,14 +22,23 @@ describe("portal status mapping", () => {
   });
 
   it("maps deployment state into deployment statuses", () => {
-    expect(getDeploymentStatus("success")).toEqual({ status: "ready", label: "Ready" });
-    expect(getDeploymentStatus("preview")).toEqual({ status: "preview", label: "Preview" });
     expect(getDeploymentStatus("queued")).toEqual({ status: "queued", label: "Queued" });
-    expect(getDeploymentStatus("failed")).toEqual({ status: "errored", label: "Errored" });
     expect(getDeploymentStatus("building")).toEqual({ status: "building", label: "Building" });
     expect(getDeploymentStatus("ready")).toEqual({ status: "ready", label: "Ready" });
     expect(getDeploymentStatus("error")).toEqual({ status: "errored", label: "Errored" });
     expect(getDeploymentStatus("canceled")).toEqual({ status: "canceled", label: "Canceled" });
+    expect(getDeploymentEnvironmentStatus("production")).toEqual({
+      status: "production",
+      label: "Production",
+    });
+    expect(getDeploymentEnvironmentStatus("preview")).toEqual({
+      status: "preview",
+      label: "Preview",
+    });
+    expect(getDeploymentEnvironmentStatus("development")).toEqual({
+      status: "running",
+      label: "Development",
+    });
   });
 
   it("maps loop enabled and workflow states", () => {

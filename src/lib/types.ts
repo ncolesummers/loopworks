@@ -1,6 +1,8 @@
 export type RepoHealth = "healthy" | "watch" | "blocked" | "disconnected";
 
-export type DeploymentState = "success" | "preview" | "queued" | "failed";
+export type DeploymentState = "queued" | "building" | "ready" | "error" | "canceled";
+
+export type DeploymentEnvironment = "production" | "preview" | "development";
 
 export type LoopState =
   | "Intake"
@@ -77,12 +79,13 @@ export interface RepoRecord {
 export interface DeploymentRecord {
   name: string;
   state: DeploymentState;
-  environment: string;
-  branch: string;
-  sha: string;
-  url: string;
+  environment: DeploymentEnvironment;
+  branch?: string;
+  sha?: string;
+  url?: string;
   age: string;
   checks: string[];
+  inspectorUrl?: string;
 }
 
 export interface LoopRegistryItem {

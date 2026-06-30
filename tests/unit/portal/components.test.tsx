@@ -4,7 +4,12 @@ import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
 import { ValidationResultSummary } from "@/components/portal/validation-result-summary";
-import type { ArtifactRecord, RepoRecord, ValidationResultRecord } from "@/lib/types";
+import type {
+  ArtifactRecord,
+  DeploymentRecord,
+  RepoRecord,
+  ValidationResultRecord,
+} from "@/lib/types";
 
 afterEach(cleanup);
 
@@ -47,6 +52,88 @@ describe("portal reusable components", () => {
     render(<ValidationResultSummary results={[result]} />);
     expect(screen.queryByRole("link", { name: "Open Unsafe evidence" })).toBeNull();
     expect(screen.getByText("Invalid Evidence Link")).toBeTruthy();
+  });
+
+  it("renders normalized Vercel deployment state, environment, metadata, and safe links", () => {
+    const deployments: DeploymentRecord[] = [
+      {
+        name: "production/main",
+        state: "ready",
+        environment: "production",
+        branch: "main",
+        sha: "7ad2f90",
+        url: "https://loopworks.vercel.app",
+        age: "1h",
+        checks: ["Build ready", "Runtime logs clean"],
+        inspectorUrl: "https://vercel.com/ncolesummers/loopworks/dpl_prod",
+      },
+      {
+        name: "preview/building",
+        state: "building",
+        environment: "preview",
+        branch: "codex/9-vercel-deploy",
+        sha: "pending",
+        age: "Queued",
+        checks: ["Build started"],
+      },
+      {
+        name: "preview/errored",
+        state: "error",
+        environment: "preview",
+        branch: "codex/failed-preview",
+        sha: "badc0de",
+        url: "https://loopworks-git-failed.vercel.app",
+        age: "3m",
+        checks: ["Build failed"],
+        inspectorUrl: "javascript:alert(1)",
+      },
+      {
+        name: "preview/unsafe-url",
+        state: "ready",
+        environment: "preview",
+        branch: "codex/unsafe-url",
+        sha: "c0ffee",
+        url: "javascript:alert(1)",
+        age: "2m",
+        checks: ["Preview ready"],
+      },
+    ];
+
+    render(<DeploymentSummary deployments={deployments} />);
+
+    expect(screen.getByText("Production")).toBeTruthy();
+    expect(screen.getAllByText("Preview").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
+    expect(screen.getByText("Building")).toBeTruthy();
+    expect(screen.getByText("Errored")).toBeTruthy();
+    expect(screen.getByText("main")).toBeTruthy();
+    expect(screen.getByText("7ad2f90")).toBeTruthy();
+    expect(screen.getByText("codex/9-vercel-deploy")).toBeTruthy();
+    expect(screen.getByText("badc0de")).toBeTruthy();
+    expect(screen.getByText("Runtime logs clean")).toBeTruthy();
+
+    expect(screen.getByRole("link", { name: "Open production/main" }).getAttribute("href")).toBe(
+      "https://loopworks.vercel.app/",
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "Open Vercel details for production/main" })
+        .getAttribute("href"),
+    ).toBe("https://vercel.com/ncolesummers/loopworks/dpl_prod");
+    expect(
+      screen.queryByRole("link", { name: "Open Vercel details for preview/errored" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Open preview/building" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(screen.queryByRole("link", { name: "Open preview/unsafe-url" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Open preview/unsafe-url" }).hasAttribute("disabled"),
+    ).toBe(true);
+    expect(screen.getByText("No preview URL yet")).toBeTruthy();
+    expect(screen.getByText("Invalid deployment URL")).toBeTruthy();
+    expect(screen.getByText("Build failed").closest("span")?.className).toContain("danger");
+    expect(screen.getByText("Build started").closest("span")?.className).toContain("info");
   });
 
   it("renders persona-critical catalog metadata for maintainers", () => {
