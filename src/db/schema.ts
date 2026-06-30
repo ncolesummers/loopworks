@@ -1,4 +1,3 @@
-import { approvalStatusValues } from "@/lib/approvals";
 import {
   bigint,
   boolean,
@@ -13,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { approvalStatusValues } from "@/lib/approvals";
 
 import { loopStateValues } from "../../schemas/loop-manifest";
 
@@ -30,6 +30,12 @@ export const deploymentStatusEnum = pgEnum("deployment_status", [
   "ready",
   "error",
   "canceled",
+]);
+export const repoHealthEnum = pgEnum("repo_health", [
+  "healthy",
+  "watch",
+  "blocked",
+  "disconnected",
 ]);
 export const runStatusEnum = pgEnum("run_status", [
   "queued",
@@ -135,6 +141,16 @@ export const repositories = pgTable(
     fullName: text("full_name").notNull().unique(),
     installationId: bigint("installation_id", { mode: "number" }),
     isActive: boolean("is_active").default(true).notNull(),
+    health: repoHealthEnum("health").default("healthy").notNull(),
+    framework: text("framework").default("Unknown").notNull(),
+    defaultBranch: text("default_branch").default("main").notNull(),
+    ciCommands: text("ci_commands").array().default([]).notNull(),
+    docsHref: text("docs_href"),
+    observabilityHref: text("observability_href"),
+    designSystemHref: text("design_system_href"),
+    enabledLoops: text("enabled_loops").array().default([]).notNull(),
+    validationGates: text("validation_gates").array().default([]).notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   () => ({}),

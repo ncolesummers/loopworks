@@ -26,7 +26,7 @@ Owns repository configuration, loop manifests, validation gates, integration cre
 
 Needs:
 
-1. Repo catalog metadata with owner, framework, CI commands, docs, observability links, design-system links, and Vercel project mapping.
+1. Repo catalog metadata with owner, framework, CI commands, docs, observability links, design-system links, Vercel project mapping, and search/filter controls.
 2. Loop toggles that clearly show enabled state, triggers, approvals, and validation gates.
 3. Safe fixture and seed data for local development.
 
@@ -92,7 +92,7 @@ Risks:
 | P02 | Product Operator | An issue with `agent-ready` normalizes into a development loop trigger; `spike` plus `agent-ready` normalizes into a research trigger. | Unit, integration |
 | P03 | Product Operator | A durable decision from planning links to an ADR proposal or accepted ADR. | Integration, docs review |
 | P04 | Product Operator | An operator switches between light and dark mode from the app shell; the choice persists across reloads and both themes meet contrast. | Playwright, a11y |
-| M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, and Vercel project links. | Playwright, Storybook |
+| M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, Vercel project links, and search/filter controls. | Playwright, Storybook |
 | M02 | Maintainer | Turning a loop off prevents trigger execution and records a skipped reason. | Unit, Playwright |
 | M03 | Maintainer | Missing Vercel credentials in dev returns explicit fixture fallback metadata; production does not silently return fixtures. | Unit, integration |
 | A01 | Agent Supervisor | Run detail shows planning, test-writing, development, validation, code review, commit, PR, and done stages with artifacts. | Storybook, Playwright |
