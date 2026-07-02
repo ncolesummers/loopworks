@@ -112,3 +112,21 @@ bun run bootstrap:github
 ```
 
 Use `--dry-run` to print the planned labels, milestones, issues, and project setup without changes.
+
+## Database Seed Data
+
+After the database bootstrap (`bun run db:migrate`), seed a demo dataset covering repos, loops, runs, run steps, artifacts, approvals, and Vercel deployment states in every status:
+
+```bash
+bun run db:seed
+```
+
+Seeding is idempotent (upsert by fixed id), so running it again does not duplicate rows. To clear the fixed-id demo rows and reseed from scratch:
+
+```bash
+bun run db:seed:reset
+```
+
+Reset only deletes the exact rows this script owns, not the whole table, so any other data in those tables is left untouched.
+
+Add `-- --dry-run` to either command to print the planned row counts without writing. Per [ADR 0007](docs/adr/0007-explicit-seed-data-and-fixture-policy.md), both commands refuse to run when `NODE_ENV` or `VERCEL_ENV` is `production`, or when `DATABASE_URL` does not point at a loopback host (`localhost`/`127.0.0.1`/`::1`) — Loopworks demo data must never write into a database that isn't obviously local.
