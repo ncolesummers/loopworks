@@ -70,9 +70,25 @@ Each loop definition includes:
 11. `cancellation` for disabled or superseded work.
 12. `githubWriteback` for approved comments, labels, or status checks.
 
-The sample `development-loop` covers the `agent-ready` trigger and the early
-validation path for issue-backed implementation work. It is a draft operating
-contract, not a full runtime engine.
+The sample `development-loop` covers the `agent-ready` trigger and the first
+durable issue-backed implementation skeleton. The stage sequence is stable:
+planning, test-writing, development, validation, code review, commit, PR, and
+done. Each stage has a required visible artifact contract:
+
+1. Planning: plan artifact.
+2. Test-writing: red test evidence.
+3. Development: patch artifact.
+4. Validation: validation report.
+5. Code review: code review notes.
+6. Commit: commit intent.
+7. PR: PR intent.
+8. Done: completion summary.
+
+Validation must appear before code review, commit, PR, and done. Disabled
+development-loop triggers must not create a run; they record a durable
+skipped/no-op reason such as `loop_disabled` so operators can explain why an
+`agent-ready` issue did not start. Research-loop disabled evidence is tracked
+separately from the development-loop skeleton.
 
 ## Operating Rules
 

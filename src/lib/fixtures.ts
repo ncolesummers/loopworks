@@ -1,4 +1,25 @@
 import type { FixtureState, GitHubSettingRecord, LoopRegistryItem } from "@/lib/types";
+import {
+  createDevelopmentLoopRunSkeleton,
+  projectDevelopmentLoopArtifacts,
+  projectDevelopmentLoopTimeline,
+} from "@/lib/loops/development-run";
+
+const developmentLoopFixture = createDevelopmentLoopRunSkeleton({
+  mode: "simulated",
+  now: new Date("2026-07-02T16:00:00.000Z"),
+  trigger: {
+    issueNumber: 11,
+    issueUrl: "https://github.com/ncolesummers/loopworks/issues/11",
+    labels: ["agent-ready", "area:loops", "area:agents", "loop:development", "priority:p0"],
+    milestone: "M3 Durable Loop MVP",
+    repositoryFullName: "ncolesummers/loopworks",
+    title: "Agent-ready development loop skeleton",
+  },
+});
+
+const developmentLoopTimeline = projectDevelopmentLoopTimeline(developmentLoopFixture);
+const developmentLoopArtifacts = projectDevelopmentLoopArtifacts(developmentLoopFixture);
 
 export const portalFixture: FixtureState = {
   repos: [
@@ -181,72 +202,9 @@ export const portalFixture: FixtureState = {
       risk: "high",
     },
   ] satisfies LoopRegistryItem[],
-  timeline: [
-    {
-      kind: "planning",
-      at: "09:14",
-      actor: "Planning agent",
-      title: "Planning",
-      detail: "Created an executable plan artifact linked to Issue #19 and persona IDs.",
-      artifact: "Plan artifact",
-    },
-    {
-      kind: "test",
-      at: "09:21",
-      actor: "Builder agent",
-      title: "Test writing",
-      detail: "Added failing Vitest and Playwright coverage before production changes.",
-      artifact: "Red tests",
-    },
-    {
-      kind: "development",
-      at: "09:35",
-      actor: "Builder agent",
-      title: "Development",
-      detail: "Implemented the smallest green path for typed fixtures and workflow surfaces.",
-      artifact: "Patch",
-    },
-    {
-      kind: "validation",
-      at: "09:48",
-      actor: "CI runner",
-      title: "Validation",
-      detail: "Deterministic checks completed before review or PR judgment.",
-      artifact: "Validation report",
-    },
-    {
-      kind: "review",
-      at: "09:54",
-      actor: "Reviewer",
-      title: "Code review",
-      detail: "Reviewer checks evidence, Vercel preview, and source issue linkage.",
-      artifact: "Review notes",
-    },
-    {
-      kind: "commit",
-      at: "10:01",
-      actor: "Maintainer",
-      title: "Commit",
-      detail: "Validated changes are ready for an atomic conventional commit.",
-      artifact: "Commit intent",
-    },
-    {
-      kind: "pull_request",
-      at: "10:08",
-      actor: "Maintainer",
-      title: "PR created",
-      detail: "PR intent links source issue, run evidence, and Vercel preview context.",
-      artifact: "PR intent",
-    },
-    {
-      kind: "done",
-      at: "10:14",
-      actor: "Maintainer",
-      title: "Done",
-      detail: "Run closes only after deterministic validation and review evidence are present.",
-    },
-  ],
+  timeline: developmentLoopTimeline,
   artifacts: [
+    ...developmentLoopArtifacts,
     {
       label: "Preview URL",
       href: "https://loopworks-git-codex-m1-shell.vercel.app",
@@ -255,7 +213,7 @@ export const portalFixture: FixtureState = {
       kind: "preview",
     },
     {
-      label: "Validation report",
+      label: "CI validation artifact",
       href: "https://github.com/ncolesummers/loopworks/actions",
       detail: "Deterministic checks captured before reviewer signoff.",
       state: "available",

@@ -185,7 +185,7 @@ test.describe("Loopworks portal", () => {
       "Validation",
       "Code review",
       "Commit",
-      "PR created",
+      "PR",
       "Done",
     ];
     let previousY = -1;

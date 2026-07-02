@@ -2,11 +2,21 @@
 import { eq } from "drizzle-orm";
 
 import { handleGithubWebhookPost } from "@/app/api/github/webhooks/route";
-import { idempotencyLocks, webhookDeliveries } from "@/db/schema";
+import {
+  agentPlans,
+  artifacts,
+  idempotencyLocks,
+  loopRuns,
+  observabilityEvents,
+  repositories,
+  runSteps,
+  webhookDeliveries,
+} from "@/db/schema";
 import {
   createDrizzleGithubWebhookDeliveryStore,
   type GithubWebhookDatabase,
 } from "@/lib/github/webhook-store";
+import type { DevelopmentLoopRunDatabase } from "@/lib/loops/development-run";
 
 import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixture";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
@@ -28,6 +38,17 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
   function createStore() {
     return createDrizzleGithubWebhookDeliveryStore(context.db as unknown as GithubWebhookDatabase, {
       lockTtlMs,
+    });
+  }
+
+  async function insertLoopworksRepository() {
+    await context.db.insert(repositories).values({
+      githubRepoId: 11_000_001,
+      owner: "ncolesummers",
+      name: "loopworks",
+      fullName: "ncolesummers/loopworks",
+      enabledLoops: ["Agent-ready development loop"],
+      validationGates: ["Focused tests", "Aggregate validation"],
     });
   }
 
@@ -237,6 +258,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
 
   it("persists route-boundary state for an accepted delivery and rejects replays", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    await insertLoopworksRepository();
     const store = createStore();
     const fixture = createGithubWebhookFixture({
       deliveryId: "fixture-route-persistence-delivery",
@@ -253,6 +275,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       });
 
     const first = await handleGithubWebhookPost(makeRequest(), {
+      developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
       now,
       webhookDeliveryStore: store,
     });
@@ -261,6 +284,11 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       accepted: true,
       duplicate: false,
       agentReadyTrigger: { shouldTrigger: true, workflow: "development" },
+      developmentRun: {
+        artifactCount: 8,
+        mode: "created",
+        stageCount: 8,
+      },
       nextAction: "queue_eve_planning_agent",
     });
 
@@ -283,8 +311,23 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       deliveryStatus: "processed",
     });
 
+    const runRows = await context.db.select().from(loopRuns);
+    const stepRows = await context.db.select().from(runSteps);
+    const artifactRows = await context.db.select().from(artifacts);
+    const planRows = await context.db.select().from(agentPlans);
+    expect(runRows).toHaveLength(1);
+    expect(runRows[0]).toMatchObject({
+      githubIssueNumber: 11,
+      loopKey: "development-loop",
+      status: "queued",
+    });
+    expect(stepRows).toHaveLength(8);
+    expect(artifactRows).toHaveLength(8);
+    expect(planRows).toHaveLength(1);
+
     // A replayed delivery is rejected at the route boundary without creating new rows.
     const second = await handleGithubWebhookPost(makeRequest(), {
+      developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
       now,
       webhookDeliveryStore: store,
     });
@@ -295,5 +338,101 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     });
     expect(await context.db.select().from(webhookDeliveries)).toHaveLength(1);
     expect(await context.db.select().from(idempotencyLocks)).toHaveLength(1);
+    expect(await context.db.select().from(loopRuns)).toHaveLength(1);
+    expect(await context.db.select().from(runSteps)).toHaveLength(8);
+    expect(await context.db.select().from(artifacts)).toHaveLength(8);
+    expect(await context.db.select().from(agentPlans)).toHaveLength(1);
+  });
+
+  it("persists disabled-loop no-op state at the route boundary", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    vi.stubEnv("LOOPWORKS_DEVELOPMENT_LOOP_ENABLED", "false");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "fixture-route-noop-delivery",
+      kind: "agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+        now: () => new Date("2026-06-28T02:05:00.000Z"),
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: true,
+      agentReadyTrigger: {
+        reason: "loop_disabled",
+        shouldTrigger: false,
+        skipped: true,
+        workflow: "development",
+      },
+      developmentRun: {
+        mode: "noop",
+        reason: "loop_disabled",
+      },
+    });
+    expect(await context.db.select().from(loopRuns)).toHaveLength(0);
+    expect(
+      await context.db
+        .select()
+        .from(observabilityEvents)
+        .where(eq(observabilityEvents.eventType, "development_loop_noop")),
+    ).toHaveLength(1);
+  });
+
+  it("does not persist a development no-op for disabled research loops", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    vi.stubEnv("LOOPWORKS_RESEARCH_LOOP_ENABLED", "false");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "fixture-route-research-noop-delivery",
+      kind: "spike-agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+        now: () => new Date("2026-06-28T02:06:00.000Z"),
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(202);
+    const responseBody = await response.json();
+    expect(responseBody).toMatchObject({
+      accepted: true,
+      agentReadyTrigger: {
+        reason: "loop_disabled",
+        shouldTrigger: false,
+        skipped: true,
+        workflow: "research",
+      },
+    });
+    expect(responseBody).not.toHaveProperty("developmentRun");
+    expect(await context.db.select().from(loopRuns)).toHaveLength(0);
+    expect(
+      await context.db
+        .select()
+        .from(observabilityEvents)
+        .where(eq(observabilityEvents.eventType, "development_loop_noop")),
+    ).toHaveLength(0);
   });
 });

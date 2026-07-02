@@ -130,7 +130,7 @@ export function TimelineAndArtifacts() {
         </div>
         <div className="space-y-3">
           {portalFixture.artifacts.map((artifact) => (
-            <ArtifactListItem key={artifact.label} artifact={artifact} />
+            <ArtifactListItem key={`${artifact.label}-${artifact.href}`} artifact={artifact} />
           ))}
         </div>
       </CardContent>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { db } from "@/db/client";
 import {
   canUseInMemoryGithubWebhookDeliveryStore,
   claimGithubWebhookDelivery,
@@ -12,6 +13,15 @@ import {
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
 import { createDrizzleGithubWebhookDeliveryStore } from "@/lib/github/webhook-store";
+import {
+  createDevelopmentLoopRun,
+  recordDevelopmentLoopNoop,
+  simulateDevelopmentLoopRun,
+  type DevelopmentLoopNoopMetadata,
+  type DevelopmentLoopRunDatabase,
+  type DevelopmentLoopRunMetadata,
+  type DevelopmentLoopTrigger,
+} from "@/lib/loops/development-run";
 import { createRequestLogger } from "@/lib/observability/logger";
 
 const inMemoryWebhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
@@ -19,6 +29,7 @@ const inMemoryWebhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
 export const runtime = "nodejs";
 
 type GithubWebhookPostDependencies = {
+  developmentRunDatabase?: DevelopmentLoopRunDatabase;
   getAgentReadyTrigger?: (
     payload: GithubIssuesWebhookPayload,
     resolveLoop: GithubAgentReadyLoopResolver,
@@ -28,6 +39,7 @@ type GithubWebhookPostDependencies = {
 };
 
 type GithubWebhookDeliveryStoreMode = "drizzle" | "injected" | "memory";
+type DevelopmentRunOutcome = DevelopmentLoopRunMetadata | DevelopmentLoopNoopMetadata;
 
 function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
   if (typeof payload !== "object" || payload === null) {
@@ -125,6 +137,85 @@ function getFixtureFallbackResponse(mode: GithubWebhookDeliveryStoreMode) {
     : {};
 }
 
+function getIssueLabels(payload: GithubIssuesWebhookPayload): string[] {
+  return (payload.issue?.labels ?? [])
+    .map((label) => label.name?.trim())
+    .filter((label): label is string => Boolean(label));
+}
+
+function getDevelopmentLoopTrigger(
+  payload: GithubIssuesWebhookPayload | null,
+  deliveryId: string,
+): DevelopmentLoopTrigger | null {
+  if (!payload?.issue?.number || !payload.repository?.full_name) {
+    return null;
+  }
+
+  return {
+    deliveryId,
+    issueNumber: payload.issue.number,
+    issueUrl: payload.issue.html_url ?? undefined,
+    labels: getIssueLabels(payload),
+    milestone: payload.issue.milestone?.title ?? null,
+    repositoryFullName: payload.repository.full_name,
+    title: payload.issue.title ?? "",
+  };
+}
+
+async function resolveDevelopmentRunOutcome(input: {
+  agentReadyTrigger: GithubAgentReadyTrigger;
+  database: DevelopmentLoopRunDatabase;
+  issuesPayload: GithubIssuesWebhookPayload | null;
+  normalizedDeliveryId: string;
+  now: Date;
+  persist: boolean;
+}): Promise<DevelopmentRunOutcome | undefined> {
+  const trigger = getDevelopmentLoopTrigger(input.issuesPayload, input.normalizedDeliveryId);
+
+  if (
+    input.agentReadyTrigger.shouldTrigger &&
+    input.agentReadyTrigger.workflow === "development" &&
+    trigger
+  ) {
+    if (input.persist) {
+      return createDevelopmentLoopRun({
+        database: input.database,
+        now: () => input.now,
+        trigger,
+      });
+    }
+
+    return simulateDevelopmentLoopRun({
+      now: input.now,
+      trigger,
+    });
+  }
+
+  if (
+    !input.agentReadyTrigger.shouldTrigger &&
+    input.agentReadyTrigger.skipped &&
+    input.agentReadyTrigger.reason === "loop_disabled" &&
+    input.agentReadyTrigger.workflow === "development" &&
+    trigger
+  ) {
+    if (input.persist) {
+      return recordDevelopmentLoopNoop({
+        database: input.database,
+        now: () => input.now,
+        reason: "loop_disabled",
+        trigger,
+      });
+    }
+
+    return {
+      mode: "noop",
+      reason: "loop_disabled",
+    };
+  }
+
+  return undefined;
+}
+
 export async function handleGithubWebhookPost(
   request: Request,
   dependencies: GithubWebhookPostDependencies = {},
@@ -134,6 +225,7 @@ export async function handleGithubWebhookPost(
   const event = request.headers.get("x-github-event") ?? "unknown";
   const getAgentReadyTrigger =
     dependencies.getAgentReadyTrigger ?? getLoopAwareAgentReadyTriggerFromIssuesWebhook;
+  const developmentRunDatabase = dependencies.developmentRunDatabase ?? db;
   const now = dependencies.now ?? (() => new Date());
   const requestLogger = createRequestLogger({
     route: "api.github.webhooks",
@@ -256,15 +348,26 @@ export async function handleGithubWebhookPost(
         : { shouldTrigger: false, reason: "unsupported_event" };
     const nextAction = getNextAction(agentReadyTrigger);
     const deliveryStatus = agentReadyTrigger.shouldTrigger ? "processed" : "ignored";
+    const processedAt = now();
+    const developmentRun = await resolveDevelopmentRunOutcome({
+      agentReadyTrigger,
+      database: developmentRunDatabase,
+      issuesPayload,
+      normalizedDeliveryId: claim.deliveryId,
+      now: processedAt,
+      persist:
+        selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
+    });
 
     await webhookDeliveryStore.complete(claim.key, {
       deliveryId: claim.deliveryId,
       metadata: {
+        ...(developmentRun ? { developmentRun } : {}),
         nextAction,
         triggerReason: agentReadyTrigger.reason,
-        triggerWorkflow: agentReadyTrigger.shouldTrigger ? agentReadyTrigger.workflow : "none",
+        triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
-      processedAt: now().toISOString(),
+      processedAt: processedAt.toISOString(),
       status: deliveryStatus,
     });
 
@@ -272,7 +375,9 @@ export async function handleGithubWebhookPost(
       {
         idempotencyKey: claim.key,
         agentReadyTrigger,
+        developmentRun,
         nextAction,
+        triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
       "github_webhook_processed",
     );
@@ -285,6 +390,7 @@ export async function handleGithubWebhookPost(
         idempotencyKey: claim.key,
         event,
         agentReadyTrigger,
+        ...(developmentRun ? { developmentRun } : {}),
         nextAction,
         ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
       },
