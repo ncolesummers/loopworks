@@ -286,6 +286,10 @@ describe("GitHub webhook helpers", () => {
         reason: "loop_disabled",
         skipped: true,
       },
+      developmentRun: {
+        mode: "noop",
+        reason: "loop_disabled",
+      },
       nextAction: "record_and_ignore",
     });
   });
@@ -356,6 +360,11 @@ describe("GitHub webhook helpers", () => {
       agentReadyTrigger: {
         shouldTrigger: true,
         workflow: "development",
+      },
+      developmentRun: {
+        artifactCount: 8,
+        mode: "simulated",
+        stageCount: 8,
       },
       nextAction: "queue_eve_planning_agent",
     });
@@ -462,6 +471,11 @@ describe("GitHub webhook helpers", () => {
     expect(complete).toHaveBeenCalledWith("github:successful-processing-route-delivery", {
       deliveryId: "successful-processing-route-delivery",
       metadata: {
+        developmentRun: {
+          artifactCount: 8,
+          mode: "simulated",
+          stageCount: 8,
+        },
         nextAction: "queue_eve_planning_agent",
         triggerReason: "issue_became_agent_ready",
         triggerWorkflow: "development",

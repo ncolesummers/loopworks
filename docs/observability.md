@@ -34,6 +34,14 @@ The MVP should emit structured logs for:
 5. Development-loop run creation, stage transition, retry, cancellation, validation result, approval wait, and completion.
 6. Planning-agent invocation, tool call summary, artifact creation, and policy block.
 
+Development-loop skeleton creation also writes durable `observability_events`
+rows so logs are not the only audit surface:
+
+1. `development_loop_run_created`: includes repository, issue, loop key, run id,
+   stage count, artifact count, and GitHub delivery correlation where available.
+2. `development_loop_noop`: records skipped triggers such as `loop_disabled`
+   without creating a run.
+
 ## Control Plane Metrics
 
 The internal control plane should eventually expose:

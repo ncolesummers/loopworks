@@ -50,3 +50,7 @@ export const FullStageMatrix: Story = {
     </div>
   ),
 };
+
+export const AgentReadyDevelopmentRun: Story = {
+  render: FullStageMatrix.render,
+};

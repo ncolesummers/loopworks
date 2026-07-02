@@ -3,7 +3,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
+import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { ValidationResultSummary } from "@/components/portal/validation-result-summary";
+import {
+  createDevelopmentLoopRunSkeleton,
+  projectDevelopmentLoopArtifacts,
+  projectDevelopmentLoopTimeline,
+} from "@/lib/loops/development-run";
 import type {
   ArtifactRecord,
   DeploymentRecord,
@@ -52,6 +58,47 @@ describe("portal reusable components", () => {
     render(<ValidationResultSummary results={[result]} />);
     expect(screen.queryByRole("link", { name: "Open Unsafe evidence" })).toBeNull();
     expect(screen.getByText("Invalid Evidence Link")).toBeTruthy();
+  });
+
+  it("renders the shared agent-ready development run timeline and artifact contract", () => {
+    const skeleton = createDevelopmentLoopRunSkeleton({
+      mode: "simulated",
+      now: new Date("2026-07-02T16:00:00.000Z"),
+      trigger: {
+        issueNumber: 11,
+        issueUrl: "https://github.com/ncolesummers/loopworks/issues/11",
+        labels: ["agent-ready", "area:loops", "priority:p0"],
+        milestone: "M3 Durable Loop MVP",
+        repositoryFullName: "ncolesummers/loopworks",
+        title: "Agent-ready development loop skeleton",
+      },
+    });
+
+    render(
+      <div>
+        {projectDevelopmentLoopTimeline(skeleton).map((event) => (
+          <RunTimelineItem key={`${event.kind}-${event.title}`} event={event} />
+        ))}
+        {projectDevelopmentLoopArtifacts(skeleton).map((artifact) => (
+          <ArtifactListItem key={artifact.label} artifact={artifact} />
+        ))}
+      </div>,
+    );
+
+    for (const stage of [
+      "Planning",
+      "Test writing",
+      "Development",
+      "Validation",
+      "Code review",
+      "Commit",
+      "PR",
+      "Done",
+    ]) {
+      expect(screen.getAllByText(stage, { exact: true }).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByRole("link", { name: "Validation report" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "PR intent" })).toBeTruthy();
   });
 
   it("renders normalized Vercel deployment state, environment, metadata, and safe links", () => {

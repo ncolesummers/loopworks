@@ -53,24 +53,24 @@ function createSignature(secret: string, payloadText: string): string {
 function createPayload(kind: GithubWebhookFixtureKind): GithubWebhookFixturePayload {
   const labels =
     kind === "spike-agent-ready"
-      ? ["agent-ready", "spike", "area:github", "priority:p0"]
-      : ["agent-ready", "area:github", "priority:p0"];
+      ? ["agent-ready", "spike", "area:loops", "area:agents", "loop:development", "priority:p0"]
+      : ["agent-ready", "area:loops", "area:agents", "loop:development", "priority:p0"];
 
   return {
     action: "labeled",
     issue: {
-      body: "Create the safe signed fixture path for GitHub issue webhook intake.",
-      html_url: "https://github.com/ncolesummers/loopworks/issues/7",
+      body: "Implement the first durable loop skeleton for issues labeled agent-ready.",
+      html_url: "https://github.com/ncolesummers/loopworks/issues/11",
       labels: labels.map((name) => ({ name })),
       milestone: {
-        title: "M2 GitHub + Vercel Source Systems",
+        title: "M3 Durable Loop MVP",
       },
-      number: 7,
+      number: 11,
       state: "open",
       title:
         kind === "spike-agent-ready"
-          ? "Research GitHub webhook intake fixture"
-          : "GitHub App webhook and dev fixture intake",
+          ? "Research agent-ready development loop skeleton"
+          : "Agent-ready development loop skeleton",
     },
     repository: {
       full_name: defaultRepository,

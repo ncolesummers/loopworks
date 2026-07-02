@@ -52,7 +52,10 @@ describe("GitHub webhook fixture script", () => {
     expect(result.stdout).toContain("x-github-delivery: dry-run-delivery");
     expect(result.stdout).toContain("x-github-event: issues");
     expect(result.stdout).toContain("x-hub-signature-256: sha256=");
-    expect(result.stdout).toContain("Labels: agent-ready, spike, area:github, priority:p0");
+    expect(result.stdout).toContain("Issue: #11 Research agent-ready development loop skeleton");
+    expect(result.stdout).toContain(
+      "Labels: agent-ready, spike, area:loops, area:agents, loop:development, priority:p0",
+    );
     expect(result.stdout).not.toContain("super-sensitive-fixture-secret");
     expect(result.stderr).not.toContain("super-sensitive-fixture-secret");
   });
