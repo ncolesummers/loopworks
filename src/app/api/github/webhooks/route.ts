@@ -195,6 +195,7 @@ async function resolveDevelopmentRunOutcome(input: {
     !input.agentReadyTrigger.shouldTrigger &&
     input.agentReadyTrigger.skipped &&
     input.agentReadyTrigger.reason === "loop_disabled" &&
+    input.agentReadyTrigger.workflow === "development" &&
     trigger
   ) {
     if (input.persist) {
@@ -364,7 +365,7 @@ export async function handleGithubWebhookPost(
         ...(developmentRun ? { developmentRun } : {}),
         nextAction,
         triggerReason: agentReadyTrigger.reason,
-        triggerWorkflow: agentReadyTrigger.shouldTrigger ? agentReadyTrigger.workflow : "none",
+        triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
       processedAt: processedAt.toISOString(),
       status: deliveryStatus,
@@ -376,6 +377,7 @@ export async function handleGithubWebhookPost(
         agentReadyTrigger,
         developmentRun,
         nextAction,
+        triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
       "github_webhook_processed",
     );

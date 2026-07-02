@@ -39,8 +39,8 @@ rows so logs are not the only audit surface:
 
 1. `development_loop_run_created`: includes repository, issue, loop key, run id,
    stage count, artifact count, and GitHub delivery correlation where available.
-2. `development_loop_noop`: records skipped triggers such as `loop_disabled`
-   without creating a run.
+2. `development_loop_noop`: records skipped development-loop triggers such as
+   `loop_disabled` without creating a run.
 
 ## Control Plane Metrics
 

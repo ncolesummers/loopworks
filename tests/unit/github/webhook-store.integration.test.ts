@@ -375,6 +375,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         reason: "loop_disabled",
         shouldTrigger: false,
         skipped: true,
+        workflow: "development",
       },
       developmentRun: {
         mode: "noop",
@@ -388,5 +389,50 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         .from(observabilityEvents)
         .where(eq(observabilityEvents.eventType, "development_loop_noop")),
     ).toHaveLength(1);
+  });
+
+  it("does not persist a development no-op for disabled research loops", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    vi.stubEnv("LOOPWORKS_RESEARCH_LOOP_ENABLED", "false");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "fixture-route-research-noop-delivery",
+      kind: "spike-agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+        now: () => new Date("2026-06-28T02:06:00.000Z"),
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(202);
+    const responseBody = await response.json();
+    expect(responseBody).toMatchObject({
+      accepted: true,
+      agentReadyTrigger: {
+        reason: "loop_disabled",
+        shouldTrigger: false,
+        skipped: true,
+        workflow: "research",
+      },
+    });
+    expect(responseBody).not.toHaveProperty("developmentRun");
+    expect(await context.db.select().from(loopRuns)).toHaveLength(0);
+    expect(
+      await context.db
+        .select()
+        .from(observabilityEvents)
+        .where(eq(observabilityEvents.eventType, "development_loop_noop")),
+    ).toHaveLength(0);
   });
 });

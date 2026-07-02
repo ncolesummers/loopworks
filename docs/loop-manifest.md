@@ -84,10 +84,11 @@ done. Each stage has a required visible artifact contract:
 7. PR: PR intent.
 8. Done: completion summary.
 
-Validation must appear before code review, commit, PR, and done. Disabled loops
-must not create a run; they record a durable skipped/no-op reason such as
-`loop_disabled` so operators can explain why an `agent-ready` issue did not
-start.
+Validation must appear before code review, commit, PR, and done. Disabled
+development-loop triggers must not create a run; they record a durable
+skipped/no-op reason such as `loop_disabled` so operators can explain why an
+`agent-ready` issue did not start. Research-loop disabled evidence is tracked
+separately from the development-loop skeleton.
 
 ## Operating Rules
 

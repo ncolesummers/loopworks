@@ -72,8 +72,11 @@ export type GithubAgentReadyTrigger =
     }
   | {
       shouldTrigger: false;
+      issueNumber?: number;
+      repositoryFullName?: string;
       reason: string;
       skipped?: boolean;
+      workflow?: "development" | "research";
     };
 
 export type GithubAgentReadyLoopResolver = (
@@ -320,8 +323,11 @@ export function getLoopAwareAgentReadyTriggerFromIssuesWebhook(
   if (!loopDecision.shouldTrigger) {
     return {
       shouldTrigger: false,
+      issueNumber: trigger.issueNumber,
+      repositoryFullName: trigger.repositoryFullName,
       reason: loopDecision.reason,
       skipped: loopDecision.skipped,
+      workflow: trigger.workflow,
     };
   }
 

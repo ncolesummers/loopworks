@@ -205,8 +205,54 @@ describe("GitHub webhook helpers", () => {
     );
     expect(trigger).toEqual({
       shouldTrigger: false,
+      issueNumber: 44,
+      repositoryFullName: "ncolesummers/loopworks",
       reason: "loop_disabled",
       skipped: true,
+      workflow: "development",
+    });
+  });
+
+  it("preserves the research workflow when a spike loop is disabled", () => {
+    const resolveLoop = vi.fn(() => ({ enabled: false }));
+    const trigger = getLoopAwareAgentReadyTriggerFromIssuesWebhook(
+      {
+        action: "labeled",
+        repository: {
+          full_name: "ncolesummers/loopworks",
+        },
+        issue: {
+          number: 45,
+          title: "Research disabled loop handling",
+          body: "Disabled research loops must not be audited as development loops.",
+          state: "open",
+          milestone: {
+            title: "M3 Durable Loop MVP",
+          },
+          labels: [
+            { name: "agent-ready" },
+            { name: "spike" },
+            { name: "area:loops" },
+            { name: "priority:p0" },
+          ],
+        },
+      },
+      resolveLoop,
+    );
+
+    expect(resolveLoop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueNumber: 45,
+        workflow: "research",
+      }),
+    );
+    expect(trigger).toEqual({
+      shouldTrigger: false,
+      issueNumber: 45,
+      repositoryFullName: "ncolesummers/loopworks",
+      reason: "loop_disabled",
+      skipped: true,
+      workflow: "research",
     });
   });
 
@@ -285,6 +331,7 @@ describe("GitHub webhook helpers", () => {
         shouldTrigger: false,
         reason: "loop_disabled",
         skipped: true,
+        workflow: "development",
       },
       developmentRun: {
         mode: "noop",
