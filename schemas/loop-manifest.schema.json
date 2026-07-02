@@ -4,19 +4,13 @@
   "title": "Loop Manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "repo",
-    "note",
-    "loopStates",
-    "requiredMetadata",
-    "milestones",
-    "labels",
-    "agentReady"
-  ],
+  "required": ["version", "repo", "note", "loops", "milestones", "labels"],
   "properties": {
+    "version": {
+      "const": 1
+    },
     "repo": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+      "$ref": "#/$defs/repoSlug"
     },
     "note": {
       "type": "string",
@@ -25,160 +19,200 @@
     "loopStates": {
       "type": "array",
       "minItems": 1,
+      "default": [
+        "intake",
+        "triage",
+        "planned",
+        "in_progress",
+        "waiting_on_review",
+        "validating",
+        "blocked",
+        "done"
+      ],
       "items": {
-        "enum": [
-          "intake",
-          "triage",
-          "planned",
-          "in_progress",
-          "waiting_on_review",
-          "validating",
-          "blocked",
-          "done"
-        ]
+        "$ref": "#/$defs/loopState"
       }
     },
     "requiredMetadata": {
       "type": "array",
       "minItems": 1,
+      "default": [
+        "repo",
+        "milestone",
+        "area",
+        "priority",
+        "state",
+        "last_synced_at",
+        "source_links"
+      ],
       "items": {
         "enum": ["repo", "milestone", "area", "priority", "state", "last_synced_at", "source_links"]
+      }
+    },
+    "loops": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/loopDefinition"
       }
     },
     "milestones": {
       "type": "array",
       "minItems": 1,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["key", "name", "description", "personaTestIds", "issues"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "pattern": "^M\\d+$"
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": {
-            "type": "string",
-            "minLength": 1
-          },
-          "personaTestIds": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "enum": [
-                "P01",
-                "P02",
-                "P03",
-                "P04",
-                "M01",
-                "M02",
-                "M03",
-                "A01",
-                "A02",
-                "A03",
-                "R01",
-                "R02",
-                "S01",
-                "S02",
-                "S03",
-                "S04"
-              ]
-            }
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["title", "labels", "template", "personaTestIds"],
-              "properties": {
-                "title": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "labels": {
-                  "type": "array",
-                  "minItems": 1,
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "template": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "personaTestIds": {
-                  "type": "array",
-                  "minItems": 1,
-                  "items": {
-                    "enum": [
-                      "P01",
-                      "P02",
-                      "P03",
-                      "P04",
-                      "M01",
-                      "M02",
-                      "M03",
-                      "A01",
-                      "A02",
-                      "A03",
-                      "R01",
-                      "R02",
-                      "S01",
-                      "S02",
-                      "S03",
-                      "S04"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
+        "$ref": "#/$defs/milestone"
       }
     },
     "labels": {
       "type": "array",
       "minItems": 1,
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "category"],
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "category": {
-            "enum": ["kind", "priority", "area", "status", "milestone", "custom"]
-          },
-          "description": {
-            "type": "string",
-            "minLength": 1
-          },
-          "required": {
-            "type": "boolean"
-          }
-        }
+        "$ref": "#/$defs/label"
       }
     },
     "agentReady": {
+      "$ref": "#/$defs/agentReady",
+      "default": {
+        "readyLabels": ["status:ready"],
+        "blockedLabels": ["status:blocked"],
+        "requiredLabelPrefixes": ["area:", "priority:"],
+        "requiresMilestone": true,
+        "requiresBody": true
+      }
+    }
+  },
+  "$defs": {
+    "repoSlug": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$"
+    },
+    "loopState": {
+      "enum": [
+        "intake",
+        "triage",
+        "planned",
+        "in_progress",
+        "waiting_on_review",
+        "validating",
+        "blocked",
+        "done"
+      ]
+    },
+    "loopDefinition": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "readyLabels",
-        "blockedLabels",
-        "requiredLabelPrefixes",
-        "requiresMilestone",
-        "requiresBody"
+        "key",
+        "name",
+        "description",
+        "enabled",
+        "repoScope",
+        "triggers",
+        "modelPolicy",
+        "toolPolicy",
+        "budgets",
+        "approvals",
+        "artifacts",
+        "validationGates",
+        "retryPolicy",
+        "concurrency",
+        "cancellation",
+        "githubWriteback"
       ],
       "properties": {
-        "readyLabels": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "repoScope": {
+          "$ref": "#/$defs/repoScope"
+        },
+        "triggers": {
+          "$ref": "#/$defs/triggers"
+        },
+        "modelPolicy": {
+          "$ref": "#/$defs/modelPolicy"
+        },
+        "toolPolicy": {
+          "$ref": "#/$defs/toolPolicy"
+        },
+        "budgets": {
+          "$ref": "#/$defs/budgets"
+        },
+        "approvals": {
+          "$ref": "#/$defs/approvals"
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/artifactContract"
+          }
+        },
+        "validationGates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/validationGate"
+          }
+        },
+        "retryPolicy": {
+          "$ref": "#/$defs/retryPolicy"
+        },
+        "concurrency": {
+          "$ref": "#/$defs/concurrency"
+        },
+        "cancellation": {
+          "$ref": "#/$defs/cancellation"
+        },
+        "githubWriteback": {
+          "$ref": "#/$defs/githubWriteback"
+        }
+      }
+    },
+    "repoScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositories", "branchPatterns"],
+      "properties": {
+        "repositories": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/repoSlug"
+          }
+        },
+        "branchPatterns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "includeForks": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "triggers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issueLabels"],
+      "properties": {
+        "issueLabels": {
           "type": "array",
           "minItems": 1,
           "items": {
@@ -188,7 +222,462 @@
         },
         "blockedLabels": {
           "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "issueStates": {
+          "type": "array",
           "minItems": 1,
+          "default": ["opened", "reopened", "labeled"],
+          "items": {
+            "enum": ["opened", "reopened", "labeled", "edited"]
+          }
+        },
+        "manual": {
+          "type": "boolean",
+          "default": true
+        },
+        "schedule": {
+          "$ref": "#/$defs/schedule",
+          "default": {
+            "enabled": false,
+            "timezone": "UTC"
+          }
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cron": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "default": "UTC"
+        }
+      },
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        },
+        "required": ["enabled"]
+      },
+      "then": {
+        "required": ["cron"]
+      }
+    },
+    "modelPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultModel"],
+      "properties": {
+        "defaultModel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
+    },
+    "toolPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowedToolCategories"],
+      "properties": {
+        "allowedToolCategories": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/toolCategory"
+          }
+        },
+        "externalWritesRequireApproval": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "toolCategory": {
+      "enum": ["repo-read", "repo-write", "github", "browser", "validation", "deployment"]
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxRunMinutes", "maxModelUsd", "maxToolCalls"],
+      "properties": {
+        "maxRunMinutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxModelUsd": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxToolCalls": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredFor", "gates"],
+      "properties": {
+        "requiredFor": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "external_write",
+              "approval_transition",
+              "pr_creation",
+              "deployment_change",
+              "manifest_rollout"
+            ]
+          }
+        },
+        "bypassPolicy": {
+          "enum": ["none", "maintainer_override"],
+          "default": "none"
+        },
+        "gates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/approvalGate"
+          }
+        }
+      }
+    },
+    "approvalGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "required", "reviewers", "evidence"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "const": true
+        },
+        "reviewers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/artifactContractType"
+          }
+        }
+      }
+    },
+    "artifactContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "required", "description"],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/artifactContractType"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retention": {
+          "enum": ["run", "pr", "audit"],
+          "default": "run"
+        }
+      }
+    },
+    "artifactContractType": {
+      "enum": [
+        "plan",
+        "validation_report",
+        "patch",
+        "pr_intent",
+        "summary",
+        "diff_summary",
+        "trace"
+      ]
+    },
+    "validationGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "command", "required"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "phase": {
+          "enum": ["before_implementation", "before_review", "before_rollout"],
+          "default": "before_review"
+        },
+        "produces": {
+          "$ref": "#/$defs/artifactContractType",
+          "default": "validation_report"
+        }
+      }
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxAttempts", "retryableStatuses", "backoff"],
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retryableStatuses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["failed", "blocked"]
+          }
+        },
+        "backoff": {
+          "$ref": "#/$defs/retryBackoff"
+        }
+      }
+    },
+    "retryBackoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "initialSeconds", "maxSeconds"],
+      "properties": {
+        "strategy": {
+          "enum": ["fixed", "exponential"]
+        },
+        "initialSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxSeconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "concurrency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group", "maxInFlight"],
+      "properties": {
+        "group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxInFlight": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cancelInProgress": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "cancellation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["onSuperseded", "onDisabled"],
+      "properties": {
+        "onSuperseded": {
+          "enum": ["mark_canceled", "continue_existing"]
+        },
+        "onDisabled": {
+          "enum": ["skip_new_runs", "cancel_running"]
+        },
+        "requiresReason": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "githubWriteback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "channels": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "enum": ["issue_comment", "label", "status_check"]
+          }
+        },
+        "requireApprovalForLabels": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "description", "personaTestIds"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^M\\d+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "personaTestIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/personaTestId"
+          }
+        },
+        "issues": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/issueTemplate"
+          }
+        }
+      }
+    },
+    "issueTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "labels", "template", "personaTestIds"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1
+        },
+        "personaTestIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/personaTestId"
+          }
+        }
+      }
+    },
+    "personaTestId": {
+      "enum": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "M01",
+        "M02",
+        "M03",
+        "A01",
+        "A02",
+        "A03",
+        "R01",
+        "R02",
+        "S01",
+        "S02",
+        "S03",
+        "S04"
+      ]
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": ["kind", "priority", "area", "status", "milestone", "custom"]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "agentReady": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "readyLabels": {
+          "type": "array",
+          "minItems": 1,
+          "default": ["status:ready"],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "blockedLabels": {
+          "type": "array",
+          "minItems": 1,
+          "default": ["status:blocked"],
           "items": {
             "type": "string",
             "minLength": 1
@@ -197,16 +686,19 @@
         "requiredLabelPrefixes": {
           "type": "array",
           "minItems": 1,
+          "default": ["area:", "priority:"],
           "items": {
             "type": "string",
             "minLength": 1
           }
         },
         "requiresMilestone": {
-          "type": "boolean"
+          "type": "boolean",
+          "default": true
         },
         "requiresBody": {
-          "type": "boolean"
+          "type": "boolean",
+          "default": true
         }
       }
     }
