@@ -1,3 +1,5 @@
+import type { ApprovalStatus } from "@/lib/approvals";
+
 export type RepoHealth = "healthy" | "watch" | "blocked" | "disconnected";
 
 export type DeploymentState = "queued" | "building" | "ready" | "error" | "canceled";
@@ -22,7 +24,9 @@ export type ApprovalState =
   | "rejected"
   | "bypassed"
   | "expired"
-  | "blocked";
+  | "blocked"
+  | "cancelled"
+  | "applied";
 
 export type TimelineKind =
   | "sync"
@@ -99,12 +103,16 @@ export interface LoopRegistryItem {
 }
 
 export interface TimelineEvent {
+  id?: string;
   kind: TimelineKind;
   at: string;
   actor: string;
   title: string;
   detail: string;
   artifact?: string;
+  status?: RunStepStatus;
+  validationCommand?: string;
+  validationStatus?: string;
 }
 
 export interface ArtifactRecord {
@@ -137,6 +145,45 @@ export interface ApprovalGateRecord {
   checklist: ApprovalChecklistItem[];
 }
 
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "waiting_for_approval"
+  | "blocked"
+  | "failed"
+  | "succeeded"
+  | "canceled";
+
+export type RunStepStatus = "queued" | "running" | "skipped" | "failed" | "succeeded";
+
+export interface RunApprovalRecord {
+  id: string;
+  note?: string;
+  requestedAt: string;
+  requestedBy: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  scope: string;
+  status: ApprovalStatus;
+}
+
+export interface RunRecord {
+  age: string;
+  approvals: RunApprovalRecord[];
+  artifacts: ArtifactRecord[];
+  blockedReason?: string;
+  currentStage: string;
+  id: string;
+  issue?: string;
+  issueHref?: string;
+  loopKey: string;
+  priorityLabel: string;
+  queuedAt: string;
+  repositoryFullName: string;
+  status: RunStatus;
+  steps: TimelineEvent[];
+}
+
 export interface GitHubSettingRecord {
   key: GitHubSettingKey;
   title: string;
@@ -152,5 +199,6 @@ export interface FixtureState {
   artifacts: ArtifactRecord[];
   validationResults: ValidationResultRecord[];
   approval: ApprovalGateRecord;
+  runs: RunRecord[];
   githubSettings: GitHubSettingRecord[];
 }

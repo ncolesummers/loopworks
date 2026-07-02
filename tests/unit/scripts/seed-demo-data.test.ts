@@ -15,6 +15,7 @@ function emptyCounts(): SeedCounts {
     runSteps: 0,
     artifacts: 0,
     approvals: 0,
+    approvalTransitionEvents: 0,
     deployments: 0,
   };
 }

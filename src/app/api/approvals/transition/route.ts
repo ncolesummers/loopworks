@@ -2,26 +2,39 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireApiSession } from "@/lib/auth/api";
+import { db } from "@/db/client";
+import { applyApprovalTransition } from "@/lib/approval-transitions";
 import {
+  ApprovalExpectedStatusError,
+  ApprovalNotFoundError,
   ApprovalTransitionError,
   approvalActionValues,
   approvalStatusValues,
-  transitionApproval,
+  type ApprovalTransitionDatabase,
 } from "@/lib/approvals";
 import { createRequestLogger } from "@/lib/observability/logger";
 
 const approvalTransitionRequestSchema = z.object({
-  currentStatus: z.enum(approvalStatusValues),
+  approvalId: z.uuid(),
+  expectedStatus: z.enum(approvalStatusValues),
   action: z.enum(approvalActionValues),
   note: z.string().min(1).optional(),
 });
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+export async function handleApprovalTransitionPost(
+  request: Request,
+  dependencies: {
+    database?: ApprovalTransitionDatabase;
+    now?: () => Date;
+  } = {},
+) {
   const requestLogger = createRequestLogger({
     route: "api.approvals.transition",
   });
+  const database = dependencies.database ?? db;
+  const now = dependencies.now ?? (() => new Date());
   const apiSession = await requireApiSession({
     route: "api.approvals.transition",
     logger: requestLogger,
@@ -61,27 +74,74 @@ export async function POST(request: Request) {
   }
 
   try {
-    const transition = transitionApproval({
-      ...body.data,
+    const result = await applyApprovalTransition({
+      action: body.data.action,
+      approvalId: body.data.approvalId,
       actorId: apiSession.actorId,
+      authMode: apiSession.mode,
+      database,
+      expectedStatus: body.data.expectedStatus,
+      logger: requestLogger,
+      note: body.data.note,
+      occurredAt: now(),
     });
     requestLogger.info(
       {
+        approvalId: body.data.approvalId,
         action: body.data.action,
         actorId: apiSession.actorId,
         authMode: apiSession.mode,
-        currentStatus: body.data.currentStatus,
-        nextStatus: transition.to,
+        currentStatus: result.transition.from,
+        nextStatus: result.transition.to,
+        runId: result.runId,
       },
       "approval_transition_applied",
     );
     return NextResponse.json(
       {
-        transition,
+        approvalId: result.approvalId,
+        runId: result.runId,
+        transition: result.transition,
       },
       { status: 200 },
     );
   } catch (error) {
+    if (error instanceof ApprovalNotFoundError) {
+      requestLogger.warn(
+        {
+          approvalId: error.approvalId,
+        },
+        "approval_transition_not_found",
+      );
+      return NextResponse.json(
+        {
+          error: error.message,
+          approvalId: error.approvalId,
+        },
+        { status: 404 },
+      );
+    }
+
+    if (error instanceof ApprovalExpectedStatusError) {
+      requestLogger.warn(
+        {
+          actualStatus: error.actualStatus,
+          approvalId: error.approvalId,
+          expectedStatus: error.expectedStatus,
+        },
+        "approval_transition_stale_state",
+      );
+      return NextResponse.json(
+        {
+          error: error.message,
+          actualStatus: error.actualStatus,
+          approvalId: error.approvalId,
+          expectedStatus: error.expectedStatus,
+        },
+        { status: 409 },
+      );
+    }
+
     if (error instanceof ApprovalTransitionError) {
       requestLogger.warn(
         {
@@ -102,4 +162,8 @@ export async function POST(request: Request) {
 
     throw error;
   }
+}
+
+export async function POST(request: Request) {
+  return handleApprovalTransitionPost(request);
 }

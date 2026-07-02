@@ -52,6 +52,16 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 7. Structured log samples for webhook rejection, duplicate delivery, approval rejection, and Vercel API fallback.
 8. Username/org allowlist coverage for allowed and denied GitHub identities.
 
+## Approval Audit Notes
+
+1. Approval transitions require an authenticated GitHub login or explicit local
+   fixture actor from `requireApiSession`.
+2. `approvals` stores current state; `approval_transition_events` stores the
+   durable transition audit trail with actor, action, previous status, next
+   status, timestamp, note, and auth mode metadata.
+3. `bypassed` is a visible terminal state. A bypass must be created through the
+   `bypass` transition from `requested` and must preserve actor attribution.
+
 ## Exit Criteria
 
 1. No open high-severity findings.

@@ -42,6 +42,16 @@ rows so logs are not the only audit surface:
 2. `development_loop_noop`: records skipped development-loop triggers such as
    `loop_disabled` without creating a run.
 
+Approval transitions also persist durable audit rows in
+`approval_transition_events`. The API logs `approval_transition_applied`,
+`approval_transition_rejected`, `approval_transition_not_found`, and
+`approval_transition_stale_state` with approval id, run id where available,
+actor id, auth mode, current status, next status, and action. Durable audit
+metadata also records auth mode so local fixture actors are distinguishable from
+GitHub-authenticated actors. A bypass is recorded as the `bypass` action moving
+`requested` to `bypassed`; it must not be represented as a missing approval or
+log-only override.
+
 ## Control Plane Metrics
 
 The internal control plane should eventually expose:

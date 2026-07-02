@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
+import { RunRecordsView } from "@/components/portal/run-records-view";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { ValidationResultSummary } from "@/components/portal/validation-result-summary";
 import {
@@ -14,6 +15,7 @@ import type {
   ArtifactRecord,
   DeploymentRecord,
   RepoRecord,
+  RunRecord,
   ValidationResultRecord,
 } from "@/lib/types";
 
@@ -99,6 +101,86 @@ describe("portal reusable components", () => {
     }
     expect(screen.getByRole("link", { name: "Validation report" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "PR intent" })).toBeTruthy();
+  });
+
+  it("renders blocked and waiting-for-approval runs at a glance with detail evidence", () => {
+    const runs: RunRecord[] = [
+      {
+        id: "run-waiting",
+        repositoryFullName: "ncolesummers/factory-core",
+        loopKey: "implementation-routing",
+        issue: "#201",
+        issueHref: "https://github.com/ncolesummers/factory-core/issues/201",
+        status: "waiting_for_approval",
+        priorityLabel: "Waiting approval",
+        currentStage: "review",
+        queuedAt: "08:55",
+        age: "15m",
+        approvals: [
+          {
+            id: "approval-requested",
+            scope: "deploy-preview",
+            status: "requested",
+            requestedBy: "morgan-dev",
+            requestedAt: "08:56",
+            note: "Requesting review before the preview promotes.",
+          },
+        ],
+        artifacts: [
+          {
+            label: "Approval evidence",
+            href: "https://github.com/ncolesummers/factory-core/issues/201#approval",
+            detail: "Requested preview evidence.",
+            state: "pending",
+            kind: "review",
+          },
+        ],
+        steps: [
+          {
+            id: "step-review",
+            actor: "reviewer",
+            at: "08:56",
+            detail: "Waiting for maintainer approval.",
+            kind: "approval",
+            status: "running",
+            title: "Approval gate",
+          },
+        ],
+      },
+      {
+        id: "run-blocked",
+        repositoryFullName: "ncolesummers/delivery-ops",
+        loopKey: "review-gate",
+        issue: "#303",
+        issueHref: "https://github.com/ncolesummers/delivery-ops/issues/303",
+        status: "blocked",
+        priorityLabel: "Blocked",
+        currentStage: "validation",
+        queuedAt: "08:50",
+        age: "20m",
+        blockedReason: "Blocked on missing Vercel scope grant.",
+        approvals: [],
+        artifacts: [],
+        steps: [],
+      },
+    ];
+
+    render(<RunRecordsView runs={runs} sourceLabel="Fixture fallback" />);
+
+    expect(screen.getByRole("heading", { name: "Run timeline and artifacts" })).toBeTruthy();
+    expect(screen.getAllByText("Waiting approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Blocked").length).toBeGreaterThan(0);
+    expect(screen.getByText("Blocked on missing Vercel scope grant.")).toBeTruthy();
+    expect(screen.getByText("ncolesummers/factory-core")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: /ncolesummers\/factory-core/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getByText("deploy-preview")).toBeTruthy();
+    expect(screen.getByText("Requested at 08:56")).toBeTruthy();
+    expect(screen.getByText(/morgan-dev/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Approval evidence" })).toBeTruthy();
   });
 
   it("renders normalized Vercel deployment state, environment, metadata, and safe links", () => {

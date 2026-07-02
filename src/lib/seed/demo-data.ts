@@ -2,6 +2,7 @@ import { inArray } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import {
+  approvalTransitionEvents,
   approvals,
   artifacts,
   deployments,
@@ -22,6 +23,7 @@ export type SeedCounts = {
   runSteps: number;
   artifacts: number;
   approvals: number;
+  approvalTransitionEvents: number;
   deployments: number;
 };
 
@@ -34,6 +36,7 @@ const seedNamespaces = {
   artifacts: 6,
   approvals: 7,
   deployments: 8,
+  approvalTransitionEvents: 9,
 } as const;
 
 function seedId(table: keyof typeof seedNamespaces, index: number): string {
@@ -96,6 +99,15 @@ export const demoSeedIds = {
     cancelled: seedId("approvals", 3),
     expired: seedId("approvals", 4),
     applied: seedId("approvals", 5),
+    bypassed: seedId("approvals", 6),
+  },
+  approvalTransitionEvents: {
+    approved: seedId("approvalTransitionEvents", 0),
+    rejected: seedId("approvalTransitionEvents", 1),
+    bypassed: seedId("approvalTransitionEvents", 2),
+    applied: seedId("approvalTransitionEvents", 3),
+    cancelled: seedId("approvalTransitionEvents", 4),
+    expired: seedId("approvalTransitionEvents", 5),
   },
   deployments: {
     productionReady: seedId("deployments", 0),
@@ -114,6 +126,7 @@ export type DemoSeedData = {
   runSteps: (typeof runSteps.$inferInsert)[];
   artifacts: (typeof artifacts.$inferInsert)[];
   approvals: (typeof approvals.$inferInsert)[];
+  approvalTransitionEvents: (typeof approvalTransitionEvents.$inferInsert)[];
   deployments: (typeof deployments.$inferInsert)[];
 };
 
@@ -382,6 +395,9 @@ export function buildDemoSeedData(): DemoSeedData {
       githubIssueUrl: "https://github.com/ncolesummers/delivery-ops/issues/303",
       status: "blocked",
       currentStage: "validation",
+      metadata: {
+        blockedReason: "Blocked on missing Vercel scope grant.",
+      },
       queuedAt: new Date("2026-06-30T08:50:00.000Z"),
       startedAt: new Date("2026-06-30T08:51:00.000Z"),
     },
@@ -599,12 +615,14 @@ export function buildDemoSeedData(): DemoSeedData {
       status: "expired",
       requestedBy: "priya-sec",
       requestedAt: new Date("2026-06-29T08:00:00.000Z"),
+      resolvedBy: "loopworks-system",
       resolvedAt: new Date("2026-06-30T08:00:00.000Z"),
       note: "Approval window expired before resolution.",
     },
     {
       id: ids.approvals.applied,
       loopId: ids.loops.done,
+      runId: ids.loopRuns.succeeded,
       scope: "pr-write",
       status: "applied",
       requestedBy: "avery-dev",
@@ -612,6 +630,87 @@ export function buildDemoSeedData(): DemoSeedData {
       resolvedBy: "avery-dev",
       resolvedAt: new Date("2026-06-30T08:59:30.000Z"),
       note: "Approved write path applied and merged.",
+    },
+    {
+      id: ids.approvals.bypassed,
+      loopId: ids.loops.inProgress,
+      runId: ids.loopRuns.blocked,
+      scope: "emergency-bypass",
+      status: "bypassed",
+      requestedBy: "morgan-dev",
+      requestedAt: new Date("2026-06-30T08:51:30.000Z"),
+      resolvedBy: "priya-sec",
+      resolvedAt: new Date("2026-06-30T08:52:30.000Z"),
+      note: "Emergency bypass recorded for blocked-run triage visibility.",
+    },
+  ];
+
+  const approvalTransitionEventsData: DemoSeedData["approvalTransitionEvents"] = [
+    {
+      id: ids.approvalTransitionEvents.approved,
+      approvalId: ids.approvals.approved,
+      runId: ids.loopRuns.succeeded,
+      fromStatus: "requested",
+      toStatus: "approved",
+      action: "approve",
+      actorId: "priya-sec",
+      occurredAt: new Date("2026-06-30T08:58:00.000Z"),
+      note: "Token scopes reviewed and approved.",
+    },
+    {
+      id: ids.approvalTransitionEvents.rejected,
+      approvalId: ids.approvals.rejected,
+      runId: ids.loopRuns.failed,
+      fromStatus: "requested",
+      toStatus: "rejected",
+      action: "reject",
+      actorId: "priya-sec",
+      occurredAt: new Date("2026-06-30T08:46:40.000Z"),
+      note: "Missing Vercel production scope grant.",
+    },
+    {
+      id: ids.approvalTransitionEvents.bypassed,
+      approvalId: ids.approvals.bypassed,
+      runId: ids.loopRuns.blocked,
+      fromStatus: "requested",
+      toStatus: "bypassed",
+      action: "bypass",
+      actorId: "priya-sec",
+      occurredAt: new Date("2026-06-30T08:52:30.000Z"),
+      note: "Emergency bypass recorded for blocked-run triage visibility.",
+    },
+    {
+      id: ids.approvalTransitionEvents.applied,
+      approvalId: ids.approvals.applied,
+      runId: ids.loopRuns.succeeded,
+      fromStatus: "approved",
+      toStatus: "applied",
+      action: "apply",
+      actorId: "avery-dev",
+      occurredAt: new Date("2026-06-30T08:59:30.000Z"),
+      note: "Approved write path applied and merged.",
+    },
+    {
+      id: ids.approvalTransitionEvents.cancelled,
+      approvalId: ids.approvals.cancelled,
+      runId: ids.loopRuns.canceled,
+      fromStatus: "requested",
+      toStatus: "cancelled",
+      action: "cancel",
+      actorId: "morgan-dev",
+      occurredAt: new Date("2026-06-30T08:32:00.000Z"),
+      note: "Run canceled before approval was needed.",
+    },
+    {
+      id: ids.approvalTransitionEvents.expired,
+      approvalId: ids.approvals.expired,
+      runId: null,
+      fromStatus: "requested",
+      toStatus: "expired",
+      action: "expire",
+      actorId: "loopworks-system",
+      occurredAt: new Date("2026-06-30T08:00:00.000Z"),
+      note: "Approval window expired before resolution.",
     },
   ];
 
@@ -700,6 +799,7 @@ export function buildDemoSeedData(): DemoSeedData {
     runSteps: runStepsData,
     artifacts: artifactsData,
     approvals: approvalsData,
+    approvalTransitionEvents: approvalTransitionEventsData,
     deployments: deploymentsData,
   };
 }
@@ -721,6 +821,9 @@ export async function seedDemoData(
 
   return database.transaction(async (tx) => {
     if (options.reset) {
+      await tx
+        .delete(approvalTransitionEvents)
+        .where(inArray(approvalTransitionEvents.id, Object.values(ids.approvalTransitionEvents)));
       await tx.delete(artifacts).where(inArray(artifacts.id, Object.values(ids.artifacts)));
       await tx.delete(runSteps).where(inArray(runSteps.id, Object.values(ids.runSteps)));
       await tx.delete(approvals).where(inArray(approvals.id, Object.values(ids.approvals)));
@@ -777,6 +880,12 @@ export async function seedDemoData(
         set: row,
       });
     }
+    for (const row of data.approvalTransitionEvents) {
+      await tx.insert(approvalTransitionEvents).values(row).onConflictDoUpdate({
+        target: approvalTransitionEvents.id,
+        set: row,
+      });
+    }
     for (const row of data.deployments) {
       await tx.insert(deployments).values(row).onConflictDoUpdate({
         target: deployments.id,
@@ -792,6 +901,7 @@ export async function seedDemoData(
       runSteps: data.runSteps.length,
       artifacts: data.artifacts.length,
       approvals: data.approvals.length,
+      approvalTransitionEvents: data.approvalTransitionEvents.length,
       deployments: data.deployments.length,
     };
   });

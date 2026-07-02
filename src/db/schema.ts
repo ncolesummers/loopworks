@@ -394,6 +394,34 @@ export const approvals = pgTable(
   }),
 );
 
+export const approvalTransitionEvents = pgTable(
+  "approval_transition_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    approvalId: uuid("approval_id")
+      .notNull()
+      .references(() => approvals.id, { onDelete: "cascade" }),
+    runId: uuid("run_id").references(() => loopRuns.id, { onDelete: "set null" }),
+    fromStatus: approvalStatusEnum("from_status").notNull(),
+    toStatus: approvalStatusEnum("to_status").notNull(),
+    action: text("action").notNull(),
+    actorId: text("actor_id").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+    note: text("note"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  },
+  (table) => ({
+    approvalCreatedAtIndex: index("approval_transition_events_approval_created_at_idx").on(
+      table.approvalId,
+      table.occurredAt,
+    ),
+    runCreatedAtIndex: index("approval_transition_events_run_created_at_idx").on(
+      table.runId,
+      table.occurredAt,
+    ),
+  }),
+);
+
 export const deployments = pgTable(
   "deployments",
   {
