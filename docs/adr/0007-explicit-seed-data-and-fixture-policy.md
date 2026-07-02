@@ -26,10 +26,61 @@ Seed data must never contain real tokens, private keys, customer data, or secret
 3. Logs include fallback reasons without logging secrets or raw payloads.
 4. Playwright and Storybook exercise fixture data intentionally.
 5. Production environments reject unsafe local auth bypasses and unsupported in-memory stores.
+6. `bun run db:seed` / `bun run db:seed:reset` refuse to run when either the
+   runtime looks like production (`NODE_ENV`/`VERCEL_ENV`) or `DATABASE_URL`
+   does not point at a loopback host, before touching the database. Portal
+   pages that are still fixture-only render an explicit degraded notice, and
+   log a structured warning identifying the fixture-gate reason, instead of
+   fixture data in production. See `tests/unit/scripts/seed-demo-data.test.ts`,
+   `tests/unit/lib/runtime.test.ts`, and `tests/unit/portal/fixture-gated-page.test.tsx`.
 
 ## Follow-Ups
 
-1. Add a seeded demo dataset for repos, loops, runs, approvals, artifacts, and Vercel deployments.
-2. Add reset and reseed commands after the database bootstrap exists.
-3. Add tests that fixture fallback cannot run in production.
-4. Document how to create new fixture states for Storybook and Playwright.
+1. **Done.** Seeded demo dataset for repos, loops, runs, run steps, artifacts,
+   approvals, and Vercel deployments: `src/lib/seed/demo-data.ts`
+   (`buildDemoSeedData`), covering every value of `repo_health`, `loop_state`,
+   `run_status`, `run_step_status`, `artifact_type`, `approval_status`, and
+   `deployment_status`, across both `production` and `preview` environments.
+   Verified by `tests/unit/seed/demo-data.test.ts`.
+2. **Done.** Reset and reseed commands: `bun run db:seed` (idempotent upsert
+   by fixed id) and `bun run db:seed:reset`, implemented in
+   `scripts/seed-demo-data.ts`. Reset deletes only the fixed-id rows this
+   module owns (via `demoSeedIds`), in FK-safe order, never a whole-table
+   truncate — any non-demo rows sharing the same tables are left untouched.
+   Verified by `tests/unit/seed/demo-data.test.ts`.
+3. **Done.** Tests that fixture fallback cannot run in production:
+   `scripts/seed-demo-data.ts` checks `isProductionRuntime()` **and** that
+   `DATABASE_URL` resolves to a loopback host, before any database dependency
+   is touched, and refuses to seed if either check fails
+   (`tests/unit/scripts/seed-demo-data.test.ts`). The `DATABASE_URL` check
+   exists because a runtime-label check alone is not sufficient: an
+   operator's local shell can have `DATABASE_URL` pointed at a real Postgres
+   host while `NODE_ENV`/`VERCEL_ENV` are unset. Note that Next.js sets
+   `NODE_ENV=production` for every optimized build, including Vercel Preview
+   deployments, not only Production — `isProductionRuntime` therefore fails
+   closed on Preview too, which is the safe direction
+   (`tests/unit/lib/runtime.test.ts`). The portal pages that are still
+   fixture-only (`dashboard`, `catalog`, `loops`, `approvals`, `runs`,
+   `settings`) are wrapped in `FixtureGatedPage`
+   (`src/components/portal/fixture-gated-page.tsx`), which renders a degraded
+   `FixtureUnavailableNotice` and logs `portal_fixture_gate_blocked` instead
+   of rendering fixture data in production
+   (`tests/unit/portal/fixture-gated-page.test.tsx`,
+   `tests/unit/portal/pages.test.tsx`). The `deployments` page already
+   followed this pattern via `createVercelDeploymentClient` and is unchanged.
+   Wiring those pages to read the seeded database instead of static fixtures
+   is tracked separately (see the Loopworks GitHub issue backlog, milestone
+   M3 Durable Loop MVP) — this ADR's fail-closed requirement is satisfied
+   either way, since the guard prevents fixture data from reaching production
+   regardless of when that wiring lands.
+4. **Done.** Adding a new fixture state:
+   - If the state is a new Drizzle enum value, add it to the enum in
+     `src/db/schema.ts` and run `bun run db:generate` for the migration.
+   - Extend `buildDemoSeedData()` in `src/lib/seed/demo-data.ts` so the new
+     value is seeded at least once, then extend the enum-coverage assertions
+     in `tests/unit/seed/demo-data.test.ts`.
+   - If the state is UI-facing, extend `portalFixture` in `src/lib/fixtures.ts`
+     and the `Status`/`STATUS_META` vocabulary in
+     `src/components/ui/status-badge.tsx` if it introduces a new status value.
+   - Add or update the relevant Storybook story so the state is reviewable in
+     isolation, per `src/components/AGENTS.md`.
