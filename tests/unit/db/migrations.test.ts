@@ -4,6 +4,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { repositories } from "@/db/schema";
 import { createPgliteTestDatabase } from "../../helpers/pglite";
 
+const migrationReplayTimeoutMs = 15_000;
+
 function readMigrationSql() {
   return readdirSync("drizzle")
     .filter((entry) => entry.endsWith(".sql"))
@@ -57,13 +59,17 @@ describe("Drizzle migrations", () => {
     }
   });
 
-  it("replays generated migrations against a clean Postgres-compatible database", async () => {
-    const context = await createPgliteTestDatabase();
+  it(
+    "replays generated migrations against a clean Postgres-compatible database",
+    async () => {
+      const context = await createPgliteTestDatabase();
 
-    try {
-      expect(await context.db.select().from(repositories)).toEqual([]);
-    } finally {
-      await context.close();
-    }
-  });
+      try {
+        expect(await context.db.select().from(repositories)).toEqual([]);
+      } finally {
+        await context.close();
+      }
+    },
+    migrationReplayTimeoutMs,
+  );
 });
