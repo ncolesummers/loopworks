@@ -90,6 +90,8 @@ export const validationGatePhaseValues = [
   "before_rollout",
 ] as const;
 
+export const retryableStatusValues = ["failed", "blocked"] as const;
+
 export const backoffStrategyValues = ["fixed", "exponential"] as const;
 
 export const cancellationOnSupersededValues = ["mark_canceled", "continue_existing"] as const;
@@ -254,7 +256,7 @@ const retryBackoffSchema = z
 const retryPolicySchema = z
   .object({
     maxAttempts: z.number().int().min(1),
-    retryableStatuses: z.array(z.enum(["failed", "blocked"])).min(1),
+    retryableStatuses: z.array(z.enum(retryableStatusValues)).min(1),
     backoff: retryBackoffSchema,
   })
   .strict();

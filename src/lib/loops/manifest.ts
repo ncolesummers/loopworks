@@ -3,6 +3,7 @@ import {
   type LoopState,
   loopManifestSchema,
   loopStateValues,
+  retryableStatusValues,
 } from "../../../schemas/loop-manifest";
 
 export type LoopManifestValidationError = {
@@ -119,7 +120,7 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
       ],
       retryPolicy: {
         maxAttempts: 2,
-        retryableStatuses: ["failed", "blocked"],
+        retryableStatuses: [...retryableStatusValues],
         backoff: {
           strategy: "exponential",
           initialSeconds: 30,

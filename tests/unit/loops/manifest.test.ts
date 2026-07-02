@@ -1,4 +1,4 @@
-import { loopManifestSchema } from "../../../schemas/loop-manifest";
+import { loopManifestSchema, retryableStatusValues } from "../../../schemas/loop-manifest";
 import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
 
 import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
@@ -79,6 +79,7 @@ describe("loop manifest schema", () => {
     );
     expect(developmentLoop.retryPolicy).toMatchObject({
       maxAttempts: 2,
+      retryableStatuses: [...retryableStatusValues],
       backoff: {
         strategy: "exponential",
       },
