@@ -1,7 +1,10 @@
 /** @vitest-environment node */
+import { eq } from "drizzle-orm";
+
+import { loopRuns } from "@/db/schema";
 import { readRunRecords, getRunRecordsForResult } from "@/lib/runs/run-record";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
-import { seedDemoData, type SeedDatabase } from "@/lib/seed/demo-data";
+import { demoSeedIds, seedDemoData, type SeedDatabase } from "@/lib/seed/demo-data";
 
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
@@ -71,6 +74,35 @@ describe("run records (pglite integration)", () => {
     );
     expect(succeeded?.approvals.map((approval) => approval.status)).toEqual(
       expect.arrayContaining(["approved", "applied"]),
+    );
+  });
+
+  it("orders same-priority runs by full queued timestamp across days", async () => {
+    await seedDemoData(testDatabase());
+
+    await context.db
+      .update(loopRuns)
+      .set({
+        queuedAt: new Date("2026-06-29T23:00:00.000Z"),
+        status: "failed",
+      })
+      .where(eq(loopRuns.id, demoSeedIds.loopRuns.failed));
+    await context.db
+      .update(loopRuns)
+      .set({
+        queuedAt: new Date("2026-06-30T08:00:00.000Z"),
+        status: "failed",
+      })
+      .where(eq(loopRuns.id, demoSeedIds.loopRuns.succeeded));
+
+    const result = await readRunRecords({
+      database: context.db,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+    const failedRunIds = result.runs.filter((run) => run.status === "failed").map((run) => run.id);
+
+    expect(failedRunIds.indexOf(demoSeedIds.loopRuns.failed)).toBeLessThan(
+      failedRunIds.indexOf(demoSeedIds.loopRuns.succeeded),
     );
   });
 

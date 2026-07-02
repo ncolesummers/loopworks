@@ -233,7 +233,7 @@ export async function readRunRecords(input: {
   );
 
   const runs = runRows
-    .map((run): RunRecord => {
+    .map((run): RunRecord & { queuedAtTime: number } => {
       const runStepsForRun = stepsByRun.get(run.id) ?? [];
       const artifactsForRun = (artifactsByRun.get(run.id) ?? []).map((artifact) => ({
         detail: metadataString(artifact.metadata, "detail") ?? artifact.title,
@@ -286,6 +286,7 @@ export async function readRunRecords(input: {
         loopKey: run.loopKey,
         priorityLabel: priorityLabel(run.status),
         queuedAt: formatClock(run.queuedAt),
+        queuedAtTime: run.queuedAt.getTime(),
         repositoryFullName: run.repositoryFullName,
         status: run.status,
         steps,
@@ -297,8 +298,9 @@ export async function readRunRecords(input: {
         return priorityDiff;
       }
 
-      return left.queuedAt.localeCompare(right.queuedAt);
-    });
+      return left.queuedAtTime - right.queuedAtTime;
+    })
+    .map(({ queuedAtTime: _queuedAtTime, ...run }) => run);
 
   return {
     runs,
