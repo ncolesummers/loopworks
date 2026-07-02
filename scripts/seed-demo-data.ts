@@ -126,6 +126,7 @@ export async function runSeedCli(
       runSteps: built.runSteps.length,
       artifacts: built.artifacts.length,
       approvals: built.approvals.length,
+      approvalTransitionEvents: built.approvalTransitionEvents.length,
       deployments: built.deployments.length,
     });
     return 0;

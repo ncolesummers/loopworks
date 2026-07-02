@@ -178,6 +178,11 @@ test.describe("Loopworks portal", () => {
   }) => {
     await page.goto("/runs");
 
+    await expect(page.getByText("Waiting approval").first()).toBeVisible();
+    await expect(page.getByText("Blocked", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Blocked on missing Vercel scope grant.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /ncolesummers\/factory-core/ })).toBeVisible();
+
     const stages = [
       "Planning",
       "Test writing",
@@ -204,6 +209,11 @@ test.describe("Loopworks portal", () => {
     const codeReviewBox = await page.getByText("Code review", { exact: true }).last().boundingBox();
     expect(validationBox?.y ?? 0).toBeLessThan(codeReviewBox?.y ?? 0);
     await expect(page.getByRole("link", { name: "Validation report" })).toBeVisible();
+
+    await page.getByRole("button", { name: /ncolesummers\/factory-core/ }).click();
+    await expect(page.getByRole("heading", { name: "Run detail" })).toBeVisible();
+    await expect(page.getByText("deploy-preview")).toBeVisible();
+    await expect(page.getByText("morgan-dev")).toBeVisible();
   });
 
   // Persona A02: approval gates preserve actor/evidence context through the request flow.

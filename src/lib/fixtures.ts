@@ -4,6 +4,7 @@ import {
   projectDevelopmentLoopArtifacts,
   projectDevelopmentLoopTimeline,
 } from "@/lib/loops/development-run";
+import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
 
 const developmentLoopFixture = createDevelopmentLoopRunSkeleton({
   mode: "simulated",
@@ -264,6 +265,7 @@ export const portalFixture: FixtureState = {
       { label: "Write paths require explicit approval", done: false },
     ],
   },
+  runs: buildRunFixtureRecords(),
   githubSettings: [
     {
       key: "sso",

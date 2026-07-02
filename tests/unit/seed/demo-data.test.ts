@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import {
   approvalStatusEnum,
+  approvalTransitionEvents,
   approvals,
   artifacts,
   artifactTypeEnum,
@@ -55,6 +56,7 @@ describe("demo seed data (pglite integration)", () => {
       runSteps: built.runSteps.length,
       artifacts: built.artifacts.length,
       approvals: built.approvals.length,
+      approvalTransitionEvents: built.approvalTransitionEvents.length,
       deployments: built.deployments.length,
     });
 
@@ -65,6 +67,7 @@ describe("demo seed data (pglite integration)", () => {
     const stepRows = await context.db.select().from(runSteps);
     const artifactRows = await context.db.select().from(artifacts);
     const approvalRows = await context.db.select().from(approvals);
+    const approvalTransitionRows = await context.db.select().from(approvalTransitionEvents);
     const deploymentRows = await context.db.select().from(deployments);
 
     expect(repoRows).toHaveLength(built.repositories.length);
@@ -74,6 +77,7 @@ describe("demo seed data (pglite integration)", () => {
     expect(stepRows).toHaveLength(built.runSteps.length);
     expect(artifactRows).toHaveLength(built.artifacts.length);
     expect(approvalRows).toHaveLength(built.approvals.length);
+    expect(approvalTransitionRows).toHaveLength(built.approvalTransitionEvents.length);
     expect(deploymentRows).toHaveLength(built.deployments.length);
   });
 
@@ -86,12 +90,14 @@ describe("demo seed data (pglite integration)", () => {
     const loopRows = await context.db.select().from(loops);
     const runRows = await context.db.select().from(loopRuns);
     const approvalRows = await context.db.select().from(approvals);
+    const approvalTransitionRows = await context.db.select().from(approvalTransitionEvents);
     const deploymentRows = await context.db.select().from(deployments);
 
     expect(repoRows).toHaveLength(built.repositories.length);
     expect(loopRows).toHaveLength(built.loops.length);
     expect(runRows).toHaveLength(built.loopRuns.length);
     expect(approvalRows).toHaveLength(built.approvals.length);
+    expect(approvalTransitionRows).toHaveLength(built.approvalTransitionEvents.length);
     expect(deploymentRows).toHaveLength(built.deployments.length);
   });
 
@@ -208,6 +214,30 @@ describe("demo seed data (pglite integration)", () => {
     expect(deploymentRows.some((row) => row.environment === "production")).toBe(true);
     expect(deploymentRows.some((row) => row.environment === "preview")).toBe(true);
     expect(repoRows.some((row) => row.isActive === false)).toBe(true);
+  });
+
+  it("seeds approval transition audit rows with actor attribution", async () => {
+    await seedDemoData(testDatabase());
+
+    const built = buildDemoSeedData();
+    const transitionRows = await context.db.select().from(approvalTransitionEvents);
+    const resolvedApprovals = built.approvals.filter((approval) => approval.resolvedAt);
+
+    expect(transitionRows).toHaveLength(built.approvalTransitionEvents.length);
+    expect(transitionRows.map((row) => row.approvalId).sort()).toEqual(
+      resolvedApprovals.map((approval) => approval.id).sort(),
+    );
+    expect(resolvedApprovals.every((approval) => approval.resolvedBy)).toBe(true);
+    expect(transitionRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "bypass",
+          actorId: "priya-sec",
+          fromStatus: "requested",
+          toStatus: "bypassed",
+        }),
+      ]),
+    );
   });
 
   it("never seeds secret-looking values", () => {

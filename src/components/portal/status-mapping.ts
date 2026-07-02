@@ -7,6 +7,8 @@ import type {
   LoopRegistryItem,
   LoopState,
   RepoHealth,
+  RunStatus,
+  RunStepStatus,
   TimelineKind,
   ValidationResultState,
 } from "@/lib/types";
@@ -93,7 +95,35 @@ export function getApprovalStatus(state: ApprovalState): PortalStatusMeta {
     bypassed: { status: "skipped", label: "Bypassed" },
     expired: { status: "blocked", label: "Expired" },
     blocked: { status: "blocked", label: "Blocked" },
+    cancelled: { status: "canceled", label: "Cancelled" },
+    applied: { status: "done", label: "Applied" },
   } satisfies Record<ApprovalState, PortalStatusMeta>;
+
+  return statuses[state];
+}
+
+export function getRunStatus(state: RunStatus): PortalStatusMeta {
+  const statuses = {
+    queued: { status: "queued", label: "Queued" },
+    running: { status: "running", label: "Running" },
+    waiting_for_approval: { status: "needsApproval", label: "Waiting Approval" },
+    blocked: { status: "blocked", label: "Blocked" },
+    failed: { status: "failed", label: "Failed" },
+    succeeded: { status: "succeeded", label: "Succeeded" },
+    canceled: { status: "canceled", label: "Canceled" },
+  } satisfies Record<RunStatus, PortalStatusMeta>;
+
+  return statuses[state];
+}
+
+export function getRunStepStatus(state: RunStepStatus): PortalStatusMeta {
+  const statuses = {
+    queued: { status: "queued", label: "Queued" },
+    running: { status: "running", label: "Running" },
+    skipped: { status: "skipped", label: "Skipped" },
+    failed: { status: "failed", label: "Failed" },
+    succeeded: { status: "succeeded", label: "Succeeded" },
+  } satisfies Record<RunStepStatus, PortalStatusMeta>;
 
   return statuses[state];
 }

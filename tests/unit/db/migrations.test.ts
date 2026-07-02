@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
-import { repositories } from "@/db/schema";
+import { approvalTransitionEvents, repositories } from "@/db/schema";
 import { createPgliteTestDatabase } from "../../helpers/pglite";
 
 const migrationReplayTimeoutMs = 15_000;
@@ -57,6 +57,24 @@ describe("Drizzle migrations", () => {
     ]) {
       expect(migrationSql).toContain(`"${column}"`);
     }
+  });
+
+  it("tracks approval transition audit state in schema and migrations", () => {
+    expect(Object.keys(approvalTransitionEvents)).toEqual(
+      expect.arrayContaining([
+        "approvalId",
+        "fromStatus",
+        "toStatus",
+        "action",
+        "actorId",
+        "occurredAt",
+        "note",
+      ]),
+    );
+
+    const migrationSql = readMigrationSql();
+    expect(migrationSql).toContain('"approval_transition_events"');
+    expect(migrationSql).toContain("'bypassed'");
   });
 
   it(

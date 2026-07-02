@@ -32,4 +32,24 @@ describe("approval transitions", () => {
       }),
     ).toThrow(ApprovalTransitionError);
   });
+
+  it("allows requested approvals to be bypassed with actor attribution", () => {
+    expect(canTransitionApproval("requested", "bypass")).toBe(true);
+    expect(
+      transitionApproval({
+        currentStatus: "requested",
+        action: "bypass",
+        actorId: "ncolesummers",
+        note: "Emergency operator override.",
+        occurredAt: new Date("2026-07-02T16:08:00.000Z"),
+      }),
+    ).toEqual({
+      from: "requested",
+      to: "bypassed",
+      action: "bypass",
+      actorId: "ncolesummers",
+      occurredAt: "2026-07-02T16:08:00.000Z",
+      note: "Emergency operator override.",
+    });
+  });
 });

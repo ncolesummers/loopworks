@@ -7,6 +7,8 @@ import {
   getLoopEnabledStatus,
   getLoopStateStatus,
   getRepoHealthStatus,
+  getRunStatus,
+  getRunStepStatus,
   getValidationResultStatus,
 } from "@/components/portal/status-mapping";
 
@@ -96,5 +98,18 @@ describe("portal status mapping", () => {
     expect(getArtifactStatus("available")).toEqual({ status: "ready", label: "Available" });
     expect(getArtifactStatus("pending")).toEqual({ status: "queued", label: "Pending" });
     expect(getArtifactStatus("failed")).toEqual({ status: "failed", label: "Failed" });
+  });
+
+  it("maps run and step states", () => {
+    expect(getRunStatus("waiting_for_approval")).toEqual({
+      status: "needsApproval",
+      label: "Waiting Approval",
+    });
+    expect(getRunStatus("blocked")).toEqual({ status: "blocked", label: "Blocked" });
+    expect(getRunStepStatus("running")).toEqual({ status: "running", label: "Running" });
+    expect(getRunStepStatus("succeeded")).toEqual({
+      status: "succeeded",
+      label: "Succeeded",
+    });
   });
 });
