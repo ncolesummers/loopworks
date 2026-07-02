@@ -3,11 +3,147 @@ import {
   type LoopState,
   loopManifestSchema,
   loopStateValues,
+  retryableStatusValues,
 } from "../../../schemas/loop-manifest";
 
+export type LoopManifestValidationError = {
+  path: string;
+  message: string;
+  hint: string;
+};
+
+export type LoopManifestValidationResult =
+  | {
+      success: true;
+      data: LoopManifest;
+    }
+  | {
+      success: false;
+      errors: LoopManifestValidationError[];
+    };
+
 export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
+  version: 1,
   repo: "ncolesummers/loopworks",
   note: "Loopworks operating contract and bootstrap planning manifest.",
+  loops: [
+    {
+      key: "development-loop",
+      name: "Agent-ready development loop",
+      description:
+        "Routes agent-ready GitHub issues through planning, implementation, validation, review, and PR preparation gates.",
+      enabled: true,
+      repoScope: {
+        repositories: ["ncolesummers/loopworks"],
+        branchPatterns: ["main", "codex/*"],
+        includeForks: false,
+      },
+      triggers: {
+        issueLabels: ["agent-ready"],
+        blockedLabels: ["status:blocked"],
+        issueStates: ["opened", "reopened", "labeled"],
+        manual: true,
+        schedule: {
+          enabled: false,
+          timezone: "UTC",
+        },
+      },
+      modelPolicy: {
+        defaultModel: "codex-default",
+      },
+      toolPolicy: {
+        allowedToolCategories: ["repo-read", "repo-write", "github", "validation"],
+        externalWritesRequireApproval: true,
+      },
+      budgets: {
+        maxRunMinutes: 90,
+        maxModelUsd: 25,
+        maxToolCalls: 120,
+      },
+      approvals: {
+        requiredFor: ["external_write", "pr_creation", "manifest_rollout"],
+        bypassPolicy: "none",
+        gates: [
+          {
+            key: "external-write-review",
+            name: "External write review",
+            required: true,
+            reviewers: ["maintainer"],
+            evidence: ["diff_summary", "validation_report"],
+          },
+        ],
+      },
+      artifacts: [
+        {
+          type: "plan",
+          required: true,
+          description:
+            "Issue-backed execution plan with acceptance criteria and validation mapping.",
+          retention: "pr",
+        },
+        {
+          type: "validation_report",
+          required: true,
+          description: "Deterministic command evidence collected before review or rollout.",
+          retention: "audit",
+        },
+        {
+          type: "diff_summary",
+          required: true,
+          description: "Human-readable summary of proposed source changes.",
+          retention: "pr",
+        },
+        {
+          type: "pr_intent",
+          required: false,
+          description: "Draft PR metadata prepared after validation and approval gates pass.",
+          retention: "pr",
+        },
+      ],
+      validationGates: [
+        {
+          key: "focused-tests",
+          name: "Focused manifest tests",
+          command: "bun test tests/unit/loops/manifest.test.ts",
+          required: true,
+          phase: "before_implementation",
+          produces: "validation_report",
+        },
+        {
+          key: "aggregate-validation",
+          name: "Aggregate validation",
+          command: "bun run validate",
+          required: true,
+          phase: "before_rollout",
+          produces: "validation_report",
+        },
+      ],
+      retryPolicy: {
+        maxAttempts: 2,
+        retryableStatuses: [...retryableStatusValues],
+        backoff: {
+          strategy: "exponential",
+          initialSeconds: 30,
+          maxSeconds: 300,
+        },
+      },
+      concurrency: {
+        group: "repo:{repo}:loop:development",
+        maxInFlight: 1,
+        cancelInProgress: false,
+      },
+      cancellation: {
+        onSuperseded: "mark_canceled",
+        onDisabled: "skip_new_runs",
+        requiresReason: true,
+      },
+      githubWriteback: {
+        enabled: true,
+        channels: ["issue_comment"],
+        requireApprovalForLabels: true,
+      },
+    },
+  ],
   milestones: [
     {
       key: "M0",
@@ -137,6 +273,16 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
     { name: "kind:bug", category: "kind" },
     { name: "kind:design", category: "kind" },
     { name: "kind:security", category: "kind" },
+    {
+      name: "agent-ready",
+      category: "custom",
+      description: "Issue can trigger the development loop.",
+    },
+    {
+      name: "needs-approval",
+      category: "custom",
+      description: "Human approval is required before advancing.",
+    },
     { name: "priority:p0", category: "priority", required: true },
     { name: "priority:p1", category: "priority", required: true },
     { name: "priority:p2", category: "priority", required: true },
@@ -161,6 +307,87 @@ export function parseLoopManifest(input: unknown): LoopManifest {
   return loopManifestSchema.parse(input);
 }
 
+export function validateLoopManifest(input: unknown): LoopManifestValidationResult {
+  const result = loopManifestSchema.safeParse(input);
+
+  if (result.success) {
+    return {
+      success: true,
+      data: result.data,
+    };
+  }
+
+  return {
+    success: false,
+    errors: result.error.issues.map((issue) => {
+      const path = formatManifestPath(issue.path);
+
+      return {
+        path,
+        message: issue.message,
+        hint: getManifestValidationHint(path),
+      };
+    }),
+  };
+}
+
 export function isLoopState(value: string): value is LoopState {
   return loopStateValues.includes(value as LoopState);
+}
+
+function formatManifestPath(path: ReadonlyArray<PropertyKey>): string {
+  if (path.length === 0) {
+    return "manifest";
+  }
+
+  return path.reduce<string>((formattedPath, pathPart) => {
+    if (typeof pathPart === "number") {
+      return `${formattedPath}[${pathPart}]`;
+    }
+
+    const property = String(pathPart);
+    if (/^[A-Za-z_$][\w$]*$/.test(property)) {
+      return formattedPath === "" ? property : `${formattedPath}.${property}`;
+    }
+
+    return `${formattedPath}[${JSON.stringify(property)}]`;
+  }, "");
+}
+
+function getManifestValidationHint(path: string): string {
+  if (path === "version") {
+    return "Set version to 1 for the current loop manifest contract.";
+  }
+
+  if (path === "repo" || path.includes(".repositories")) {
+    return "Use an owner/repo slug such as ncolesummers/loopworks.";
+  }
+
+  if (path.includes("loops")) {
+    if (path.includes("triggers.issueLabels")) {
+      return "Add at least one GitHub label that can trigger the loop, such as agent-ready.";
+    }
+
+    if (path.includes("validationGates")) {
+      return "Define at least one validation gate with a key, command, and required flag.";
+    }
+
+    if (path.includes("approvals")) {
+      return "Define approval gates with reviewers and required evidence for high-impact actions.";
+    }
+
+    if (path.includes("retryPolicy")) {
+      return "Set retry maxAttempts to at least 1 and provide a bounded backoff policy.";
+    }
+
+    if (path.includes("concurrency")) {
+      return "Set a concurrency group and maxInFlight of at least 1.";
+    }
+
+    if (path.includes("cancellation")) {
+      return "Choose explicit cancellation behavior for superseded and disabled loop states.";
+    }
+  }
+
+  return "Review the loop manifest contract and provide the missing or invalid field.";
 }

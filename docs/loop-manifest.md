@@ -45,6 +45,35 @@ Every tracked item should carry:
 6. Last synced timestamp.
 7. Source links to issues, PRs, and deployments.
 
+## Manifest Contract
+
+The manifest is versioned. The current schema uses `version: 1` and requires at
+least one entry in `loops`.
+
+Each loop definition includes:
+
+1. `key`, `name`, and `description` for stable identification.
+2. `enabled` to stop new runs without deleting the loop contract.
+3. `repoScope` with allowed repositories, branch patterns, and fork policy.
+4. `triggers` with issue labels, blocked labels, issue event states, manual
+   trigger support, and optional schedules.
+5. `modelPolicy`, `toolPolicy`, and `budgets` to bound agent execution.
+6. `approvals` describing high-impact actions, required reviewers, bypass
+   policy, and evidence.
+7. `artifacts` describing required plans, validation reports, diff summaries,
+   PR intents, traces, and retention.
+8. `validationGates` with deterministic commands and the rollout phase they
+   protect.
+9. `retryPolicy` with bounded attempts and backoff.
+10. `concurrency` with the group key, max in-flight runs, and cancellation
+    behavior for overlapping work.
+11. `cancellation` for disabled or superseded work.
+12. `githubWriteback` for approved comments, labels, or status checks.
+
+The sample `development-loop` covers the `agent-ready` trigger and the early
+validation path for issue-backed implementation work. It is a draft operating
+contract, not a full runtime engine.
+
 ## Operating Rules
 
 1. Do not advance a loop without recording why the state changed.
@@ -54,6 +83,24 @@ Every tracked item should carry:
 5. Preserve enough history to reconstruct what happened after the fact.
 6. Emit structured logs for trigger decisions, validation gates, retries, cancellations, approvals, and external writes.
 7. Store durable records for audit state; do not rely on logs as the only source of truth.
+
+## Change Governance
+
+Manifest changes must be reviewable before rollout:
+
+1. Propose the manifest as a diff in the issue or PR that changes loop
+   behavior. GitHub remains the durable planning surface.
+2. Validate the proposed manifest with the TypeScript schema and the checked-in
+   JSON schema. Invalid manifests must report field paths, messages, and hints.
+3. Add or update deterministic tests for changed triggers, enabled state,
+   validation gates, approvals, retries, concurrency, or cancellation behavior.
+4. Add eval coverage when model policy, prompt/tool access, or workflow behavior
+   changes in a way deterministic tests cannot fully judge.
+5. Require PR review for any change that expands write access, changes approval
+   gates, loosens validation, raises budgets, changes concurrency, or changes
+   GitHub writeback behavior.
+6. Record rollout notes that identify the manifest version, affected loop keys,
+   validation evidence, reviewer approval, and rollback or disable path.
 
 ## Milestone Contract
 
