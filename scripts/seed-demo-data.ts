@@ -140,5 +140,14 @@ export async function runSeedCli(
 }
 
 if (import.meta.main) {
-  process.exitCode = await runSeedCli(process.argv.slice(2));
+  try {
+    process.exitCode = await runSeedCli(process.argv.slice(2));
+  } finally {
+    // `db` is a lazy postgres-js pool: it only opens a socket once a query
+    // runs (inside seedDemoData's transaction), but once open, postgres-js
+    // keeps it alive to keep the event loop from exiting on its own.
+    // Closing it here (a no-op if no query ever ran) lets the CLI actually
+    // return control to the shell instead of hanging after printing counts.
+    await db.$client.end({ timeout: 5 });
+  }
 }
