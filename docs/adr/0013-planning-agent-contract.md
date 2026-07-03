@@ -1,4 +1,4 @@
-# ADR 0012: Eve Planning Agent Contract
+# ADR 0013: Eve Planning Agent Contract
 
 Status: Proposed
 Date: 2026-07-03
@@ -8,8 +8,9 @@ Date: 2026-07-03
 Issue [#13](https://github.com/ncolesummers/loopworks/issues/13) introduces the
 first Eve-based planning agent. The agent must make GitHub issues executable
 without becoming an autonomous code mutation path. It also needs enough
-observability to support later operations while issue #21 keeps the telemetry
-backend and production masking/export decision open.
+observability to support later operations while ADR
+[0012](0012-telemetry-backend-and-metric-contract.md) owns the telemetry backend
+and metric contract.
 
 ## Decision
 
@@ -26,10 +27,10 @@ mutation, deployment changes, and SaaS mutation verbs are blocked. The only
 write-like planning contract is emitting the validated plan artifact.
 
 Production structured logs stay enabled and carry sanitized metadata and
-correlation fields. Raw input/output capture is disabled in production until
-issue #21 defines filtering, masking, and the likely OTel Collector/Grafana
-stack. Non-production may opt in to raw IO capture for eval/debug validation
-with explicit environment configuration.
+correlation fields. Raw input/output capture is disabled in production until the
+ADR 0012 implementation work defines filtering, masking, and exporter topology.
+Non-production may opt in to raw IO capture for eval/debug validation with
+explicit environment configuration.
 
 Fixture mode is explicit and local-only. It requires
 `LOOPWORKS_EVE_FIXTURE_MODE=true` and fails closed in production-like runtimes.
@@ -41,8 +42,9 @@ shell or source mutation surface. The first agent contract is testable through
 deterministic golden fixtures and Eve eval discovery before broader model,
 prompt, or tool changes.
 
-The implementation intentionally defers the telemetry exporter, production
-masking policy, metrics backend, and trace collector to issue #21.
+The implementation intentionally defers telemetry exporter wiring, production
+masking policy, metrics backend activation, and trace collector setup to ADR
+0012 implementation work.
 
 ## Validation
 
@@ -58,5 +60,5 @@ masking policy, metrics backend, and trace collector to issue #21.
 
 1. Link this Proposed ADR from issue #13 before accepting or merging the
    architecture decision.
-2. Issue #21 will choose the metrics/trace backend, production filtering and
-   masking policy, and collector/exporter topology.
+2. ADR 0012 implementation work will wire backend/exporter topology and
+   production filtering or masking policy.
