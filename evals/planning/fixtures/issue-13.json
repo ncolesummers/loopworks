@@ -1,0 +1,7 @@
+{
+  "repositoryFullName": "ncolesummers/loopworks",
+  "issueNumber": 13,
+  "title": "Initial Eve planning agent",
+  "labels": ["loop:development", "area:agents", "priority:p1"],
+  "body": "## Summary\nCreate the first Eve-based agent skeleton focused on planning, not autonomous code mutation.\n\n## Acceptance Criteria\n- Agent output is an executable plan artifact with stages, validation gates, approval points, and risks.\n- Agent tools are narrow and auditable.\n- Future model/prompt/tool changes have a path to eval coverage."
+}

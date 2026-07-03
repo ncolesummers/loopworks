@@ -107,7 +107,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
 
     await store.complete(key, {
       deliveryId,
-      metadata: { nextAction: "queue_eve_planning_agent", triggerWorkflow: "development" },
+      metadata: { nextAction: "queue_planning_agent", triggerWorkflow: "development" },
       processedAt,
       status: "processed",
     });
@@ -126,7 +126,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     expect(releasedLock.status).toBe("released");
     expect(releasedLock.releasedAt).toEqual(new Date(processedAt));
     expect(releasedLock.metadata).toMatchObject({
-      nextAction: "queue_eve_planning_agent",
+      nextAction: "queue_planning_agent",
       triggerWorkflow: "development",
       deliveryStatus: "processed",
     });
@@ -289,7 +289,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         mode: "created",
         stageCount: 8,
       },
-      nextAction: "queue_eve_planning_agent",
+      nextAction: "queue_planning_agent",
     });
 
     const [delivery] = await context.db
@@ -306,7 +306,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       .where(eq(idempotencyLocks.key, `github:${fixture.deliveryId}`));
     expect(lock.status).toBe("released");
     expect(lock.metadata).toMatchObject({
-      nextAction: "queue_eve_planning_agent",
+      nextAction: "queue_planning_agent",
       triggerWorkflow: "development",
       deliveryStatus: "processed",
     });

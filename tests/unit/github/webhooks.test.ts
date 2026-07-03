@@ -413,7 +413,7 @@ describe("GitHub webhook helpers", () => {
         mode: "simulated",
         stageCount: 8,
       },
-      nextAction: "queue_eve_planning_agent",
+      nextAction: "queue_planning_agent",
     });
   });
 
@@ -523,7 +523,7 @@ describe("GitHub webhook helpers", () => {
           mode: "simulated",
           stageCount: 8,
         },
-        nextAction: "queue_eve_planning_agent",
+        nextAction: "queue_planning_agent",
         triggerReason: "issue_became_agent_ready",
         triggerWorkflow: "development",
       },

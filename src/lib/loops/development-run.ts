@@ -11,6 +11,7 @@ import {
   repositories,
   runSteps,
 } from "@/db/schema";
+import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
 import type { ArtifactRecord, TimelineEvent, TimelineKind } from "@/lib/types";
 
 export const developmentLoopKey = "development-loop";
@@ -55,7 +56,7 @@ type DevelopmentLoopStageContract = {
 
 export const developmentLoopStages = [
   {
-    actorId: "eve-planning-agent",
+    actorId: "planning-agent",
     actorType: "agent",
     artifact: { label: "Plan artifact", required: true, type: "plan" },
     key: "planning",
@@ -134,6 +135,7 @@ export const developmentLoopStages = [
 ] as const satisfies readonly DevelopmentLoopStageContract[];
 
 export type DevelopmentLoopTrigger = {
+  body?: string;
   deliveryId?: string;
   issueNumber: number;
   issueUrl?: string;
@@ -425,7 +427,7 @@ export async function createDevelopmentLoopRun(input: {
     );
 
     await tx.insert(agentPlans).values({
-      agentName: "eve-planning-agent",
+      agentName: "planning-agent",
       input: {
         issueNumber: input.trigger.issueNumber,
         labels: input.trigger.labels ?? [],
@@ -434,12 +436,15 @@ export async function createDevelopmentLoopRun(input: {
         title: input.trigger.title ?? "",
       },
       issueNumber: input.trigger.issueNumber,
-      plan: {
-        artifact: "Plan artifact",
-        loopKey: skeleton.loopKey,
-        stages: skeleton.stages.map((stage) => stage.key),
-        validationBeforeReview: true,
-      },
+      plan: createPlanningAgentSeedPlan({
+        body: input.trigger.body ?? "",
+        issueNumber: input.trigger.issueNumber,
+        issueUrl: getIssueUrl(input.trigger),
+        labels: [...(input.trigger.labels ?? [])],
+        milestone: input.trigger.milestone ?? null,
+        repositoryFullName: input.trigger.repositoryFullName,
+        title: input.trigger.title ?? `Issue #${input.trigger.issueNumber}`,
+      }),
       runId,
       status: "pending",
     });

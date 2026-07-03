@@ -117,7 +117,7 @@ function getNextAction(agentReadyTrigger: GithubAgentReadyTrigger): string {
   }
 
   if (agentReadyTrigger.shouldTrigger === true) {
-    return "queue_eve_planning_agent";
+    return "queue_planning_agent";
   }
 
   return "record_and_ignore";
@@ -152,6 +152,7 @@ function getDevelopmentLoopTrigger(
   }
 
   return {
+    body: payload.issue.body ?? "",
     deliveryId,
     issueNumber: payload.issue.number,
     issueUrl: payload.issue.html_url ?? undefined,

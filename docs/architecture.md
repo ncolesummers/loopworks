@@ -12,7 +12,7 @@ The MVP should favor working slices over broad platform abstractions. The core a
 2. UI: Tailwind CSS, ShadCN/UI primitives, Storybook.
 3. Auth: Auth.js GitHub provider with username/org allowlist.
 4. Data: Postgres with Drizzle ORM.
-5. Agent framework: Eve planning-agent skeleton.
+5. Agent framework: Planning-agent skeleton on Eve runtime.
 6. Vercel infrastructure: Vercel deployment visibility first, with Vercel Workflows, Sandbox, Connect, and AI Gateway as likely expansion points.
 7. GitHub: GitHub App/webhooks, REST/GraphQL APIs, Issues, Labels, Milestones, Projects, PRs, Checks/Statuses.
 8. Quality: Biome, TypeScript, Vitest, Playwright, Axe, Storybook build.

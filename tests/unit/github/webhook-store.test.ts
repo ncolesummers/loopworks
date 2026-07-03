@@ -296,7 +296,7 @@ describe("Drizzle GitHub webhook delivery store", () => {
     await store.complete(firstClaim.key, {
       deliveryId: firstClaim.deliveryId,
       metadata: {
-        nextAction: "queue_eve_planning_agent",
+        nextAction: "queue_planning_agent",
         triggerWorkflow: "development",
       },
       processedAt: "2026-06-28T01:00:02.000Z",
@@ -329,7 +329,7 @@ describe("Drizzle GitHub webhook delivery store", () => {
         key: "github:processed-duplicate-delivery",
         metadata: {
           deliveryStatus: "processed",
-          nextAction: "queue_eve_planning_agent",
+          nextAction: "queue_planning_agent",
           triggerWorkflow: "development",
         },
         releasedAt: new Date("2026-06-28T01:00:02.000Z"),

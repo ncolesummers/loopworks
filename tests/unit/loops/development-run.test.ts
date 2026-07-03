@@ -21,6 +21,10 @@ import {
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
 const issueTrigger = {
+  body: [
+    "## Acceptance Criteria",
+    "- Development-loop planning stores the issue acceptance criteria.",
+  ].join("\n"),
   deliveryId: "issue-11-delivery",
   issueNumber: 11,
   issueUrl: "https://github.com/ncolesummers/loopworks/issues/11",
@@ -146,8 +150,28 @@ describe("agent-ready development loop run skeleton", () => {
     expect(artifactRows.every((artifact) => artifact.runId === runRows[0]?.id)).toBe(true);
     expect(planRows).toHaveLength(1);
     expect(planRows[0]).toMatchObject({
-      agentName: "eve-planning-agent",
+      agentName: "planning-agent",
       issueNumber: 11,
+      plan: expect.objectContaining({
+        issue: expect.objectContaining({
+          acceptanceCriteria: ["Development-loop planning stores the issue acceptance criteria."],
+        }),
+        model: "openai/gpt-5.5-xhigh",
+        stages: expect.arrayContaining([
+          expect.objectContaining({
+            key: "plan-artifact",
+          }),
+        ]),
+        toolContractSummary: expect.objectContaining({
+          planArtifactOnlyWrite: true,
+          planningOnly: true,
+        }),
+        validationGates: expect.arrayContaining([
+          expect.objectContaining({
+            key: "focused-agent-tests",
+          }),
+        ]),
+      }),
       status: "pending",
     });
   });

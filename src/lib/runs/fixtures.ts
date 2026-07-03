@@ -157,7 +157,7 @@ export function buildRunFixtureRecords(): RunRecord[] {
       steps: [
         {
           id: "fixture-step-planning",
-          actor: "eve-planning-agent",
+          actor: "planning-agent",
           at: "08:41",
           artifact: "Plan artifact",
           detail: "Issue-backed plan captured before implementation.",
