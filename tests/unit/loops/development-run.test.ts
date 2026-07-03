@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { eq } from "drizzle-orm";
+import { context as otelContext, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
 import {
   agentPlans,
@@ -47,6 +48,18 @@ async function insertRepository(context: PgliteTestDatabase) {
     enabledLoops: ["Agent-ready development loop"],
     validationGates: ["Focused tests", "Aggregate validation"],
   });
+}
+
+function withTestTrace<T>(callback: () => T): T {
+  const span = {
+    spanContext: () => ({
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      spanId: "00f067aa0ba902b7",
+      traceFlags: TraceFlags.SAMPLED,
+    }),
+  } as Span;
+
+  return otelContext.with(trace.setSpan(otelContext.active(), span), callback);
 }
 
 describe("agent-ready development loop run skeleton", () => {
@@ -118,11 +131,13 @@ describe("agent-ready development loop run skeleton", () => {
   it("creates one durable run, eight stage rows, eight artifacts, and an agent plan", async () => {
     await insertRepository(context);
 
-    const result = await createDevelopmentLoopRun({
-      database: testDatabase(context),
-      now: () => new Date("2026-07-02T16:00:00.000Z"),
-      trigger: issueTrigger,
-    });
+    const result = await withTestTrace(() =>
+      createDevelopmentLoopRun({
+        database: testDatabase(context),
+        now: () => new Date("2026-07-02T16:00:00.000Z"),
+        trigger: issueTrigger,
+      }),
+    );
 
     expect(result).toMatchObject({
       artifactCount: 8,
@@ -142,6 +157,16 @@ describe("agent-ready development loop run skeleton", () => {
       githubIssueUrl: issueTrigger.issueUrl,
       loopKey: "development-loop",
       status: "queued",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+    });
+    expect(stepRows.every((step) => step.traceId === runRows[0]?.traceId)).toBe(true);
+    const [event] = await context.db
+      .select()
+      .from(observabilityEvents)
+      .where(eq(observabilityEvents.eventType, "development_loop_run_created"));
+    expect(event).toMatchObject({
+      metricName: "development_loop_run_created",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
     });
     expect(stepRows.map((step) => step.stage)).toEqual(
       developmentLoopStages.map((stage) => stage.key),
@@ -195,6 +220,28 @@ describe("agent-ready development loop run skeleton", () => {
     expect(await context.db.select().from(runSteps)).toHaveLength(8);
     expect(await context.db.select().from(artifacts)).toHaveLength(8);
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
+  });
+
+  it("does not persist malformed explicit trace ids", async () => {
+    await insertRepository(context);
+
+    await createDevelopmentLoopRun({
+      database: testDatabase(context),
+      now: () => new Date("2026-07-02T16:00:00.000Z"),
+      traceId: "TRACE_123",
+      trigger: issueTrigger,
+    });
+
+    const [run] = await context.db.select().from(loopRuns);
+    const stepRows = await context.db.select().from(runSteps);
+    const [event] = await context.db
+      .select()
+      .from(observabilityEvents)
+      .where(eq(observabilityEvents.eventType, "development_loop_run_created"));
+
+    expect(run.traceId).toBeNull();
+    expect(stepRows.every((step) => step.traceId === null)).toBe(true);
+    expect(event.traceId).toBeNull();
   });
 
   it("records a durable disabled-loop no-op without creating a run", async () => {
