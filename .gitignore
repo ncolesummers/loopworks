@@ -8,8 +8,13 @@ storybook-static
 coverage
 playwright-report
 test-results
+.eve
+.workflow-data
+.output
+.claude
 .env
 .env.local
 .env.*.local
 CLAUDE.local.md
 tsconfig.tsbuildinfo
+.vercel

@@ -445,7 +445,7 @@ export function buildDemoSeedData(): DemoSeedData {
       stage: "planning",
       status: "queued",
       actorType: "agent",
-      actorId: "eve-planning-agent",
+      actorId: "planning-agent",
       summary: "Waiting to start the planning stage.",
       queuedAt: new Date("2026-06-30T09:06:30.000Z"),
     },

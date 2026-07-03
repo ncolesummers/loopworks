@@ -460,7 +460,7 @@ export const agentPlans = pgTable(
     loopId: uuid("loop_id").references(() => loops.id, { onDelete: "set null" }),
     runId: uuid("run_id").references(() => loopRuns.id, { onDelete: "set null" }),
     issueNumber: integer("issue_number"),
-    agentName: text("agent_name").default("eve-planning-agent").notNull(),
+    agentName: text("agent_name").default("planning-agent").notNull(),
     status: text("status").default("pending").notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull(),
     plan: jsonb("plan").$type<Record<string, unknown>>(),
