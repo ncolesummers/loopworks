@@ -1,4 +1,5 @@
 import { createLogger } from "@/lib/observability/logger";
+import { context, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
 function createMemoryDestination() {
   const writes: string[] = [];
@@ -137,6 +138,35 @@ describe("Loopworks logger", () => {
         oauth_access_token: "[redacted]",
         github_webhook_secret: "[redacted]",
       },
+    });
+  });
+
+  it("attaches the active W3C trace id while preserving structured log fields", () => {
+    const sink = createMemoryDestination();
+    const logger = createLogger(
+      {
+        level: "info",
+        base: null,
+      },
+      sink.destination,
+    );
+    const span = {
+      spanContext: () => ({
+        traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+        spanId: "00f067aa0ba902b7",
+        traceFlags: TraceFlags.SAMPLED,
+      }),
+    } as Span;
+
+    context.with(trace.setSpan(context.active(), span), () => {
+      logger.info({ route: "test.route" }, "trace_context_test");
+    });
+
+    const entry = JSON.parse(sink.writes[0] ?? "{}") as Record<string, unknown>;
+    expect(entry).toMatchObject({
+      msg: "trace_context_test",
+      route: "test.route",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
     });
   });
 });

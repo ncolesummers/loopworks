@@ -1,5 +1,7 @@
 import pino, { type DestinationStream, type Logger, type LoggerOptions } from "pino";
 
+import { withActiveTraceId } from "@/lib/observability/trace-context";
+
 const redactedPaths = [
   "accessToken",
   "access_token",
@@ -74,7 +76,7 @@ function defaultBaseBindings() {
 }
 
 function buildLoggerOptions(options: LoggerOptions): LoggerOptions {
-  const { base, redact, ...rest } = options;
+  const { base, mixin, redact, ...rest } = options;
 
   return {
     level: process.env.LOG_LEVEL ?? "info",
@@ -82,6 +84,11 @@ function buildLoggerOptions(options: LoggerOptions): LoggerOptions {
     redact: redact ?? {
       paths: redactedPaths,
       censor: "[redacted]",
+    },
+    mixin(mergeObject, level, logger) {
+      return withActiveTraceId(
+        (mixin?.(mergeObject, level, logger) ?? {}) as Record<string, unknown>,
+      );
     },
     timestamp: pino.stdTimeFunctions.isoTime,
     ...rest,

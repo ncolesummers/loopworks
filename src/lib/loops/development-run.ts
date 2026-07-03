@@ -12,6 +12,11 @@ import {
   runSteps,
 } from "@/db/schema";
 import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
+import {
+  developmentLoopRunCreatedDurableMetricName,
+  recordDevelopmentLoopRunStartedMetric,
+} from "@/lib/observability/metrics";
+import { getActiveTraceId, isValidW3cTraceId } from "@/lib/observability/trace-context";
 import type { ArtifactRecord, TimelineEvent, TimelineKind } from "@/lib/types";
 
 export const developmentLoopKey = "development-loop";
@@ -315,9 +320,16 @@ export function simulateDevelopmentLoopRun(input: {
 export async function createDevelopmentLoopRun(input: {
   database: DevelopmentLoopRunDatabase;
   now?: () => Date;
+  traceId?: string;
   trigger: DevelopmentLoopTrigger;
 }): Promise<DevelopmentLoopRunMetadata> {
   const createdAt = input.now?.() ?? new Date();
+  const traceId =
+    input.traceId === undefined
+      ? getActiveTraceId()
+      : isValidW3cTraceId(input.traceId)
+        ? input.traceId
+        : undefined;
 
   return input.database.transaction(async (tx) => {
     const existingRun = input.trigger.deliveryId
@@ -387,6 +399,7 @@ export async function createDevelopmentLoopRun(input: {
       queuedAt: createdAt,
       repositoryId: repository.id,
       status: "queued",
+      traceId,
     });
 
     const stepIds: string[] = [];
@@ -406,6 +419,7 @@ export async function createDevelopmentLoopRun(input: {
         stage: stage.key,
         status: stage.status,
         summary: stage.summary,
+        traceId,
         validationCommand: stage.validationCommand,
         validationStatus: stage.validationStatus,
       });
@@ -453,7 +467,7 @@ export async function createDevelopmentLoopRun(input: {
       eventType: developmentLoopRunCreatedEventType,
       correlationId: input.trigger.deliveryId,
       message: "Agent-ready development loop run skeleton created.",
-      metricName: "development_loop_run_created",
+      metricName: developmentLoopRunCreatedDurableMetricName,
       metricValue: skeleton.stages.length,
       payload: {
         artifactCount: skeleton.artifacts.length,
@@ -465,6 +479,13 @@ export async function createDevelopmentLoopRun(input: {
       repositoryId: repository.id,
       runId,
       severity: "info",
+      traceId,
+    });
+
+    recordDevelopmentLoopRunStartedMetric({
+      loopKey: skeleton.loopKey,
+      repository: input.trigger.repositoryFullName,
+      triggerLabel: "agent-ready",
     });
 
     return {

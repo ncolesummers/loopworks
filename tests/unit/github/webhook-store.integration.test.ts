@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { eq } from "drizzle-orm";
+import { context as otelContext, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
 import { handleGithubWebhookPost } from "@/app/api/github/webhooks/route";
 import {
@@ -22,6 +23,18 @@ import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixt
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
 const lockTtlMs = 5 * 60 * 1000;
+
+function withTestTrace<T>(callback: () => T): T {
+  const span = {
+    spanContext: () => ({
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      spanId: "00f067aa0ba902b7",
+      traceFlags: TraceFlags.SAMPLED,
+    }),
+  } as Span;
+
+  return otelContext.with(trace.setSpan(otelContext.active(), span), callback);
+}
 
 describe("GitHub webhook delivery store (pglite integration)", () => {
   let context: PgliteTestDatabase;
@@ -274,11 +287,13 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         method: "POST",
       });
 
-    const first = await handleGithubWebhookPost(makeRequest(), {
-      developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
-      now,
-      webhookDeliveryStore: store,
-    });
+    const first = await withTestTrace(() =>
+      handleGithubWebhookPost(makeRequest(), {
+        developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+        now,
+        webhookDeliveryStore: store,
+      }),
+    );
     expect(first.status).toBe(202);
     await expect(first.json()).resolves.toMatchObject({
       accepted: true,
@@ -320,8 +335,15 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       githubIssueNumber: 11,
       loopKey: "development-loop",
       status: "queued",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
     });
     expect(stepRows).toHaveLength(8);
+    expect(stepRows.every((step) => step.traceId === runRows[0]?.traceId)).toBe(true);
+    const [event] = await context.db
+      .select()
+      .from(observabilityEvents)
+      .where(eq(observabilityEvents.eventType, "development_loop_run_created"));
+    expect(event.traceId).toBe(runRows[0]?.traceId);
     expect(artifactRows).toHaveLength(8);
     expect(planRows).toHaveLength(1);
 

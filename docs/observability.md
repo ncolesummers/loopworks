@@ -6,13 +6,23 @@ Observability is a core product requirement for Loopworks, not an operational af
 
 ## Current Foundation
 
-Loopworks uses Pino for structured JSON logging. This decision is captured in `adr/0003-pino-structured-logging-and-metrics-contract.md`. The shared logger lives in `src/lib/observability/logger.ts` and provides:
+Loopworks uses Pino for structured JSON logging and `@vercel/otel` for the
+OpenTelemetry foundation. These decisions are captured in
+`adr/0003-pino-structured-logging-and-metrics-contract.md` and
+`adr/0012-telemetry-backend-and-metric-contract.md`. The shared logger lives in
+`src/lib/observability/logger.ts` and provides:
 
 1. Stable service metadata: service name, environment, and deployment id.
 2. ISO timestamps for logs.
 3. `LOG_LEVEL` control.
 4. Default redaction for common token, secret, password, authorization, and access-token fields.
 5. Request-scoped child loggers for API boundaries.
+6. Active W3C `traceId` attachment when an OTel span is available.
+
+The Next.js runtime registers OTel from `src/instrumentation.ts` for the Node.js
+runtime only. Resource attributes include stable service, environment,
+deployment, Vercel, runtime, and Git revision fields so traces and metrics can
+be queried consistently across local, preview, and production environments.
 
 ## Logging Rules
 
@@ -65,11 +75,54 @@ The internal control plane should eventually expose:
 7. Agent cost, token, model, and tool usage metrics.
 8. Queue depth, concurrency, lock contention, and cancellation counts.
 
-The concrete metrics backend and trace collector are still open decisions. Until those are selected, implementation should still use stable metric names and correlation identifiers so the later backend choice does not force a semantic rewrite.
+ADR 0012 defines the concrete metric-name contract. The exported metric names
+live in `src/lib/observability/metrics.ts`; code should import helpers from that
+module instead of naming OTel meters ad hoc. The first wired metric maps the
+durable `development_loop_run_created` control-plane event to
+`loopworks.run.started` with `loop.key`, `repository`, and `trigger.label`
+attributes.
 
 ## Tracing Direction
 
-The MVP logger should be compatible with future trace context. When workflow execution moves into Vercel Workflows, Sandbox, or other distributed execution, run id, step id, GitHub delivery id, and trace id should be propagated through logs, artifacts, and status records.
+The MVP logger is compatible with trace context. Development-loop run creation
+persists the active W3C trace id into `loop_runs.trace_id`,
+`run_steps.trace_id`, and `observability_events.trace_id`, allowing Axiom traces,
+stdout logs, and durable run records to be correlated.
+
+## Axiom Preview Configuration
+
+Local development is safe by default: leave OTLP exporter variables blank unless
+you intentionally want to ship telemetry. Preview and production should use
+standard OpenTelemetry environment variables rather than backend-specific SDKs.
+
+For Axiom:
+
+1. Use `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`.
+2. Point `OTEL_EXPORTER_OTLP_ENDPOINT` at the Axiom OTLP base domain so
+   per-signal paths resolve to `/v1/traces` and `/v1/metrics`.
+3. Set `OTEL_EXPORTER_OTLP_TRACES_HEADERS` with the bearer token and the Events
+   dataset header for traces.
+4. Set `OTEL_EXPORTER_OTLP_METRICS_HEADERS` with the same bearer token and the
+   dedicated Metrics dataset header.
+5. Keep Pino stdout logging enabled for Vercel runtime logs. Full Pino-to-Axiom
+   log shipping, including any `OTEL_EXPORTER_OTLP_LOGS_HEADERS` configuration,
+   is tracked separately by issue #65.
+
+## Grafana Cloud Fallback
+
+If the Axiom preview validation fails without requiring metric-contract changes,
+use Grafana Cloud as the fallback backend:
+
+1. Create or select a Grafana Cloud stack and open its OpenTelemetry connection
+   tile.
+2. Generate the OTLP endpoint and token.
+3. Set `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`,
+   `OTEL_EXPORTER_OTLP_ENDPOINT`, and `OTEL_EXPORTER_OTLP_HEADERS` from the
+   Grafana connection instructions.
+4. Redeploy the same preview and repeat the signed webhook fixture validation:
+   trace present, `loopworks.run.started` metric present, stdout log has the
+   same `traceId`, and persisted run/step `trace_id` values match when preview
+   database access is available.
 
 ## Review Checklist
 

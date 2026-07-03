@@ -23,6 +23,7 @@ import {
   type DevelopmentLoopTrigger,
 } from "@/lib/loops/development-run";
 import { createRequestLogger } from "@/lib/observability/logger";
+import { getActiveTraceId } from "@/lib/observability/trace-context";
 
 const inMemoryWebhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
 
@@ -170,6 +171,7 @@ async function resolveDevelopmentRunOutcome(input: {
   normalizedDeliveryId: string;
   now: Date;
   persist: boolean;
+  traceId?: string;
 }): Promise<DevelopmentRunOutcome | undefined> {
   const trigger = getDevelopmentLoopTrigger(input.issuesPayload, input.normalizedDeliveryId);
 
@@ -182,6 +184,7 @@ async function resolveDevelopmentRunOutcome(input: {
       return createDevelopmentLoopRun({
         database: input.database,
         now: () => input.now,
+        traceId: input.traceId,
         trigger,
       });
     }
@@ -228,6 +231,7 @@ export async function handleGithubWebhookPost(
     dependencies.getAgentReadyTrigger ?? getLoopAwareAgentReadyTriggerFromIssuesWebhook;
   const developmentRunDatabase = dependencies.developmentRunDatabase ?? db;
   const now = dependencies.now ?? (() => new Date());
+  const traceId = getActiveTraceId();
   const requestLogger = createRequestLogger({
     route: "api.github.webhooks",
     githubDeliveryId: deliveryId,
@@ -358,6 +362,7 @@ export async function handleGithubWebhookPost(
       now: processedAt,
       persist:
         selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
+      traceId,
     });
 
     await webhookDeliveryStore.complete(claim.key, {
