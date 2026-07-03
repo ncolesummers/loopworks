@@ -103,16 +103,6 @@ The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome
 - Personas and test scenarios: `docs/personas-and-test-scenarios.md`
 - MVP security review: `docs/security-review.md`
 
-## GitHub Bootstrap
-
-After the repository exists and `gh` can mutate it:
-
-```bash
-bun run bootstrap:github
-```
-
-Use `--dry-run` to print the planned labels, milestones, issues, and project setup without changes.
-
 ## Database Seed Data
 
 After the database bootstrap (`bun run db:migrate`), seed a demo dataset covering repos, loops, runs, run steps, artifacts, approvals, and Vercel deployment states in every status:

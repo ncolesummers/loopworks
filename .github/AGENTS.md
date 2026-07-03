@@ -14,8 +14,9 @@ while maintaining pull requests.
 3. Issue templates should capture acceptance criteria and validation evidence.
 4. Do not put secrets, tokens, private keys, or production credentials in
    workflows or templates.
-5. Update `scripts/bootstrap-github.ts` when foundational labels, milestones,
-   issues, or project setup change.
+5. Manage labels, milestones, and issues directly via `gh` or the GitHub UI;
+   keep issue templates and this guide aligned with the label/milestone names
+   actually in use.
 6. To resolve an inline PR review comment through the GitHub API, query
    `pullRequest.reviewThreads` and resolve the review-thread node ID; the review
    comment database ID is not directly resolvable.

@@ -174,7 +174,16 @@ The first agent is a planning agent. It should:
 4. Produce a clear next-action summary.
 5. Avoid mutating code or GitHub state outside explicit tool contracts.
 
-Later agents can own research, test-writing, implementation, validation review, PR preparation, and release notes. Each agent needs eval coverage before promotion to default use.
+Later agents are tracked as backlog items, one per development-loop stage that still lacks an LLM agent:
+
+1. Research loop skeleton, research planner, researcher, and research author agents — the `spike` plus `agent-ready` research loop, run in parallel to the development loop.
+2. Test-writing agent — test-writing stage, red test evidence plus a reusable automated test plan and seed data.
+3. Implementation agent — development stage, patch artifact.
+4. Validation review agent — code review stage, code review notes and UI screenshot evidence.
+5. PR preparation agent — PR stage, PR intent content including screenshots.
+6. Release notes agent — done stage, completion summary.
+
+The commit stage intentionally stays mechanical, owned by the PR creation path rather than a dedicated agent. Each agent needs eval coverage before promotion to default use.
 
 ## Security Architecture
 
