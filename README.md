@@ -52,12 +52,27 @@ Copy `.env.example` to `.env.local` for local development. The fixture server on
 - `LOOPWORKS_RESEARCH_LOOP_ENABLED`
 - `LOG_LEVEL`
 - `DATABASE_URL`
+- `OTEL_EXPORTER_OTLP_PROTOCOL`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_TRACES_HEADERS`
+- `OTEL_EXPORTER_OTLP_METRICS_HEADERS`
+- `OTEL_SERVICE_NAME`
+- `OTEL_RESOURCE_ATTRIBUTES`
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_WEBHOOK_SECRET`
 - `VERCEL_ACCESS_TOKEN`
 - `VERCEL_TEAM_ID`
 - `VERCEL_TEAM_SLUG`
+
+OpenTelemetry is registered through `@vercel/otel`. Local development is safe
+by default: leave the OTLP exporter variables blank unless you intentionally want
+to ship telemetry. For the ADR 0012 Axiom preview proof, use OTLP/HTTP protobuf,
+send traces to an Axiom Events dataset with
+`OTEL_EXPORTER_OTLP_TRACES_HEADERS`, and send metrics to a dedicated Axiom
+Metrics dataset with `OTEL_EXPORTER_OTLP_METRICS_HEADERS`. Pino stdout logs stay
+attached to Vercel runtime logs with the active `traceId`; direct Pino-to-Axiom
+log shipping is tracked separately by issue #65.
 
 ## Validation
 
