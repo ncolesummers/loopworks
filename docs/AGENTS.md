@@ -8,8 +8,8 @@ review, loop manifests, and contributor-facing documentation under `docs/`.
 ## Rules
 
 1. Update the persona/test-scenario matrix when intended user workflows change.
-2. Update the GitHub backlog/bootstrap script when new foundational work needs
-   durable tracking.
+2. Create durable GitHub issues directly (`gh issue create` or the issue-form
+   templates) when new foundational work needs tracking.
 3. Use ADR proposals or issue comments for durable decisions.
 4. Update `docs/security-review.md` when auth or session behavior changes the
    durable security expectation.
