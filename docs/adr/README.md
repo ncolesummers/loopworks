@@ -32,6 +32,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0009](0009-design-system-direction-and-tokens.md) | Accepted | Adopt a monochrome neutral base with one blue accent, Mona Sans and Monaspace Neon typography, an HSL token system, and a centralized STATUS_META vocabulary as the M1 design system. |
 | [0010](0010-storybook-first-visual-regression-strategy.md) | Accepted | Use Storybook stories, native a11y review, and human review as the M1 visual-regression strategy before durable screenshot baselines. |
 | [0011](0011-approval-transition-audit-events.md) | Proposed | Store approval transition audit events alongside current approval state. |
+| [0012](0012-telemetry-backend-and-metric-contract.md) | Proposed | Adopt Axiom as the OTel telemetry backend and define the metric, span, and correlation contract. |
 
 ## Template
 
