@@ -12,16 +12,12 @@ import {
   runSteps,
 } from "@/db/schema";
 import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
-import {
-  developmentLoopRunCreatedDurableMetricName,
-  recordDevelopmentLoopRunStartedMetric,
-} from "@/lib/observability/metrics";
+import { recordDevelopmentLoopRunCreatedObservability } from "@/lib/observability/metrics";
 import { getActiveTraceId, isValidW3cTraceId } from "@/lib/observability/trace-context";
 import type { ArtifactRecord, TimelineEvent, TimelineKind } from "@/lib/types";
 
 export const developmentLoopKey = "development-loop";
 export const developmentLoopNoopEventType = "development_loop_noop";
-export const developmentLoopRunCreatedEventType = "development_loop_run_created";
 
 export type DevelopmentLoopStageKey =
   | "planning"
@@ -168,6 +164,11 @@ export type DevelopmentLoopRunMetadata =
 export type DevelopmentLoopNoopMetadata = {
   mode: "noop";
   reason: "loop_disabled";
+};
+
+type DevelopmentLoopRunTransactionResult = {
+  emitObservability?: () => void;
+  metadata: DevelopmentLoopRunMetadata;
 };
 
 type DevelopmentLoopStageInstance = {
@@ -331,170 +332,170 @@ export async function createDevelopmentLoopRun(input: {
         ? input.traceId
         : undefined;
 
-  return input.database.transaction(async (tx) => {
-    const existingRun = input.trigger.deliveryId
-      ? await tx
-          .select({ id: loopRuns.id })
-          .from(loopRuns)
-          .where(
-            and(
-              eq(loopRuns.loopKey, developmentLoopKey),
-              sql`${loopRuns.metadata}->>'deliveryId' = ${input.trigger.deliveryId}`,
-            ),
-          )
-          .limit(1)
-      : [];
+  const result: DevelopmentLoopRunTransactionResult = await input.database.transaction(
+    async (tx) => {
+      const existingRun = input.trigger.deliveryId
+        ? await tx
+            .select({ id: loopRuns.id })
+            .from(loopRuns)
+            .where(
+              and(
+                eq(loopRuns.loopKey, developmentLoopKey),
+                sql`${loopRuns.metadata}->>'deliveryId' = ${input.trigger.deliveryId}`,
+              ),
+            )
+            .limit(1)
+        : [];
 
-    if (existingRun[0]) {
-      const existingArtifacts = await tx
-        .select({ id: artifacts.id })
-        .from(artifacts)
-        .where(eq(artifacts.runId, existingRun[0].id));
-      const existingSteps = await tx
-        .select({ id: runSteps.id })
-        .from(runSteps)
-        .where(eq(runSteps.runId, existingRun[0].id));
+      if (existingRun[0]) {
+        const existingArtifacts = await tx
+          .select({ id: artifacts.id })
+          .from(artifacts)
+          .where(eq(artifacts.runId, existingRun[0].id));
+        const existingSteps = await tx
+          .select({ id: runSteps.id })
+          .from(runSteps)
+          .where(eq(runSteps.runId, existingRun[0].id));
 
-      return {
-        artifactCount: existingArtifacts.length,
+        return {
+          metadata: {
+            artifactCount: existingArtifacts.length,
+            mode: "created",
+            runId: existingRun[0].id,
+            stageCount: existingSteps.length,
+          },
+        };
+      }
+
+      const [repository] = await tx
+        .select({ id: repositories.id })
+        .from(repositories)
+        .where(eq(repositories.fullName, input.trigger.repositoryFullName))
+        .limit(1);
+
+      if (!repository) {
+        throw new Error(
+          `Cannot create development loop run for unknown repository: ${input.trigger.repositoryFullName}`,
+        );
+      }
+
+      const runId = randomUUID();
+      const skeleton = createDevelopmentLoopRunSkeleton({
         mode: "created",
-        runId: existingRun[0].id,
-        stageCount: existingSteps.length,
-      };
-    }
-
-    const [repository] = await tx
-      .select({ id: repositories.id })
-      .from(repositories)
-      .where(eq(repositories.fullName, input.trigger.repositoryFullName))
-      .limit(1);
-
-    if (!repository) {
-      throw new Error(
-        `Cannot create development loop run for unknown repository: ${input.trigger.repositoryFullName}`,
-      );
-    }
-
-    const runId = randomUUID();
-    const skeleton = createDevelopmentLoopRunSkeleton({
-      mode: "created",
-      now: createdAt,
-      runId,
-      trigger: input.trigger,
-    });
-
-    await tx.insert(loopRuns).values({
-      id: runId,
-      currentStage: developmentLoopStages[0].key,
-      githubIssueNumber: input.trigger.issueNumber,
-      githubIssueUrl: getIssueUrl(input.trigger),
-      loopKey: skeleton.loopKey,
-      metadata: {
-        deliveryId: input.trigger.deliveryId,
-        labels: input.trigger.labels ?? [],
-        milestone: input.trigger.milestone ?? null,
-        source: "github_issue",
-        stageCount: skeleton.stages.length,
-      },
-      queuedAt: createdAt,
-      repositoryId: repository.id,
-      status: "queued",
-      traceId,
-    });
-
-    const stepIds: string[] = [];
-    for (const stage of skeleton.stages) {
-      const stepId = randomUUID();
-      stepIds.push(stepId);
-      await tx.insert(runSteps).values({
-        id: stepId,
-        actorId: stage.actorId,
-        actorType: stage.actorType,
-        metadata: {
-          artifactLabel: stage.artifact.label,
-          requiredArtifact: stage.artifact.required,
-        },
-        queuedAt: stage.queuedAt,
+        now: createdAt,
         runId,
-        stage: stage.key,
-        status: stage.status,
-        summary: stage.summary,
-        traceId,
-        validationCommand: stage.validationCommand,
-        validationStatus: stage.validationStatus,
+        trigger: input.trigger,
       });
-    }
 
-    await tx.insert(artifacts).values(
-      skeleton.artifacts.map((artifact, index) => ({
-        id: randomUUID(),
+      await tx.insert(loopRuns).values({
+        id: runId,
+        currentStage: developmentLoopStages[0].key,
+        githubIssueNumber: input.trigger.issueNumber,
+        githubIssueUrl: getIssueUrl(input.trigger),
+        loopKey: skeleton.loopKey,
         metadata: {
-          required: artifact.required,
-          stage: skeleton.stages[index]?.key,
+          deliveryId: input.trigger.deliveryId,
+          labels: input.trigger.labels ?? [],
+          milestone: input.trigger.milestone ?? null,
+          source: "github_issue",
+          stageCount: skeleton.stages.length,
         },
+        queuedAt: createdAt,
+        repositoryId: repository.id,
+        status: "queued",
+        traceId,
+      });
+
+      const stepIds: string[] = [];
+      for (const stage of skeleton.stages) {
+        const stepId = randomUUID();
+        stepIds.push(stepId);
+        await tx.insert(runSteps).values({
+          id: stepId,
+          actorId: stage.actorId,
+          actorType: stage.actorType,
+          metadata: {
+            artifactLabel: stage.artifact.label,
+            requiredArtifact: stage.artifact.required,
+          },
+          queuedAt: stage.queuedAt,
+          runId,
+          stage: stage.key,
+          status: stage.status,
+          summary: stage.summary,
+          traceId,
+          validationCommand: stage.validationCommand,
+          validationStatus: stage.validationStatus,
+        });
+      }
+
+      await tx.insert(artifacts).values(
+        skeleton.artifacts.map((artifact, index) => ({
+          id: randomUUID(),
+          metadata: {
+            required: artifact.required,
+            stage: skeleton.stages[index]?.key,
+          },
+          runId,
+          stepId: stepIds[index],
+          title: artifact.label,
+          type: artifact.type,
+          uri: artifact.uri,
+        })),
+      );
+
+      await tx.insert(agentPlans).values({
+        agentName: "planning-agent",
+        input: {
+          issueNumber: input.trigger.issueNumber,
+          labels: input.trigger.labels ?? [],
+          milestone: input.trigger.milestone ?? null,
+          repositoryFullName: input.trigger.repositoryFullName,
+          title: input.trigger.title ?? "",
+        },
+        issueNumber: input.trigger.issueNumber,
+        plan: createPlanningAgentSeedPlan({
+          body: input.trigger.body ?? "",
+          issueNumber: input.trigger.issueNumber,
+          issueUrl: getIssueUrl(input.trigger),
+          labels: [...(input.trigger.labels ?? [])],
+          milestone: input.trigger.milestone ?? null,
+          repositoryFullName: input.trigger.repositoryFullName,
+          title: input.trigger.title ?? `Issue #${input.trigger.issueNumber}`,
+        }),
         runId,
-        stepId: stepIds[index],
-        title: artifact.label,
-        type: artifact.type,
-        uri: artifact.uri,
-      })),
-    );
+        status: "pending",
+      });
 
-    await tx.insert(agentPlans).values({
-      agentName: "planning-agent",
-      input: {
-        issueNumber: input.trigger.issueNumber,
-        labels: input.trigger.labels ?? [],
-        milestone: input.trigger.milestone ?? null,
-        repositoryFullName: input.trigger.repositoryFullName,
-        title: input.trigger.title ?? "",
-      },
-      issueNumber: input.trigger.issueNumber,
-      plan: createPlanningAgentSeedPlan({
-        body: input.trigger.body ?? "",
-        issueNumber: input.trigger.issueNumber,
-        issueUrl: getIssueUrl(input.trigger),
-        labels: [...(input.trigger.labels ?? [])],
-        milestone: input.trigger.milestone ?? null,
-        repositoryFullName: input.trigger.repositoryFullName,
-        title: input.trigger.title ?? `Issue #${input.trigger.issueNumber}`,
-      }),
-      runId,
-      status: "pending",
-    });
-
-    await tx.insert(observabilityEvents).values({
-      eventType: developmentLoopRunCreatedEventType,
-      correlationId: input.trigger.deliveryId,
-      message: "Agent-ready development loop run skeleton created.",
-      metricName: developmentLoopRunCreatedDurableMetricName,
-      metricValue: skeleton.stages.length,
-      payload: {
+      const emitObservability = await recordDevelopmentLoopRunCreatedObservability({
         artifactCount: skeleton.artifacts.length,
+        deliveryId: input.trigger.deliveryId,
         issueNumber: input.trigger.issueNumber,
         loopKey: skeleton.loopKey,
         repositoryFullName: input.trigger.repositoryFullName,
+        repositoryId: repository.id,
+        runId,
         stageCount: skeleton.stages.length,
-      },
-      repositoryId: repository.id,
-      runId,
-      severity: "info",
-      traceId,
-    });
+        traceId,
+        triggerLabel: "agent-ready",
+        writer: tx,
+      });
 
-    recordDevelopmentLoopRunStartedMetric({
-      loopKey: skeleton.loopKey,
-      repository: input.trigger.repositoryFullName,
-      triggerLabel: "agent-ready",
-    });
+      return {
+        emitObservability,
+        metadata: {
+          artifactCount: skeleton.artifacts.length,
+          mode: "created",
+          runId,
+          stageCount: skeleton.stages.length,
+        },
+      };
+    },
+  );
 
-    return {
-      artifactCount: skeleton.artifacts.length,
-      mode: "created",
-      runId,
-      stageCount: skeleton.stages.length,
-    };
-  });
+  result.emitObservability?.();
+
+  return result.metadata;
 }
 
 export async function recordDevelopmentLoopNoop(input: {

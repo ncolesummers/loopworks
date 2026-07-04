@@ -1,7 +1,20 @@
-import { trace } from "@opentelemetry/api";
+import { trace, type Span, type SpanOptions, type Tracer } from "@opentelemetry/api";
 
 const w3cTraceIdPattern = /^[0-9a-f]{32}$/;
 const emptyTraceId = "00000000000000000000000000000000";
+const loopworksTracerName = "loopworks";
+
+export function getLoopworksTracer(): Tracer {
+  return trace.getTracer(loopworksTracerName);
+}
+
+export function startLoopworksSpan(
+  name: string,
+  options?: SpanOptions,
+  tracer = getLoopworksTracer(),
+): Span {
+  return tracer.startSpan(name, options);
+}
 
 export function isValidW3cTraceId(traceId: unknown): traceId is string {
   return typeof traceId === "string" && w3cTraceIdPattern.test(traceId) && traceId !== emptyTraceId;
