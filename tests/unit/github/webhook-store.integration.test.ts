@@ -1,6 +1,7 @@
 /** @vitest-environment node */
+
+import { context as otelContext, type Span, TraceFlags, trace } from "@opentelemetry/api";
 import { eq } from "drizzle-orm";
-import { context as otelContext, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
 import { handleGithubWebhookPost } from "@/app/api/github/webhooks/route";
 import {
@@ -18,6 +19,7 @@ import {
   type GithubWebhookDatabase,
 } from "@/lib/github/webhook-store";
 import type { DevelopmentLoopRunDatabase } from "@/lib/loops/development-run";
+import type { LockContentionMetricInput } from "@/lib/observability/metrics";
 
 import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixture";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
@@ -48,9 +50,10 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     await context.close();
   });
 
-  function createStore() {
+  function createStore(recordLockContentionMetric?: (input: LockContentionMetricInput) => void) {
     return createDrizzleGithubWebhookDeliveryStore(context.db as unknown as GithubWebhookDatabase, {
       lockTtlMs,
+      ...(recordLockContentionMetric ? { recordLockContentionMetric } : {}),
     });
   }
 
@@ -195,7 +198,10 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
   });
 
   it("honors the delivery unique constraint via onConflictDoNothing without raising", async () => {
-    const store = createStore();
+    const lockContentionScopes: string[] = [];
+    const store = createStore((input) => {
+      lockContentionScopes.push(input.scope);
+    });
     const key = "github:conflict-delivery";
     const deliveryId = "conflict-delivery";
     const receivedAt = "2026-06-28T00:00:00.000Z";
@@ -226,6 +232,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       .where(eq(idempotencyLocks.key, key));
     expect(lock.status).toBe("released");
     expect(lock.metadata).toMatchObject({ deliveryStatus: "duplicate" });
+    expect(lockContentionScopes).toEqual(["github:webhook-delivery"]);
   });
 
   it("rolls back the lock insert when the delivery insert fails mid-transaction", async () => {

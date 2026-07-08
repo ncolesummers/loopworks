@@ -1,8 +1,12 @@
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { idempotencyLocks, type webhookDeliveryStatusEnum, webhookDeliveries } from "@/db/schema";
+import { idempotencyLocks, webhookDeliveries, type webhookDeliveryStatusEnum } from "@/db/schema";
 import type { GithubWebhookDeliveryStore } from "@/lib/github/webhooks";
+import {
+  type LockContentionMetricInput,
+  recordLockContentionMetric,
+} from "@/lib/observability/metrics";
 
 export type GithubWebhookDatabase = Pick<typeof db, "transaction">;
 
@@ -34,6 +38,18 @@ function buildLockMetadata(record: {
   };
 }
 
+function recordLockContentionSafely(
+  recordMetric: (input: LockContentionMetricInput) => void,
+): void {
+  try {
+    recordMetric({
+      scope: webhookDeliveryScope,
+    });
+  } catch {
+    // Lock acquisition must not depend on telemetry sink health.
+  }
+}
+
 async function hasRetryableDelivery(
   tx: Parameters<Parameters<GithubWebhookDatabase["transaction"]>[0]>[0],
   deliveryId: string,
@@ -56,9 +72,11 @@ export function createDrizzleGithubWebhookDeliveryStore(
   database: GithubWebhookDatabase = db,
   options: {
     lockTtlMs?: number;
+    recordLockContentionMetric?: (input: LockContentionMetricInput) => void;
   } = {},
 ): GithubWebhookDeliveryStore {
   const lockTtlMs = options.lockTtlMs ?? defaultLockTtlMs;
+  const recordLockContention = options.recordLockContentionMetric ?? recordLockContentionMetric;
 
   return {
     async claim(key, record) {
@@ -91,6 +109,8 @@ export function createDrizzleGithubWebhookDeliveryStore(
           .returning({ id: idempotencyLocks.id });
 
         if (insertedLocks.length === 0) {
+          recordLockContentionSafely(recordLockContention);
+
           if (!(await hasRetryableDelivery(tx, record.deliveryId))) {
             return false;
           }
@@ -158,6 +178,8 @@ export function createDrizzleGithubWebhookDeliveryStore(
           .returning({ id: webhookDeliveries.id });
 
         if (insertedDeliveries.length === 0) {
+          recordLockContentionSafely(recordLockContention);
+
           const resetDeliveries = await tx
             .update(webhookDeliveries)
             .set({

@@ -1,33 +1,39 @@
 import { NextResponse } from "next/server";
 
 import { db } from "@/db/client";
+import { createDrizzleGithubWebhookDeliveryStore } from "@/lib/github/webhook-store";
 import {
   canUseInMemoryGithubWebhookDeliveryStore,
   claimGithubWebhookDelivery,
   createInMemoryGithubWebhookDeliveryStore,
-  getLoopAwareAgentReadyTriggerFromIssuesWebhook,
   type GithubAgentReadyLoopResolver,
   type GithubAgentReadyTrigger,
-  type GithubWebhookDeliveryStore,
   type GithubIssuesWebhookPayload,
+  type GithubWebhookDeliveryStore,
+  getLoopAwareAgentReadyTriggerFromIssuesWebhook,
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
-import { createDrizzleGithubWebhookDeliveryStore } from "@/lib/github/webhook-store";
 import {
   createDevelopmentLoopRun,
-  recordDevelopmentLoopNoop,
-  simulateDevelopmentLoopRun,
   type DevelopmentLoopNoopMetadata,
   type DevelopmentLoopRunDatabase,
   type DevelopmentLoopRunMetadata,
   type DevelopmentLoopTrigger,
+  recordDevelopmentLoopNoop,
+  simulateDevelopmentLoopRun,
 } from "@/lib/loops/development-run";
 import { createRequestLogger } from "@/lib/observability/logger";
+import {
+  type GithubWebhookOutcomeMetricInput,
+  recordGithubWebhookOutcomeMetric,
+} from "@/lib/observability/metrics";
 import { getActiveTraceId } from "@/lib/observability/trace-context";
 
 const inMemoryWebhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
 
 export const runtime = "nodejs";
+
+const supportedGithubWebhookMetricEvents = new Set(["issues"]);
 
 type GithubWebhookPostDependencies = {
   developmentRunDatabase?: DevelopmentLoopRunDatabase;
@@ -36,6 +42,7 @@ type GithubWebhookPostDependencies = {
     resolveLoop: GithubAgentReadyLoopResolver,
   ) => GithubAgentReadyTrigger;
   now?: () => Date;
+  recordGithubWebhookOutcomeMetric?: (input: GithubWebhookOutcomeMetricInput) => void;
   webhookDeliveryStore?: GithubWebhookDeliveryStore;
 };
 
@@ -126,6 +133,22 @@ function getNextAction(agentReadyTrigger: GithubAgentReadyTrigger): string {
 
 function getFailureType(error: unknown): string {
   return error instanceof Error ? error.name : typeof error;
+}
+
+function getVerifiedGithubWebhookMetricEvent(event: string): string {
+  const normalizedEvent = event.trim().toLowerCase();
+  return supportedGithubWebhookMetricEvents.has(normalizedEvent) ? normalizedEvent : "unsupported";
+}
+
+function recordWebhookOutcomeSafely(
+  recordMetric: (input: GithubWebhookOutcomeMetricInput) => void,
+  input: GithubWebhookOutcomeMetricInput,
+): void {
+  try {
+    recordMetric(input);
+  } catch {
+    // Webhook request handling must not depend on telemetry sink health.
+  }
 }
 
 function getFixtureFallbackResponse(mode: GithubWebhookDeliveryStoreMode) {
@@ -231,6 +254,8 @@ export async function handleGithubWebhookPost(
     dependencies.getAgentReadyTrigger ?? getLoopAwareAgentReadyTriggerFromIssuesWebhook;
   const developmentRunDatabase = dependencies.developmentRunDatabase ?? db;
   const now = dependencies.now ?? (() => new Date());
+  const recordWebhookOutcome =
+    dependencies.recordGithubWebhookOutcomeMetric ?? recordGithubWebhookOutcomeMetric;
   const traceId = getActiveTraceId();
   const requestLogger = createRequestLogger({
     route: "api.github.webhooks",
@@ -240,6 +265,11 @@ export async function handleGithubWebhookPost(
 
   if (!webhookSecret) {
     requestLogger.error("github_webhook_secret_missing");
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action: null,
+      event: "unknown",
+      outcome: "error",
+    });
     return NextResponse.json(
       {
         error: "Missing GITHUB_WEBHOOK_SECRET.",
@@ -253,6 +283,11 @@ export async function handleGithubWebhookPost(
 
   if (!deliveryId) {
     requestLogger.warn("github_webhook_delivery_id_missing");
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action: null,
+      event: "unknown",
+      outcome: "rejected",
+    });
     return NextResponse.json(
       {
         error: "Missing x-github-delivery header.",
@@ -269,6 +304,11 @@ export async function handleGithubWebhookPost(
     })
   ) {
     requestLogger.warn("github_webhook_signature_invalid");
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action: null,
+      event: "unknown",
+      outcome: "invalid_signature",
+    });
     return NextResponse.json(
       {
         error: "Invalid GitHub webhook signature.",
@@ -277,11 +317,18 @@ export async function handleGithubWebhookPost(
     );
   }
 
+  const metricEvent = getVerifiedGithubWebhookMetricEvent(event);
+
   let payload: unknown;
   try {
     payload = JSON.parse(payloadText) as unknown;
   } catch {
     requestLogger.warn("github_webhook_payload_invalid_json");
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action: null,
+      event: metricEvent,
+      outcome: "rejected",
+    });
     return NextResponse.json(
       {
         error: "Webhook payload must be valid JSON.",
@@ -324,6 +371,11 @@ export async function handleGithubWebhookPost(
       },
       "github_webhook_claim_failed",
     );
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action,
+      event: metricEvent,
+      outcome: "error",
+    });
     throw error;
   }
 
@@ -334,6 +386,11 @@ export async function handleGithubWebhookPost(
       },
       "github_webhook_duplicate_ignored",
     );
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action,
+      event: metricEvent,
+      outcome: "duplicate",
+    });
     return NextResponse.json(
       {
         accepted: false,
@@ -387,6 +444,11 @@ export async function handleGithubWebhookPost(
       },
       "github_webhook_processed",
     );
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action,
+      event: metricEvent,
+      outcome: deliveryStatus === "processed" ? "accepted" : "rejected",
+    });
 
     return NextResponse.json(
       {
@@ -412,6 +474,11 @@ export async function handleGithubWebhookPost(
       },
       "github_webhook_processing_failed",
     );
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action,
+      event: metricEvent,
+      outcome: "error",
+    });
 
     try {
       await webhookDeliveryStore.complete(claim.key, {

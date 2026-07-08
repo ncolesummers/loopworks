@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
-import { requireApiSession } from "@/lib/auth/api";
 import { db } from "@/db/client";
 import { applyApprovalTransition } from "@/lib/approval-transitions";
 import {
   ApprovalExpectedStatusError,
   ApprovalNotFoundError,
+  type ApprovalTransitionDatabase,
   ApprovalTransitionError,
   approvalActionValues,
   approvalStatusValues,
-  type ApprovalTransitionDatabase,
 } from "@/lib/approvals";
+import { requireApiSession } from "@/lib/auth/api";
 import { createRequestLogger } from "@/lib/observability/logger";
+import type { ApprovalWaitTimeMetricInput } from "@/lib/observability/metrics";
 
 const approvalTransitionRequestSchema = z.object({
   approvalId: z.uuid(),
@@ -28,6 +28,7 @@ export async function handleApprovalTransitionPost(
   dependencies: {
     database?: ApprovalTransitionDatabase;
     now?: () => Date;
+    recordApprovalWaitTimeMetric?: (input: ApprovalWaitTimeMetricInput) => void;
   } = {},
 ) {
   const requestLogger = createRequestLogger({
@@ -84,6 +85,7 @@ export async function handleApprovalTransitionPost(
       logger: requestLogger,
       note: body.data.note,
       occurredAt: now(),
+      recordApprovalWaitTimeMetric: dependencies.recordApprovalWaitTimeMetric,
     });
     requestLogger.info(
       {

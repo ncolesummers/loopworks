@@ -3,6 +3,14 @@ export async function register() {
     return;
   }
 
-  const { registerLoopworksOtel } = await import("@/lib/observability/otel");
+  const [{ db }, { registerLoopworksOtel }, metrics] = await Promise.all([
+    import("@/db/client"),
+    import("@/lib/observability/otel"),
+    import("@/lib/observability/metrics"),
+  ]);
+
   registerLoopworksOtel();
+  metrics.registerControlPlaneGaugeMetrics({
+    sources: metrics.createControlPlaneGaugeSources(db),
+  });
 }

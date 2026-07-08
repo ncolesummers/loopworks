@@ -1,9 +1,9 @@
-import { claimGithubWebhookDelivery } from "@/lib/github/webhooks";
+import { idempotencyLocks, webhookDeliveries } from "@/db/schema";
 import {
   createDrizzleGithubWebhookDeliveryStore,
   type GithubWebhookDatabase,
 } from "@/lib/github/webhook-store";
-import { idempotencyLocks, webhookDeliveries } from "@/db/schema";
+import { claimGithubWebhookDelivery } from "@/lib/github/webhooks";
 
 function createFakeWebhookDatabase() {
   const locks: Record<string, unknown>[] = [];
@@ -127,7 +127,12 @@ function createFakeWebhookDatabase() {
 describe("Drizzle GitHub webhook delivery store", () => {
   it("claims a GitHub delivery once and records the idempotency lock plus delivery row", async () => {
     const fake = createFakeWebhookDatabase();
-    const store = createDrizzleGithubWebhookDeliveryStore(fake.database);
+    const lockContentionScopes: string[] = [];
+    const store = createDrizzleGithubWebhookDeliveryStore(fake.database, {
+      recordLockContentionMetric(input) {
+        lockContentionScopes.push(input.scope);
+      },
+    });
 
     const first = await claimGithubWebhookDelivery({
       store,
@@ -182,6 +187,7 @@ describe("Drizzle GitHub webhook delivery store", () => {
         status: "received",
       }),
     ]);
+    expect(lockContentionScopes).toEqual(["github:webhook-delivery"]);
   });
 
   it.each([
@@ -283,7 +289,12 @@ describe("Drizzle GitHub webhook delivery store", () => {
 
   it("does not rewrite processed delivery lock evidence on duplicate redelivery", async () => {
     const fake = createFakeWebhookDatabase();
-    const store = createDrizzleGithubWebhookDeliveryStore(fake.database);
+    const lockContentionScopes: string[] = [];
+    const store = createDrizzleGithubWebhookDeliveryStore(fake.database, {
+      recordLockContentionMetric(input) {
+        lockContentionScopes.push(input.scope);
+      },
+    });
     const firstClaim = await claimGithubWebhookDelivery({
       store,
       deliveryId: "processed-duplicate-delivery",
@@ -336,5 +347,6 @@ describe("Drizzle GitHub webhook delivery store", () => {
         status: "released",
       }),
     ]);
+    expect(lockContentionScopes).toEqual(["github:webhook-delivery"]);
   });
 });
