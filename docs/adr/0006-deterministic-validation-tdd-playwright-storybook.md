@@ -13,6 +13,17 @@ Loopworks will treat deterministic validation as the first quality gate. The val
 
 For behavior changes, agents and maintainers should define the test plan before implementation and add or update tests alongside the implementation. Playwright is the browser and user-workflow test runner. Storybook is the component development, documentation, and review surface for reusable UI.
 
+Validation output is recorded as `loopworks.validation_report.v1`. The report
+stores ordered per-gate outcomes (`pass`, `fail`, `skipped`), commands, exit
+codes, durations, and raw-output references with SHA-256 and byte counts. It
+does not embed raw stdout, stderr, prompts, tokens, or credentials. Output
+writers receive redacted stdout/stderr, and report byte counts and hashes
+describe that redacted persisted output. Queued artifacts use
+`validation_report_contract` metadata; completed artifacts use
+`validation_report_result` metadata with the parseable report payload. The
+report runner produces outcomes only; run/step transitions, downstream
+blocking, and lifecycle telemetry stay in the transition layer.
+
 ## Consequences
 
 This raises the cost of small UI and workflow changes, but it prevents the product from accumulating untested automation paths. The right level of coverage should match risk: narrow changes get focused tests, while shared workflow, GitHub integration, auth, approvals, Vercel integration, and agent orchestration require broader coverage.
@@ -26,6 +37,9 @@ LLM review can summarize or critique deterministic evidence, but it does not rep
 3. PRs and agent runs report deterministic validation evidence before judgment.
 4. UI changes include Playwright coverage for affected flows and Storybook stories for reusable components.
 5. Tests cover auth allowlist, manifest validation, webhook signature/dedupe, Vercel mapping, loop toggles, approval transitions, logger redaction, and persona-derived acceptance scenarios.
+6. Validation report tests assert pass/fail/skipped classification, stable V1
+   artifact metadata, raw-output references, and the runner's no-transition
+   boundary.
 
 ## Follow-Ups
 

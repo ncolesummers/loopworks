@@ -14,6 +14,7 @@ import {
 import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
 import { recordDevelopmentLoopRunCreatedObservability } from "@/lib/observability/metrics";
 import { getActiveTraceId, isValidW3cTraceId } from "@/lib/observability/trace-context";
+import { createValidationReportArtifactContractMetadata } from "@/lib/loops/validation-report";
 import type { ArtifactRecord, TimelineEvent, TimelineKind } from "@/lib/types";
 
 export const developmentLoopKey = "development-loop";
@@ -435,6 +436,11 @@ export async function createDevelopmentLoopRun(input: {
           metadata: {
             required: artifact.required,
             stage: skeleton.stages[index]?.key,
+            ...(artifact.type === "validation_report"
+              ? createValidationReportArtifactContractMetadata({
+                  detail: artifact.detail,
+                })
+              : {}),
           },
           runId,
           stepId: stepIds[index],

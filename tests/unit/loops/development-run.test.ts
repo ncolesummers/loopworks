@@ -19,6 +19,7 @@ import {
   recordDevelopmentLoopNoop,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
+import { validationReportSchemaId } from "@/lib/loops/validation-runner";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
 const issueTrigger = {
@@ -173,6 +174,22 @@ describe("agent-ready development loop run skeleton", () => {
     );
     expect(artifactRows).toHaveLength(8);
     expect(artifactRows.every((artifact) => artifact.runId === runRows[0]?.id)).toBe(true);
+    expect(
+      artifactRows
+        .filter((artifact) => artifact.type === "validation_report")
+        .map((artifact) => artifact.metadata),
+    ).toEqual([
+      expect.objectContaining({
+        expectedValidationReportSchemaId: validationReportSchemaId,
+        validationReportMetadataKind: "validation_report_contract",
+        validationReportVersion: 1,
+      }),
+      expect.objectContaining({
+        expectedValidationReportSchemaId: validationReportSchemaId,
+        validationReportMetadataKind: "validation_report_contract",
+        validationReportVersion: 1,
+      }),
+    ]);
     expect(planRows).toHaveLength(1);
     expect(planRows[0]).toMatchObject({
       agentName: "planning-agent",
