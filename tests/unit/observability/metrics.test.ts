@@ -8,9 +8,15 @@ import {
   collectControlPlaneGaugeMeasurements,
   developmentLoopRunCreatedDurableMetricName,
   observabilityMetricNames,
+  recordDevelopmentLoopRunCompletedMetric,
   recordApprovalWaitTimeMetric,
   recordDevelopmentLoopRunCreatedObservability,
+  recordDevelopmentLoopRunDurationMetric,
   recordDevelopmentLoopRunStartedMetric,
+  recordDevelopmentLoopStepDurationMetric,
+  recordDevelopmentLoopStepRetryMetric,
+  recordDevelopmentLoopValidationDurationMetric,
+  recordDevelopmentLoopValidationOutcomeMetric,
   recordGithubWebhookOutcomeMetric,
   recordLockContentionMetric,
   registerControlPlaneGaugeMetrics,
@@ -183,6 +189,212 @@ describe("ADR 0012 observability metric contract", () => {
         },
         name: "loopworks.lock.contention",
         type: "counter",
+        value: 1,
+      },
+    ]);
+  });
+
+  it("records lifecycle metrics with ADR attributes and cancellation spelling", () => {
+    const recordings: {
+      attributes: Record<string, unknown> | undefined;
+      name: string;
+      type: "counter" | "histogram";
+      value: number;
+    }[] = [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, type: "counter", value });
+          },
+        };
+      },
+      createHistogram(name: string) {
+        return {
+          record(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, type: "histogram", value });
+          },
+        };
+      },
+    };
+
+    recordDevelopmentLoopRunCompletedMetric(
+      {
+        loopKey: "development-loop",
+        repository: "ncolesummers/loopworks",
+        status: "canceled",
+      },
+      meter,
+    );
+    recordDevelopmentLoopRunDurationMetric(
+      {
+        durationSeconds: 600,
+        loopKey: "development-loop",
+        status: "canceled",
+      },
+      meter,
+    );
+    recordDevelopmentLoopStepDurationMetric(
+      {
+        durationSeconds: 12,
+        loopKey: "development-loop",
+        stage: "validation",
+        status: "failed",
+      },
+      meter,
+    );
+    recordDevelopmentLoopStepRetryMetric(
+      {
+        loopKey: "development-loop",
+        reason: "validation_failed",
+        stage: "validation",
+      },
+      meter,
+    );
+    recordDevelopmentLoopValidationOutcomeMetric(
+      {
+        command: "bun run test",
+        gate: "unit-tests",
+        status: "fail",
+      },
+      meter,
+    );
+    recordDevelopmentLoopValidationDurationMetric(
+      {
+        command: "bun run test",
+        durationSeconds: 4,
+        gate: "unit-tests",
+      },
+      meter,
+    );
+
+    expect(recordings).toEqual([
+      {
+        attributes: {
+          "loop.key": "development-loop",
+          repository: "ncolesummers/loopworks",
+          status: "cancelled",
+        },
+        name: "loopworks.run.completed",
+        type: "counter",
+        value: 1,
+      },
+      {
+        attributes: {
+          "loop.key": "development-loop",
+          status: "cancelled",
+        },
+        name: "loopworks.run.duration",
+        type: "histogram",
+        value: 600,
+      },
+      {
+        attributes: {
+          "loop.key": "development-loop",
+          stage: "validation",
+          status: "failed",
+        },
+        name: "loopworks.step.duration",
+        type: "histogram",
+        value: 12,
+      },
+      {
+        attributes: {
+          "loop.key": "development-loop",
+          reason: "validation_failed",
+          stage: "validation",
+        },
+        name: "loopworks.step.retries",
+        type: "counter",
+        value: 1,
+      },
+      {
+        attributes: {
+          command: "bun run test",
+          gate: "unit-tests",
+          status: "fail",
+        },
+        name: "loopworks.validation.outcome",
+        type: "counter",
+        value: 1,
+      },
+      {
+        attributes: {
+          command: "bun run test",
+          gate: "unit-tests",
+        },
+        name: "loopworks.validation.duration",
+        type: "histogram",
+        value: 4,
+      },
+    ]);
+  });
+
+  it("keeps lifecycle persistence independent from telemetry sink failures", () => {
+    const meter = {
+      createCounter() {
+        throw new Error("counter unavailable");
+      },
+      createHistogram() {
+        throw new Error("histogram unavailable");
+      },
+    };
+
+    expect(() =>
+      recordDevelopmentLoopRunCompletedMetric(
+        {
+          loopKey: "development-loop",
+          repository: "ncolesummers/loopworks",
+          status: "succeeded",
+        },
+        meter,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      recordDevelopmentLoopValidationDurationMetric(
+        {
+          command: "bun run validate",
+          durationSeconds: 1,
+          gate: "aggregate-validation",
+        },
+        meter,
+      ),
+    ).not.toThrow();
+  });
+
+  it("redacts sensitive validation command metric attributes", () => {
+    const recordings: {
+      attributes: Record<string, unknown> | undefined;
+      name: string;
+      value: number;
+    }[] = [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+    };
+
+    recordDevelopmentLoopValidationOutcomeMetric(
+      {
+        command: "bun run test --token ghp_secret",
+        gate: "unit-tests",
+        status: "fail",
+      },
+      meter,
+    );
+
+    expect(recordings).toEqual([
+      {
+        attributes: {
+          command: "[redacted]",
+          gate: "unit-tests",
+          status: "fail",
+        },
+        name: "loopworks.validation.outcome",
         value: 1,
       },
     ]);

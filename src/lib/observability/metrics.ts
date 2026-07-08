@@ -185,7 +185,15 @@ const lockContentionCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const approvalPendingGauges = new WeakMap<object, ObservableGauge<MetricAttributes>>();
 const queueDepthGauges = new WeakMap<object, ObservableGauge<MetricAttributes>>();
 const controlPlaneGaugeSourcesByMeter = new WeakMap<object, ControlPlaneGaugeSources>();
+const runCompletedCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const runDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
+const stepDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
+const stepRetryCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const validationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const validationDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const supportedGithubWebhookMetricEvents = new Set(["issues", "unknown", "unsupported"]);
+const sensitiveMetricCommandPattern =
+  /\b(token|secret|password|authorization|credential|api[-_]?key|prompt)\b|Bearer\s+|gh[pousr]_|sk-[A-Za-z0-9_-]+/i;
 
 export type RunStartedMeter = Pick<Meter, "createCounter">;
 export type CounterMeter = Pick<Meter, "createCounter">;
@@ -213,6 +221,45 @@ export type ApprovalWaitTimeMetricInput = {
 
 export type LockContentionMetricInput = {
   scope: string;
+};
+
+export type DevelopmentLoopRunMetricStatus = "succeeded" | "failed" | "canceled" | "cancelled";
+
+export type DevelopmentLoopRunCompletedMetricInput = {
+  loopKey: string;
+  repository: string;
+  status: DevelopmentLoopRunMetricStatus;
+};
+
+export type DevelopmentLoopRunDurationMetricInput = {
+  durationSeconds: number;
+  loopKey: string;
+  status: DevelopmentLoopRunMetricStatus;
+};
+
+export type DevelopmentLoopStepDurationMetricInput = {
+  durationSeconds: number;
+  loopKey: string;
+  stage: string;
+  status: "succeeded" | "failed" | "skipped";
+};
+
+export type DevelopmentLoopStepRetryMetricInput = {
+  loopKey: string;
+  reason: string;
+  stage: string;
+};
+
+export type DevelopmentLoopValidationOutcomeMetricInput = {
+  command: string;
+  gate: string;
+  status: "pass" | "fail";
+};
+
+export type DevelopmentLoopValidationDurationMetricInput = {
+  command: string;
+  durationSeconds: number;
+  gate: string;
 };
 
 export type ControlPlanePendingApprovalMeasurement = {
@@ -266,6 +313,96 @@ function getRunStartedCounter(meter: RunStartedMeter): Counter<MetricAttributes>
   });
   runStartedCounters.set(meter, counter);
   return counter;
+}
+
+function getRunCompletedCounter(meter: CounterMeter): Counter<MetricAttributes> {
+  const cached = runCompletedCounters.get(meter);
+  if (cached) {
+    return cached;
+  }
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.run.completed");
+  const counter = meter.createCounter(metric.name, {
+    description: "Development and workflow runs completed by Loopworks.",
+    unit: metric.unit,
+  });
+  runCompletedCounters.set(meter, counter);
+  return counter;
+}
+
+function getRunDurationHistogram(meter: HistogramMeter): Histogram<MetricAttributes> {
+  const cached = runDurationHistograms.get(meter);
+  if (cached) {
+    return cached;
+  }
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.run.duration");
+  const histogram = meter.createHistogram(metric.name, {
+    description: "Elapsed seconds for completed Loopworks runs.",
+    unit: metric.unit,
+  });
+  runDurationHistograms.set(meter, histogram);
+  return histogram;
+}
+
+function getStepDurationHistogram(meter: HistogramMeter): Histogram<MetricAttributes> {
+  const cached = stepDurationHistograms.get(meter);
+  if (cached) {
+    return cached;
+  }
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.step.duration");
+  const histogram = meter.createHistogram(metric.name, {
+    description: "Elapsed seconds for completed Loopworks run steps.",
+    unit: metric.unit,
+  });
+  stepDurationHistograms.set(meter, histogram);
+  return histogram;
+}
+
+function getStepRetryCounter(meter: CounterMeter): Counter<MetricAttributes> {
+  const cached = stepRetryCounters.get(meter);
+  if (cached) {
+    return cached;
+  }
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.step.retries");
+  const counter = meter.createCounter(metric.name, {
+    description: "Retry attempts for Loopworks run steps.",
+    unit: metric.unit,
+  });
+  stepRetryCounters.set(meter, counter);
+  return counter;
+}
+
+function getValidationOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
+  const cached = validationOutcomeCounters.get(meter);
+  if (cached) {
+    return cached;
+  }
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.validation.outcome");
+  const counter = meter.createCounter(metric.name, {
+    description: "Deterministic validation gate outcomes.",
+    unit: metric.unit,
+  });
+  validationOutcomeCounters.set(meter, counter);
+  return counter;
+}
+
+function getValidationDurationHistogram(meter: HistogramMeter): Histogram<MetricAttributes> {
+  const cached = validationDurationHistograms.get(meter);
+  if (cached) {
+    return cached;
+  }
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.validation.duration");
+  const histogram = meter.createHistogram(metric.name, {
+    description: "Elapsed seconds for deterministic validation gates.",
+    unit: metric.unit,
+  });
+  validationDurationHistograms.set(meter, histogram);
+  return histogram;
 }
 
 function getWebhookOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
@@ -348,6 +485,25 @@ function normalizeMetricAttribute(value: string | null | undefined, fallback: st
   return normalized || fallback;
 }
 
+function normalizeRunMetricStatus(
+  status: DevelopmentLoopRunMetricStatus,
+): Exclude<DevelopmentLoopRunMetricStatus, "canceled"> {
+  return status === "canceled" ? "cancelled" : status;
+}
+
+function sanitizeMetricCommandAttribute(command: string): string {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return "unknown";
+  }
+
+  if (sensitiveMetricCommandPattern.test(trimmed)) {
+    return "[redacted]";
+  }
+
+  return trimmed.slice(0, 200);
+}
+
 function normalizeGithubWebhookEventAttribute(value: string): string {
   const normalized = normalizeMetricAttribute(value, "unknown");
   return supportedGithubWebhookMetricEvents.has(normalized) ? normalized : "unsupported";
@@ -380,6 +536,94 @@ export function recordGithubWebhookOutcomeMetric(
     });
   } catch {
     // OTel emission must never affect webhook request handling.
+  }
+}
+
+export function recordDevelopmentLoopRunCompletedMetric(
+  input: DevelopmentLoopRunCompletedMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getRunCompletedCounter(meter).add(1, {
+      "loop.key": input.loopKey,
+      repository: input.repository,
+      status: normalizeRunMetricStatus(input.status),
+    });
+  } catch {
+    // OTel emission must never affect run lifecycle persistence.
+  }
+}
+
+export function recordDevelopmentLoopRunDurationMetric(
+  input: DevelopmentLoopRunDurationMetricInput,
+  meter: HistogramMeter = getLoopworksMeter(),
+): void {
+  try {
+    getRunDurationHistogram(meter).record(Math.max(0, input.durationSeconds), {
+      "loop.key": input.loopKey,
+      status: normalizeRunMetricStatus(input.status),
+    });
+  } catch {
+    // OTel emission must never affect run lifecycle persistence.
+  }
+}
+
+export function recordDevelopmentLoopStepDurationMetric(
+  input: DevelopmentLoopStepDurationMetricInput,
+  meter: HistogramMeter = getLoopworksMeter(),
+): void {
+  try {
+    getStepDurationHistogram(meter).record(Math.max(0, input.durationSeconds), {
+      "loop.key": input.loopKey,
+      stage: normalizeMetricAttribute(input.stage, "unknown"),
+      status: input.status,
+    });
+  } catch {
+    // OTel emission must never affect step lifecycle persistence.
+  }
+}
+
+export function recordDevelopmentLoopStepRetryMetric(
+  input: DevelopmentLoopStepRetryMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getStepRetryCounter(meter).add(1, {
+      "loop.key": input.loopKey,
+      reason: normalizeMetricAttribute(input.reason, "unknown"),
+      stage: normalizeMetricAttribute(input.stage, "unknown"),
+    });
+  } catch {
+    // OTel emission must never affect step retry persistence.
+  }
+}
+
+export function recordDevelopmentLoopValidationOutcomeMetric(
+  input: DevelopmentLoopValidationOutcomeMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getValidationOutcomeCounter(meter).add(1, {
+      command: sanitizeMetricCommandAttribute(input.command),
+      gate: normalizeMetricAttribute(input.gate, "unknown"),
+      status: input.status,
+    });
+  } catch {
+    // OTel emission must never affect validation transition persistence.
+  }
+}
+
+export function recordDevelopmentLoopValidationDurationMetric(
+  input: DevelopmentLoopValidationDurationMetricInput,
+  meter: HistogramMeter = getLoopworksMeter(),
+): void {
+  try {
+    getValidationDurationHistogram(meter).record(Math.max(0, input.durationSeconds), {
+      command: sanitizeMetricCommandAttribute(input.command),
+      gate: normalizeMetricAttribute(input.gate, "unknown"),
+    });
+  } catch {
+    // OTel emission must never affect validation transition persistence.
   }
 }
 

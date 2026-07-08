@@ -115,6 +115,9 @@ Reports must not embed raw stdout, stderr, prompts, tokens, credentials, or
 secret-looking fixture values. Run and step status transitions, downstream
 blocking, approval-policy continuation, and lifecycle telemetry are handled by
 the transition layer rather than by the validation report runner.
+Failed validation gates block downstream stages by default. Skipped required
+gates also block downstream stages, even when other gates passed; skipped
+optional gates remain inspectable in the report but do not block progression.
 
 Queued `validation_report` artifacts may carry
 `validationReportMetadataKind: validation_report_contract` with
