@@ -90,6 +90,39 @@ skipped/no-op reason such as `loop_disabled` so operators can explain why an
 `agent-ready` issue did not start. Research-loop disabled evidence is tracked
 separately from the development-loop skeleton.
 
+## Validation Report Artifact
+
+The `validation_report` artifact uses schema
+`loopworks.validation_report.v1`. The report is the structured downstream
+contract for deterministic validation results and is consumable without parsing
+raw command output.
+
+Each report records:
+
+1. `version: 1`, `schemaId`, `generatedAt`, `overallOutcome`, and aggregate
+   pass/fail/skipped counts.
+2. One ordered result per manifest validation gate, preserving the manifest
+   order.
+3. Gate `key`, `name`, `command`, `phase`, `produces`, and `required` fields
+   copied from the manifest.
+4. The gate outcome (`pass`, `fail`, or `skipped`), exit code when a command
+   ran, and duration in milliseconds.
+5. A redacted raw-output reference when output is available, including URI,
+   SHA-256, stdout/stderr byte counts, and truncation state. Byte counts and
+   digests describe the redacted output persisted by the output writer.
+
+Reports must not embed raw stdout, stderr, prompts, tokens, credentials, or
+secret-looking fixture values. Run and step status transitions, downstream
+blocking, approval-policy continuation, and lifecycle telemetry are handled by
+the transition layer rather than by the validation report runner.
+
+Queued `validation_report` artifacts may carry
+`validationReportMetadataKind: validation_report_contract` with
+`expectedValidationReportSchemaId` while waiting for execution. Completed
+validation artifacts carry `validationReportMetadataKind:
+validation_report_result`, `validationReportSchemaId`, and the parseable V1
+report payload.
+
 ## Operating Rules
 
 1. Do not advance a loop without recording why the state changed.
