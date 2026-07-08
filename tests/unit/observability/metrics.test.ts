@@ -1,17 +1,23 @@
 /** @vitest-environment node */
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
-import { observabilityEvents } from "@/db/schema";
+import { approvals, loopRuns, observabilityEvents, repositories } from "@/db/schema";
 import {
+  collectControlPlaneGaugeMeasurements,
   developmentLoopRunCreatedDurableMetricName,
   observabilityMetricNames,
-  recordDevelopmentLoopRunStartedMetric,
+  recordApprovalWaitTimeMetric,
   recordDevelopmentLoopRunCreatedObservability,
+  recordDevelopmentLoopRunStartedMetric,
+  recordGithubWebhookOutcomeMetric,
+  recordLockContentionMetric,
+  registerControlPlaneGaugeMetrics,
   resolveDurableObservabilityEventDefinition,
   resolveObservabilityMetricDefinition,
 } from "@/lib/observability/metrics";
+import { createPgliteTestDatabase } from "../../helpers/pglite";
 
 const repoRoot = process.cwd();
 
@@ -103,6 +109,203 @@ describe("ADR 0012 observability metric contract", () => {
       },
     ]);
   });
+
+  it("records current issue #64 counter and histogram metrics with ADR attributes only", () => {
+    const recordings: {
+      attributes: Record<string, unknown> | undefined;
+      name: string;
+      type: "counter" | "histogram";
+      value: number;
+    }[] = [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, type: "counter", value });
+          },
+        };
+      },
+      createHistogram(name: string) {
+        return {
+          record(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, type: "histogram", value });
+          },
+        };
+      },
+    };
+
+    recordGithubWebhookOutcomeMetric(
+      {
+        action: "labeled",
+        event: "issues",
+        outcome: "accepted",
+      },
+      meter,
+    );
+    recordApprovalWaitTimeMetric(
+      {
+        decision: "approved",
+        durationSeconds: 300,
+        gate: "pr-write",
+      },
+      meter,
+    );
+    recordLockContentionMetric(
+      {
+        scope: "github:webhook-delivery",
+      },
+      meter,
+    );
+
+    expect(recordings).toEqual([
+      {
+        attributes: {
+          action: "labeled",
+          event: "issues",
+          outcome: "accepted",
+        },
+        name: "loopworks.webhook.outcome",
+        type: "counter",
+        value: 1,
+      },
+      {
+        attributes: {
+          decision: "approved",
+          gate: "pr-write",
+        },
+        name: "loopworks.approval.wait_time",
+        type: "histogram",
+        value: 300,
+      },
+      {
+        attributes: {
+          scope: "github:webhook-delivery",
+        },
+        name: "loopworks.lock.contention",
+        type: "counter",
+        value: 1,
+      },
+    ]);
+  });
+
+  it("registers pending approval and queue-depth observable gauges", async () => {
+    const callbacks: {
+      callback: (result: {
+        observe: (value: number, attributes?: Record<string, unknown>) => void;
+      }) => void | Promise<void>;
+      name: string;
+    }[] = [];
+    const observations: {
+      attributes: Record<string, unknown> | undefined;
+      name: string;
+      value: number;
+    }[] = [];
+    const meter = {
+      createObservableGauge(name: string) {
+        return {
+          addCallback(
+            callback: (result: {
+              observe: (value: number, attributes?: Record<string, unknown>) => void;
+            }) => void | Promise<void>,
+          ) {
+            callbacks.push({ callback, name });
+          },
+          removeCallback() {},
+        };
+      },
+    };
+
+    registerControlPlaneGaugeMetrics(
+      {
+        sources: {
+          pendingApprovals: async () => [{ gate: "pr-write", value: 2 }],
+          queuedRuns: async () => [{ loopKey: "development-loop", value: 3 }],
+        },
+      },
+      meter,
+    );
+
+    for (const { callback, name } of callbacks) {
+      await callback({
+        observe(value, attributes) {
+          observations.push({ attributes, name, value });
+        },
+      });
+    }
+
+    expect(observations).toEqual([
+      {
+        attributes: {
+          gate: "pr-write",
+        },
+        name: "loopworks.approval.pending",
+        value: 2,
+      },
+      {
+        attributes: {
+          "loop.key": "development-loop",
+        },
+        name: "loopworks.queue.depth",
+        value: 3,
+      },
+    ]);
+  });
+
+  it("collects pending approval and queued-run gauge values from control-plane state", async () => {
+    const context = await createPgliteTestDatabase();
+    try {
+      const repositoryId = "64000000-0000-4000-8000-000000000001";
+      const queuedRunId = "64000000-0000-4000-8000-000000000002";
+      const runningRunId = "64000000-0000-4000-8000-000000000003";
+
+      await context.db.insert(repositories).values({
+        id: repositoryId,
+        githubRepoId: 64_000_001,
+        owner: "ncolesummers",
+        name: "loopworks",
+        fullName: "ncolesummers/loopworks",
+      });
+      await context.db.insert(loopRuns).values([
+        {
+          id: queuedRunId,
+          currentStage: "planning",
+          loopKey: "development-loop",
+          repositoryId,
+          status: "queued",
+        },
+        {
+          id: runningRunId,
+          currentStage: "planning",
+          loopKey: "development-loop",
+          repositoryId,
+          status: "running",
+        },
+      ]);
+      await context.db.insert(approvals).values([
+        {
+          id: "64000000-0000-4000-8000-000000000004",
+          requestedBy: "eve-builder-agent",
+          runId: queuedRunId,
+          scope: "pr-write",
+          status: "requested",
+        },
+        {
+          id: "64000000-0000-4000-8000-000000000005",
+          requestedBy: "eve-builder-agent",
+          runId: runningRunId,
+          scope: "pr-write",
+          status: "approved",
+        },
+      ]);
+
+      await expect(collectControlPlaneGaugeMeasurements(context.db)).resolves.toEqual({
+        pendingApprovals: [{ gate: "pr-write", value: 1 }],
+        queuedRuns: [{ loopKey: "development-loop", value: 1 }],
+      });
+    } finally {
+      await context.close();
+    }
+  }, 15_000);
 
   it("rejects unsupported OTel metric names", () => {
     expect(resolveObservabilityMetricDefinition("loopworks.run.started")).toMatchObject({

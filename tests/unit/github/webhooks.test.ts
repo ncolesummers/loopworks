@@ -1,20 +1,35 @@
 import {
+  handleGithubWebhookPost,
+  POST as postGithubWebhook,
+} from "@/app/api/github/webhooks/route";
+import {
   canUseInMemoryGithubWebhookDeliveryStore,
   claimGithubWebhookDelivery,
   createGithubWebhookSignature,
   createInMemoryGithubWebhookDeliveryStore,
   defaultGithubAgentReadyRules,
   evaluateGithubIssueReadiness,
+  type GithubWebhookDeliveryStore,
   getAgentReadyTriggerFromIssuesWebhook,
   getLoopAwareAgentReadyTriggerFromIssuesWebhook,
-  type GithubWebhookDeliveryStore,
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
-import {
-  handleGithubWebhookPost,
-  POST as postGithubWebhook,
-} from "@/app/api/github/webhooks/route";
 import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixture";
+
+function createWebhookOutcomeRecorder() {
+  const recordings: {
+    action?: string | null;
+    event: string;
+    outcome: "accepted" | "rejected" | "duplicate" | "invalid_signature" | "error";
+  }[] = [];
+
+  return {
+    recordGithubWebhookOutcomeMetric(input: (typeof recordings)[number]) {
+      recordings.push(input);
+    },
+    recordings,
+  };
+}
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -269,25 +284,36 @@ describe("GitHub webhook helpers", () => {
     ).toBe(true);
   });
 
-  it("rejects an invalid signature before parsing the webhook payload", async () => {
+  it("rejects an invalid signature before parsing the webhook payload with bounded metric attributes", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
+    const webhookOutcome = createWebhookOutcomeRecorder();
 
-    const response = await postGithubWebhook(
+    const response = await handleGithubWebhookPost(
       new Request("https://loopworks.local/api/github/webhooks", {
         method: "POST",
         headers: {
           "x-github-delivery": "invalid-json-delivery",
-          "x-github-event": "issues",
+          "x-github-event": "attacker-controlled-event",
           "x-hub-signature-256": "sha256=invalid",
         },
         body: "{not-valid-json",
       }),
+      {
+        recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
+      },
     );
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({
       error: "Invalid GitHub webhook signature.",
     });
+    expect(webhookOutcome.recordings).toEqual([
+      {
+        action: null,
+        event: "unknown",
+        outcome: "invalid_signature",
+      },
+    ]);
   });
 
   it("skips a disabled development loop at the route boundary before queueing", async () => {
@@ -343,6 +369,7 @@ describe("GitHub webhook helpers", () => {
 
   it("ignores duplicate webhook deliveries at the route boundary", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
+    const webhookOutcome = createWebhookOutcomeRecorder();
     const payload = JSON.stringify({
       action: "labeled",
       repository: {
@@ -372,7 +399,9 @@ describe("GitHub webhook helpers", () => {
       });
 
     const first = await postGithubWebhook(makeRequest());
-    const second = await postGithubWebhook(makeRequest());
+    const second = await handleGithubWebhookPost(makeRequest(), {
+      recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
+    });
 
     expect(first.status).toBe(202);
     expect(second.status).toBe(202);
@@ -382,6 +411,52 @@ describe("GitHub webhook helpers", () => {
       deliveryId: "duplicate-route-delivery",
       idempotencyKey: "github:duplicate-route-delivery",
     });
+    expect(webhookOutcome.recordings).toEqual([
+      {
+        action: "labeled",
+        event: "issues",
+        outcome: "duplicate",
+      },
+    ]);
+  });
+
+  it("records a failed outcome when delivery claiming throws", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    const webhookOutcome = createWebhookOutcomeRecorder();
+    const store: GithubWebhookDeliveryStore = {
+      claim: vi.fn(() => {
+        throw new Error("claim failed");
+      }),
+      complete: vi.fn(),
+    };
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "claim-failure-route-delivery",
+      kind: "agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+
+    await expect(
+      handleGithubWebhookPost(
+        new Request(fixture.url, {
+          body: fixture.payloadText,
+          headers: fixture.headers,
+          method: "POST",
+        }),
+        {
+          recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
+          webhookDeliveryStore: store,
+        },
+      ),
+    ).rejects.toThrow("claim failed");
+
+    expect(webhookOutcome.recordings).toEqual([
+      {
+        action: "labeled",
+        event: "issues",
+        outcome: "error",
+      },
+    ]);
   });
 
   it("accepts a signed agent-ready fixture as a development trigger", async () => {
@@ -447,6 +522,7 @@ describe("GitHub webhook helpers", () => {
 
   it("records a failed outcome when accepted delivery processing throws", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    const webhookOutcome = createWebhookOutcomeRecorder();
     const complete = vi.fn();
     const store: GithubWebhookDeliveryStore = {
       claim: vi.fn(() => true),
@@ -471,6 +547,7 @@ describe("GitHub webhook helpers", () => {
             throw new Error("classification failed");
           },
           now: () => new Date("2026-06-28T01:00:03.000Z"),
+          recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
           webhookDeliveryStore: store,
         },
       ),
@@ -486,10 +563,18 @@ describe("GitHub webhook helpers", () => {
       processedAt: "2026-06-28T01:00:03.000Z",
       status: "failed",
     });
+    expect(webhookOutcome.recordings).toEqual([
+      {
+        action: "labeled",
+        event: "issues",
+        outcome: "error",
+      },
+    ]);
   });
 
   it("records a processed outcome on the accepted success path", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    const webhookOutcome = createWebhookOutcomeRecorder();
     const complete = vi.fn();
     const store: GithubWebhookDeliveryStore = {
       claim: vi.fn(() => true),
@@ -510,6 +595,7 @@ describe("GitHub webhook helpers", () => {
       }),
       {
         now: () => new Date("2026-06-28T01:00:04.000Z"),
+        recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
         webhookDeliveryStore: store,
       },
     );
@@ -530,5 +616,61 @@ describe("GitHub webhook helpers", () => {
       processedAt: "2026-06-28T01:00:04.000Z",
       status: "processed",
     });
+    expect(webhookOutcome.recordings).toEqual([
+      {
+        action: "labeled",
+        event: "issues",
+        outcome: "accepted",
+      },
+    ]);
+  });
+
+  it("records a rejected outcome when a valid webhook is ignored", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    const webhookOutcome = createWebhookOutcomeRecorder();
+    const complete = vi.fn();
+    const store: GithubWebhookDeliveryStore = {
+      claim: vi.fn(() => true),
+      complete,
+    };
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "ignored-processing-route-delivery",
+      kind: "agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        getAgentReadyTrigger: () => ({ shouldTrigger: false, reason: "missing_ready_label" }),
+        now: () => new Date("2026-06-28T01:00:05.000Z"),
+        recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(complete).toHaveBeenCalledWith("github:ignored-processing-route-delivery", {
+      deliveryId: "ignored-processing-route-delivery",
+      metadata: {
+        nextAction: "record_and_ignore",
+        triggerReason: "missing_ready_label",
+        triggerWorkflow: "none",
+      },
+      processedAt: "2026-06-28T01:00:05.000Z",
+      status: "ignored",
+    });
+    expect(webhookOutcome.recordings).toEqual([
+      {
+        action: "labeled",
+        event: "issues",
+        outcome: "rejected",
+      },
+    ]);
   });
 });

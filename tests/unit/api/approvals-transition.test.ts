@@ -1,13 +1,15 @@
 /** @vitest-environment node */
-import { auth } from "@/auth";
+
+import type { Session } from "next-auth";
 import {
   handleApprovalTransitionPost,
   POST as postApprovalTransition,
 } from "@/app/api/approvals/transition/route";
-import { approvalTransitionEvents, approvals, loopRuns, repositories } from "@/db/schema";
+import { auth } from "@/auth";
+import { approvals, approvalTransitionEvents, loopRuns, repositories } from "@/db/schema";
+import { applyApprovalTransition } from "@/lib/approval-transitions";
 import type { ApprovalTransitionDatabase } from "@/lib/approvals";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
-import type { Session } from "next-auth";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -62,7 +64,7 @@ describe("approval transition API", () => {
   }
 
   function transitionRequest(input: {
-    action: "approve" | "reject" | "bypass" | "apply";
+    action: "approve" | "reject" | "bypass" | "expire" | "apply";
     approvalId: string;
     expectedStatus: string;
     note?: string;
@@ -75,6 +77,11 @@ describe("approval transition API", () => {
 
   it("attributes and persists approval transitions to the authenticated GitHub login", async () => {
     const { approvalId } = await insertRequestedApproval();
+    const approvalWaitTimeMetrics: {
+      decision: string;
+      durationSeconds: number;
+      gate: string;
+    }[] = [];
     vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
     authMock.mockResolvedValue({
       expires: "2026-06-27T00:00:00.000Z",
@@ -95,6 +102,9 @@ describe("approval transition API", () => {
       {
         database: context.db as unknown as ApprovalTransitionDatabase,
         now: () => new Date("2026-07-02T16:05:00.000Z"),
+        recordApprovalWaitTimeMetric(input) {
+          approvalWaitTimeMetrics.push(input);
+        },
       },
     );
 
@@ -130,6 +140,125 @@ describe("approval transition API", () => {
       expectedStatus: "requested",
       authMode: "github",
     });
+    expect(approvalWaitTimeMetrics).toEqual([
+      {
+        decision: "approved",
+        durationSeconds: 300,
+        gate: "pr-write",
+      },
+    ]);
+  });
+
+  it.each([
+    { action: "reject", decision: "rejected" },
+    { action: "bypass", decision: "bypassed" },
+    { action: "expire", decision: "expired" },
+  ] as const)("emits approval wait time when an approval is $decision", async ({
+    action,
+    decision,
+  }) => {
+    const { approvalId } = await insertRequestedApproval();
+    const approvalWaitTimeMetrics: {
+      decision: string;
+      durationSeconds: number;
+      gate: string;
+    }[] = [];
+    vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
+    authMock.mockResolvedValue({
+      expires: "2026-06-27T00:00:00.000Z",
+      user: {
+        name: "Nathan Summers",
+        email: "nathan@example.com",
+        githubLogin: "ncolesummers",
+      },
+    });
+
+    const response = await handleApprovalTransitionPost(
+      transitionRequest({
+        approvalId,
+        expectedStatus: "requested",
+        action,
+      }),
+      {
+        database: context.db as unknown as ApprovalTransitionDatabase,
+        now: () => new Date("2026-07-02T16:07:30.000Z"),
+        recordApprovalWaitTimeMetric(input) {
+          approvalWaitTimeMetrics.push(input);
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(approvalWaitTimeMetrics).toEqual([
+      {
+        decision,
+        durationSeconds: 450,
+        gate: "pr-write",
+      },
+    ]);
+  });
+
+  it("does not emit approval wait time when the transition transaction rolls back", async () => {
+    const approvalWaitTimeMetrics: {
+      decision: string;
+      durationSeconds: number;
+      gate: string;
+    }[] = [];
+    const database = {
+      async transaction(callback: (tx: unknown) => Promise<unknown> | unknown) {
+        const tx = {
+          update(table: unknown) {
+            expect(table).toBe(approvals);
+
+            return {
+              set(value: { status?: string }) {
+                return {
+                  where() {
+                    return {
+                      returning: async () => [
+                        {
+                          id: "rollback-approval",
+                          requestedAt: new Date("2026-07-02T16:00:00.000Z"),
+                          runId: "rollback-run",
+                          scope: "pr-write",
+                          status: value.status,
+                        },
+                      ],
+                    };
+                  },
+                };
+              },
+            };
+          },
+          insert(table: unknown) {
+            expect(table).toBe(approvalTransitionEvents);
+
+            return {
+              values: async () => undefined,
+            };
+          },
+        };
+
+        await callback(tx);
+        throw new Error("commit failed");
+      },
+    };
+
+    await expect(
+      applyApprovalTransition({
+        action: "approve",
+        actorId: "ncolesummers",
+        approvalId: "rollback-approval",
+        database: database as unknown as ApprovalTransitionDatabase,
+        expectedStatus: "requested",
+        occurredAt: new Date("2026-07-02T16:05:00.000Z"),
+        recordApprovalWaitTimeMetric(input) {
+          approvalWaitTimeMetrics.push(input);
+        },
+      }),
+    ).rejects.toThrow("commit failed");
+
+    expect(approvalWaitTimeMetrics).toEqual([]);
   });
 
   it("rejects stale expected approval state without mutating the row", async () => {
