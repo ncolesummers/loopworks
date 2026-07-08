@@ -3,20 +3,20 @@ import { and, eq } from "drizzle-orm";
 
 import { artifacts, loopRuns, repositories, runSteps } from "@/db/schema";
 import {
-  applyDevelopmentLoopValidationReport,
-  completeDevelopmentLoopRun,
-  retryDevelopmentLoopStep,
-  type DevelopmentLoopTransitionDatabase,
-} from "@/lib/loops/development-run-transitions";
-import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import {
-  validationReportSchemaId,
-  validationReportV1Schema,
+  applyDevelopmentLoopValidationReport,
+  completeDevelopmentLoopRun,
+  type DevelopmentLoopTransitionDatabase,
+  retryDevelopmentLoopStep,
+} from "@/lib/loops/development-run-transitions";
+import {
   type ValidationGateResultV1,
   type ValidationReportV1,
+  validationReportSchemaId,
+  validationReportV1Schema,
 } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
@@ -311,6 +311,48 @@ describe("development-loop run transitions", () => {
     });
   });
 
+  it("returns the persisted blocked reason when a failed validation transition is replayed", async () => {
+    const runId = await createRun(context);
+    const metrics = createMetricRecorder();
+    const report = validationReport([
+      gateResult({
+        durationMs: 3000,
+        exitCode: 1,
+        key: "aggregate-validation",
+        outcome: "fail",
+        required: true,
+      }),
+    ]);
+
+    const firstResult = await applyDevelopmentLoopValidationReport({
+      database: transitionDatabase(context),
+      metrics,
+      occurredAt: new Date("2026-07-08T16:05:00.000Z"),
+      report,
+      runId,
+    });
+    const replayResult = await applyDevelopmentLoopValidationReport({
+      database: transitionDatabase(context),
+      metrics,
+      occurredAt: new Date("2026-07-08T16:05:00.000Z"),
+      report,
+      runId,
+    });
+
+    expect(firstResult).toMatchObject({
+      blockedReason: "Deterministic validation failed before review.",
+      status: "blocked",
+    });
+    expect(replayResult).toMatchObject({
+      blockedReason: "Deterministic validation failed before review.",
+      idempotent: true,
+      status: "blocked",
+    });
+    expect(metrics.validationOutcome).toHaveBeenCalledTimes(1);
+    expect(metrics.validationDuration).toHaveBeenCalledTimes(1);
+    expect(metrics.stepDuration).toHaveBeenCalledTimes(1);
+  });
+
   it("blocks required skipped gates without emitting skipped validation metrics", async () => {
     const runId = await createRun(context);
     const metrics = createMetricRecorder();
@@ -365,6 +407,43 @@ describe("development-loop run transitions", () => {
         status: "skipped",
       }),
     );
+  });
+
+  it("blocks empty validation reports with a dedicated blocked reason", async () => {
+    const runId = await createRun(context);
+    const metrics = createMetricRecorder();
+    const report = validationReport([]);
+
+    const result = await applyDevelopmentLoopValidationReport({
+      database: transitionDatabase(context),
+      metrics,
+      occurredAt: new Date("2026-07-08T16:05:00.000Z"),
+      report,
+      runId,
+    });
+
+    const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, runId));
+    const [validationStep] = await context.db
+      .select()
+      .from(runSteps)
+      .where(and(eq(runSteps.runId, runId), eq(runSteps.stage, "validation")));
+
+    expect(result).toMatchObject({
+      blockedReason: "Validation report contained no gate results.",
+      status: "blocked",
+    });
+    expect(run).toMatchObject({
+      currentStage: "validation",
+      status: "blocked",
+    });
+    expect(run.metadata).toMatchObject({
+      blockedReason: "Validation report contained no gate results.",
+    });
+    expect(validationStep).toMatchObject({
+      status: "failed",
+      validationStatus: "failed",
+    });
+    expect(metrics.validationOutcome).not.toHaveBeenCalled();
   });
 
   it("fails closed when required validation gates are missing from the report", async () => {

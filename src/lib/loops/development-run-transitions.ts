@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import { artifacts, loopRuns, repositories, runSteps } from "@/db/schema";
-import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-report";
 import type { ValidationGateResultV1, ValidationReportV1 } from "@/lib/loops/validation-report";
+import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import {
   type DevelopmentLoopRunCompletedMetricInput,
@@ -84,10 +84,6 @@ function missingRequiredGateKeys(
   report: ValidationReportV1,
   expectedValidationGates: readonly ExpectedValidationGate[] | undefined,
 ): string[] {
-  if (report.results.length === 0) {
-    return ["validation_report"];
-  }
-
   if (!expectedValidationGates) {
     return [];
   }
@@ -102,6 +98,10 @@ function getBlockedReason(
   report: ValidationReportV1,
   expectedValidationGates?: readonly ExpectedValidationGate[],
 ): string | undefined {
+  if (report.results.length === 0) {
+    return "Validation report contained no gate results.";
+  }
+
   if (failedResults(report).length > 0) {
     return "Deterministic validation failed before review.";
   }
@@ -132,6 +132,11 @@ function getStartedAtForDuration(input: {
 function metadataWithoutBlockedReason(metadata: RunMetadata | null | undefined): RunMetadata {
   const { blockedReason: _blockedReason, ...rest } = metadata ?? {};
   return rest;
+}
+
+function getPersistedBlockedReason(metadata: RunMetadata | null | undefined): string | undefined {
+  const blockedReason = metadata?.blockedReason;
+  return typeof blockedReason === "string" && blockedReason.length > 0 ? blockedReason : undefined;
 }
 
 const safeReasonCodePattern = /^[a-z][a-z0-9_.:-]{0,79}$/;
@@ -297,9 +302,10 @@ export async function applyDevelopmentLoopValidationReport(input: {
 
     if (step.completedAt && (step.status === "succeeded" || step.status === "failed")) {
       const traceId = step.traceId ?? run.traceId ?? undefined;
+      const persistedBlockedReason = getPersistedBlockedReason(run.metadata);
       return {
         ...(step.status === "failed"
-          ? { blockedReason: "Validation transition already failed." }
+          ? { blockedReason: persistedBlockedReason ?? "Validation transition already failed." }
           : {}),
         idempotent: true,
         runId: input.runId,
