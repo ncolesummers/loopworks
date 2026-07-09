@@ -6,6 +6,7 @@ import { AlertTriangle, Clock3, FileJson2, ShieldCheck } from "lucide-react";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { getApprovalStatus, getRunStatus } from "@/components/portal/status-mapping";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
+import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -155,6 +156,8 @@ export function RunRecordsView({
                   <div className="mt-1 font-medium">{selectedRun.issue ?? "None"}</div>
                 </div>
               </div>
+
+              <ValidationGateSummary summary={selectedRun.validationSummary} />
 
               <div className="space-y-3">
                 {selectedRun.steps.length > 0 ? (

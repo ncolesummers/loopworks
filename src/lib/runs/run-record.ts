@@ -12,10 +12,14 @@ import type {
   RunStepStatus,
   TimelineEvent,
   TimelineKind,
+  ValidationGateRecord,
+  ValidationGateSummaryRecord,
 } from "@/lib/types";
+import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 
 export type RunRecordDatabase = Pick<typeof db, "select">;
+type ArtifactRow = typeof artifacts.$inferSelect;
 
 export type RunRecordsResult =
   | {
@@ -164,6 +168,129 @@ function metadataString(metadata: Record<string, unknown> | null | undefined, ke
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function metadataKind(metadata: Record<string, unknown> | null | undefined): string | undefined {
+  return metadataString(metadata, "validationReportMetadataKind");
+}
+
+function emptyValidationSummary(
+  detail = "No validation gates have completed for this run yet.",
+): ValidationGateSummaryRecord {
+  return {
+    detail,
+    gates: [],
+    state: "empty",
+  };
+}
+
+function errorValidationSummary(): ValidationGateSummaryRecord {
+  return {
+    detail: "Validation report metadata could not be parsed.",
+    gates: [],
+    state: "error",
+  };
+}
+
+function formatValidationDuration(durationMs: number): string {
+  const normalizedMs = Math.max(0, durationMs);
+  if (normalizedMs === 0) {
+    return "0s";
+  }
+
+  if (normalizedMs < 1000) {
+    return `${normalizedMs}ms`;
+  }
+
+  const totalSeconds = Math.round(normalizedMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+
+  if (normalizedMs % 1000 === 0) {
+    return `${totalSeconds}s`;
+  }
+
+  return `${(normalizedMs / 1000).toFixed(1)}s`;
+}
+
+function validationGateDetail(input: {
+  exitCode: number | null;
+  message?: string;
+  outcome: ValidationGateRecord["outcome"];
+  skipReason?: string;
+}): string {
+  if (input.message) {
+    return input.message;
+  }
+
+  if (input.skipReason) {
+    return input.skipReason;
+  }
+
+  if (input.outcome === "skipped") {
+    return "Gate was skipped.";
+  }
+
+  if (input.exitCode !== null) {
+    return `Gate exited with code ${input.exitCode}.`;
+  }
+
+  return "Gate completed.";
+}
+
+function validationSummaryForArtifacts(artifactRows: ArtifactRow[]): ValidationGateSummaryRecord {
+  const latestValidationArtifact = [...artifactRows].reverse()[0];
+
+  if (!latestValidationArtifact) {
+    return emptyValidationSummary();
+  }
+
+  const kind = metadataKind(latestValidationArtifact.metadata);
+  if (kind === "validation_report_contract" || !latestValidationArtifact.metadata) {
+    return emptyValidationSummary();
+  }
+
+  if (kind !== "validation_report_result") {
+    return errorValidationSummary();
+  }
+
+  const parsed = validationReportArtifactMetadataSchema.safeParse(
+    latestValidationArtifact.metadata,
+  );
+  if (!parsed.success) {
+    return errorValidationSummary();
+  }
+
+  const report = parsed.data.validationReport;
+  if (report.results.length === 0) {
+    return emptyValidationSummary(parsed.data.detail);
+  }
+
+  return {
+    detail: parsed.data.detail,
+    gates: report.results.map((result) => ({
+      command: result.command,
+      detail: validationGateDetail({
+        exitCode: result.exitCode,
+        message: result.message,
+        outcome: result.outcome,
+        skipReason: result.skipReason,
+      }),
+      duration: formatValidationDuration(result.durationMs),
+      key: result.key,
+      name: result.name,
+      outcome: result.outcome,
+      phase: result.phase,
+      rawArtifactHref: result.output?.uri,
+      required: result.required,
+    })),
+    generatedAt: report.generatedAt,
+    state: "ready",
+  };
+}
+
 function groupBy<T, K extends string>(items: T[], getKey: (item: T) => K): Map<K, T[]> {
   const grouped = new Map<K, T[]>();
 
@@ -235,7 +362,8 @@ export async function readRunRecords(input: {
   const runs = runRows
     .map((run): RunRecord & { queuedAtTime: number } => {
       const runStepsForRun = stepsByRun.get(run.id) ?? [];
-      const artifactsForRun = (artifactsByRun.get(run.id) ?? []).map((artifact) => ({
+      const artifactRowsForRun = artifactsByRun.get(run.id) ?? [];
+      const artifactsForRun = artifactRowsForRun.map((artifact) => ({
         detail: metadataString(artifact.metadata, "detail") ?? artifact.title,
         href: artifact.uri,
         kind: artifactKind(artifact.type),
@@ -290,6 +418,9 @@ export async function readRunRecords(input: {
         repositoryFullName: run.repositoryFullName,
         status: run.status,
         steps,
+        validationSummary: validationSummaryForArtifacts(
+          artifactRowsForRun.filter((artifact) => artifact.type === "validation_report"),
+        ),
       };
     })
     .sort((left, right) => {

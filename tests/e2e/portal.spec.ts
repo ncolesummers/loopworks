@@ -210,10 +210,59 @@ test.describe("Loopworks portal", () => {
     expect(validationBox?.y ?? 0).toBeLessThan(codeReviewBox?.y ?? 0);
     await expect(page.getByRole("link", { name: "Validation report" })).toBeVisible();
 
+    const gateSummary = page.getByRole("region", { name: "Validation gates" });
+    await expect(gateSummary).toBeVisible();
+    await expect(gateSummary.getByText("Typecheck", { exact: true })).toBeVisible();
+    await expect(gateSummary.getByText("Unit tests", { exact: true })).toBeVisible();
+    await expect(gateSummary.getByText("Playwright", { exact: true })).toBeVisible();
+    await expect(gateSummary.getByText("Passed", { exact: true })).toBeVisible();
+    await expect(gateSummary.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(gateSummary.getByText("Skipped", { exact: true })).toBeVisible();
+    await expect(
+      gateSummary.getByRole("link", { name: "Open raw artifact for Typecheck" }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/ncolesummers/loopworks/actions/runs/demo-typecheck",
+    );
+    const gateSummaryBox = await gateSummary.boundingBox();
+    expect(gateSummaryBox?.y ?? 0).toBeLessThan(codeReviewBox?.y ?? 0);
+
     await page.getByRole("button", { name: /ncolesummers\/factory-core/ }).click();
     await expect(page.getByRole("heading", { name: "Run detail" })).toBeVisible();
+    await expect(gateSummary.getByText("No validation gates yet")).toBeVisible();
     await expect(page.getByText("deploy-preview")).toBeVisible();
     await expect(page.getByText("morgan-dev")).toBeVisible();
+  });
+
+  test("validation gate summary stays readable at mobile width", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/runs");
+
+    const gateSummary = page.getByRole("region", { name: "Validation gates" });
+    await expect(gateSummary).toBeVisible();
+    const rows = gateSummary.getByRole("listitem");
+    await expect(rows).toHaveCount(3);
+
+    let previousBottom = -1;
+    for (let index = 0; index < 3; index += 1) {
+      const row = rows.nth(index);
+      await expect(row).toBeVisible();
+      const box = await row.boundingBox();
+      expect(box, `validation row ${index}`).not.toBeNull();
+      if (box) {
+        expect(box.x, `validation row ${index} should stay inside viewport`).toBeGreaterThanOrEqual(
+          0,
+        );
+        expect(
+          box.x + box.width <= 390,
+          `validation row ${index} should not overflow mobile viewport`,
+        ).toBe(true);
+        expect(box.y, `validation row ${index} should not overlap previous row`).toBeGreaterThan(
+          previousBottom,
+        );
+        previousBottom = box.y + box.height;
+      }
+    }
   });
 
   // Persona A02: approval gates preserve actor/evidence context through the request flow.

@@ -1,7 +1,11 @@
 /** @vitest-environment node */
 import { eq } from "drizzle-orm";
 
-import { loopRuns } from "@/db/schema";
+import { artifacts, loopRuns } from "@/db/schema";
+import {
+  createValidationReportArtifactMetadata,
+  type ValidationReportV1,
+} from "@/lib/loops/validation-report";
 import { readRunRecords, getRunRecordsForResult } from "@/lib/runs/run-record";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
 import { demoSeedIds, seedDemoData, type SeedDatabase } from "@/lib/seed/demo-data";
@@ -21,6 +25,26 @@ describe("run records (pglite integration)", () => {
 
   function testDatabase(): SeedDatabase {
     return context.db as unknown as SeedDatabase;
+  }
+
+  function validationReport(results: ValidationReportV1["results"]): ValidationReportV1 {
+    return {
+      counts: {
+        failed: results.filter((result) => result.outcome === "fail").length,
+        passed: results.filter((result) => result.outcome === "pass").length,
+        skipped: results.filter((result) => result.outcome === "skipped").length,
+        total: results.length,
+      },
+      generatedAt: "2026-07-08T16:00:00.000Z",
+      overallOutcome: results.some((result) => result.outcome === "fail")
+        ? "fail"
+        : results.some((result) => result.outcome === "pass")
+          ? "pass"
+          : "skipped",
+      results,
+      schemaId: "loopworks.validation_report.v1",
+      version: 1,
+    };
   }
 
   it("prioritizes waiting-for-approval and blocked runs for operator triage", async () => {
@@ -75,6 +99,221 @@ describe("run records (pglite integration)", () => {
     expect(succeeded?.approvals.map((approval) => approval.status)).toEqual(
       expect.arrayContaining(["approved", "applied"]),
     );
+  });
+
+  it("projects persisted validation report gates onto run detail summaries", async () => {
+    await seedDemoData(testDatabase());
+    const report = validationReport([
+      {
+        command: "bun run format:check",
+        durationMs: 1800,
+        exitCode: 0,
+        key: "format",
+        message: "Biome formatting passed.",
+        name: "Format check",
+        outcome: "pass",
+        output: {
+          sha256: "a".repeat(64),
+          stderrBytes: 0,
+          stdoutBytes: 42,
+          truncated: false,
+          uri: "https://github.com/ncolesummers/loopworks/actions/runs/76-format",
+        },
+        phase: "before_review",
+        produces: "validation_report",
+        required: true,
+      },
+      {
+        command: "bun run test",
+        durationMs: 72_000,
+        exitCode: 1,
+        key: "unit-tests",
+        message: "A focused unit test failed.",
+        name: "Unit tests",
+        outcome: "fail",
+        output: {
+          sha256: "b".repeat(64),
+          stderrBytes: 128,
+          stdoutBytes: 0,
+          truncated: false,
+          uri: "https://github.com/ncolesummers/loopworks/actions/runs/76-unit",
+        },
+        phase: "before_review",
+        produces: "validation_report",
+        required: true,
+      },
+      {
+        command: "bun run test:e2e",
+        durationMs: 0,
+        exitCode: null,
+        key: "playwright",
+        name: "Playwright",
+        outcome: "skipped",
+        phase: "before_rollout",
+        produces: "validation_report",
+        required: false,
+        skipReason: "No browser-impacting change in this fixture.",
+      },
+    ]);
+
+    await context.db
+      .update(artifacts)
+      .set({
+        metadata: createValidationReportArtifactMetadata(report),
+      })
+      .where(eq(artifacts.id, demoSeedIds.artifacts.validationReport));
+
+    const result = await readRunRecords({
+      database: context.db,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+    const failed = result.runs.find((run) => run.status === "failed");
+    const succeeded = result.runs.find((run) => run.status === "succeeded");
+
+    expect(failed?.validationSummary).toMatchObject({
+      state: "ready",
+      detail: "Validation report: 1 passed, 1 failed, 1 skipped.",
+      generatedAt: "2026-07-08T16:00:00.000Z",
+    });
+    expect(failed?.validationSummary.gates).toEqual([
+      expect.objectContaining({
+        command: "bun run format:check",
+        detail: "Biome formatting passed.",
+        duration: "1.8s",
+        key: "format",
+        name: "Format check",
+        outcome: "pass",
+        rawArtifactHref: "https://github.com/ncolesummers/loopworks/actions/runs/76-format",
+        required: true,
+      }),
+      expect.objectContaining({
+        command: "bun run test",
+        detail: "A focused unit test failed.",
+        duration: "1m 12s",
+        key: "unit-tests",
+        name: "Unit tests",
+        outcome: "fail",
+        rawArtifactHref: "https://github.com/ncolesummers/loopworks/actions/runs/76-unit",
+        required: true,
+      }),
+      expect.objectContaining({
+        command: "bun run test:e2e",
+        detail: "No browser-impacting change in this fixture.",
+        duration: "0s",
+        key: "playwright",
+        name: "Playwright",
+        outcome: "skipped",
+        rawArtifactHref: undefined,
+        required: false,
+      }),
+    ]);
+    expect(succeeded?.validationSummary).toMatchObject({
+      state: "ready",
+      gates: expect.arrayContaining([
+        expect.objectContaining({
+          key: "typecheck",
+          outcome: "pass",
+        }),
+      ]),
+    });
+  });
+
+  it("degrades validation summaries for empty and malformed completed reports", async () => {
+    await seedDemoData(testDatabase());
+
+    await context.db
+      .update(artifacts)
+      .set({
+        metadata: createValidationReportArtifactMetadata(validationReport([])),
+      })
+      .where(eq(artifacts.id, demoSeedIds.artifacts.validationReport));
+
+    const emptyResult = await readRunRecords({
+      database: context.db,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+    expect(
+      emptyResult.runs.find((run) => run.status === "failed")?.validationSummary,
+    ).toMatchObject({
+      state: "empty",
+      gates: [],
+    });
+
+    await context.db
+      .update(artifacts)
+      .set({
+        metadata: {
+          validationReportMetadataKind: "validation_report_result",
+          validationReportSchemaId: "loopworks.validation_report.v1",
+          validationReportVersion: 1,
+          validationReport: {
+            counts: { failed: 0, passed: 1, skipped: 0, total: 2 },
+            generatedAt: "2026-07-08T16:00:00.000Z",
+            overallOutcome: "pass",
+            results: [],
+            schemaId: "loopworks.validation_report.v1",
+            version: 1,
+          },
+        },
+      })
+      .where(eq(artifacts.id, demoSeedIds.artifacts.validationReport));
+
+    const malformedResult = await readRunRecords({
+      database: context.db,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+    expect(
+      malformedResult.runs.find((run) => run.status === "failed")?.validationSummary,
+    ).toMatchObject({
+      state: "error",
+      gates: [],
+    });
+  });
+
+  it("does not show stale validation evidence when the newest report artifact is malformed", async () => {
+    await seedDemoData(testDatabase());
+    await context.db
+      .update(artifacts)
+      .set({
+        metadata: createValidationReportArtifactMetadata(
+          validationReport([
+            {
+              command: "bun run format:check",
+              durationMs: 1000,
+              exitCode: 0,
+              key: "format",
+              name: "Format check",
+              outcome: "pass",
+              phase: "before_review",
+              produces: "validation_report",
+              required: true,
+            },
+          ]),
+        ),
+      })
+      .where(eq(artifacts.id, demoSeedIds.artifacts.validationReport));
+    await context.db.insert(artifacts).values({
+      createdAt: new Date("2027-07-08T16:10:00.000Z"),
+      id: "06000000-0000-4000-8000-000000000099",
+      metadata: {
+        detail: "Malformed report metadata without a result kind.",
+      },
+      runId: demoSeedIds.loopRuns.failed,
+      stepId: demoSeedIds.runSteps.failed,
+      title: "Malformed validation report",
+      type: "validation_report",
+      uri: "https://github.com/ncolesummers/loopworks/actions/runs/malformed",
+    });
+
+    const result = await readRunRecords({
+      database: context.db,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+
+    expect(result.runs.find((run) => run.status === "failed")?.validationSummary).toMatchObject({
+      state: "error",
+      gates: [],
+    });
   });
 
   it("orders same-priority runs by full queued timestamp across days", async () => {

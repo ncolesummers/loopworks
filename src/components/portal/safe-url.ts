@@ -5,6 +5,16 @@ function isAllowedHttpsHost(hostname: string) {
   return HTTPS_HOSTS.has(hostname) || hostname === "vercel.app" || hostname.endsWith(".vercel.app");
 }
 
+function isAllowedArtifactReference(url: URL) {
+  return (
+    url.protocol === "artifact:" &&
+    url.hostname === "validation" &&
+    url.pathname.startsWith("/") &&
+    !url.username &&
+    !url.password
+  );
+}
+
 export function getSafeExternalHref(href: string | undefined | null) {
   const value = href?.trim();
 
@@ -21,6 +31,10 @@ export function getSafeExternalHref(href: string | undefined | null) {
     }
 
     if (url.protocol === "http:" && LOCAL_HTTP_HOSTS.has(hostname)) {
+      return url.toString();
+    }
+
+    if (isAllowedArtifactReference(url)) {
       return url.toString();
     }
   } catch {
