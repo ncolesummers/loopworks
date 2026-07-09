@@ -23,6 +23,9 @@ const portalRoutes = [
   },
 ] as const;
 
+const portalSourceLabel = /Live database|Fixture fallback/;
+const dbBackedPortalPaths = ["/", "/catalog", "/loops", "/approvals", "/settings"] as const;
+
 test.describe("Loopworks portal", () => {
   test("renders the dashboard surface", async ({ page }) => {
     await page.goto("/");
@@ -64,6 +67,13 @@ test.describe("Loopworks portal", () => {
       page.getByRole("heading", { name: "Connection, label mapping, and dev fixtures" }),
     ).toBeVisible();
     await expect(page.getByText("GitHub app connected")).toBeVisible();
+  });
+
+  test("shows explicit portal data source labels on database-backed pages", async ({ page }) => {
+    for (const path of dbBackedPortalPaths) {
+      await page.goto(path);
+      await expect(page.getByText(portalSourceLabel).first()).toBeVisible();
+    }
   });
 
   // Persona P01: a signed-in operator can move across each protected MVP slice.
@@ -325,6 +335,22 @@ test.describe("Loopworks portal", () => {
       ).toBeVisible();
     });
   }
+
+  test("keeps database-backed portal pages inside the mobile viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    for (const path of dbBackedPortalPaths) {
+      await page.goto(path);
+      await expect(page.getByText(portalSourceLabel).first()).toBeVisible();
+
+      const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+
+      expect(scrollWidth, `${path} should not create horizontal page overflow`).toBeLessThanOrEqual(
+        viewportWidth + 1,
+      );
+    }
+  });
 
   // Persona P04: an operator switches light/dark from the shell and it persists.
   test("operator can switch light/dark from the shell and the choice persists", async ({

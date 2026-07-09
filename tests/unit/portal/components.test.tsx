@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
+import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
+import { LoopRegistry } from "@/components/portal/dashboard-view";
+import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
 import { RunRecordsView } from "@/components/portal/run-records-view";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
@@ -436,6 +439,94 @@ describe("portal reusable components", () => {
 
     expect(screen.getByText("Loading repositories")).toBeTruthy();
     expect(screen.queryByText("No repositories tracked")).toBeNull();
+  });
+
+  it("renders source labels and explicit empty states for database-backed portal panels", () => {
+    render(
+      <LoopRegistry
+        emptyDetail="Loop rows will appear after issue sync writes durable state."
+        loops={[]}
+        sourceLabel="Live database"
+      />,
+    );
+    expect(screen.getByText("Live database")).toBeTruthy();
+    expect(screen.getByText("No loops tracked")).toBeTruthy();
+    expect(
+      screen.getByText("Loop rows will appear after issue sync writes durable state."),
+    ).toBeTruthy();
+
+    cleanup();
+    render(
+      <ApprovalGatePanel
+        approval={null}
+        emptyDetail="Portal data store unavailable."
+        sourceLabel="Unavailable"
+      />,
+    );
+    expect(screen.getByText("Unavailable")).toBeTruthy();
+    expect(screen.getByText("No approval gates available")).toBeTruthy();
+    expect(screen.getAllByText("Portal data store unavailable.").length).toBeGreaterThan(0);
+
+    cleanup();
+    render(
+      <GitHubSettingsView
+        emptyDetail="No settings can be projected until repository and loop rows exist."
+        readOnly
+        settings={[]}
+        sourceLabel="Live database"
+      />,
+    );
+    expect(screen.getByText("Live database")).toBeTruthy();
+    expect(screen.getByText("No GitHub settings projected")).toBeTruthy();
+    expect(
+      screen.getByText("No settings can be projected until repository and loop rows exist."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Fixture control surface")).toBeNull();
+    expect(screen.queryByText("Refresh fixture snapshot")).toBeNull();
+  });
+
+  it("keeps database-backed approval and settings copy neutral and read-only", async () => {
+    render(
+      <ApprovalGatePanel
+        approval={{
+          checklist: [
+            { done: true, label: "Scope deploy-preview" },
+            { done: false, label: "Awaiting resolution" },
+          ],
+          due: "Requested 08:56",
+          owner: "morgan-dev",
+          risk: "Requesting review before the preview promotes.",
+          state: "requested",
+        }}
+        sourceLabel="Live database"
+      />,
+    );
+
+    expect(screen.getByText("Verified against the current portal state.")).toBeTruthy();
+    expect(screen.queryByText(/fixture/i)).toBeNull();
+
+    cleanup();
+    render(
+      <GitHubSettingsView
+        readOnly
+        settings={[
+          {
+            detail: "1 repository has GitHub installation metadata.",
+            enabled: true,
+            key: "sso",
+            title: "GitHub SSO",
+          },
+        ]}
+        sourceLabel="Live database"
+      />,
+    );
+    const scopingTab = screen.getByRole("tab", { name: "Scoping" });
+    fireEvent.pointerDown(scopingTab, { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(scopingTab, { button: 0, ctrlKey: false });
+    fireEvent.click(scopingTab);
+    await waitFor(() => expect(scopingTab.getAttribute("aria-selected")).toBe("true"));
+    expect(screen.getByRole("switch", { name: "GitHub SSO" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByText("Fixture control surface")).toBeNull();
   });
 
   it("filters catalog rows by search and health while preserving explicit filtered-empty state", () => {

@@ -59,20 +59,16 @@ Seed data must never contain real tokens, private keys, customer data, or secret
    `NODE_ENV=production` for every optimized build, including Vercel Preview
    deployments, not only Production — `isProductionRuntime` therefore fails
    closed on Preview too, which is the safe direction
-   (`tests/unit/lib/runtime.test.ts`). The portal pages that are still
-   fixture-only (`dashboard`, `catalog`, `loops`, `approvals`, `runs`,
-   `settings`) are wrapped in `FixtureGatedPage`
-   (`src/components/portal/fixture-gated-page.tsx`), which renders a degraded
-   `FixtureUnavailableNotice` and logs `portal_fixture_gate_blocked` instead
-   of rendering fixture data in production
-   (`tests/unit/portal/fixture-gated-page.test.tsx`,
-   `tests/unit/portal/pages.test.tsx`). The `deployments` page already
-   followed this pattern via `createVercelDeploymentClient` and is unchanged.
-   Wiring those pages to read the seeded database instead of static fixtures
-   is tracked separately (see the Loopworks GitHub issue backlog, milestone
-   M3 Durable Loop MVP) — this ADR's fail-closed requirement is satisfied
-   either way, since the guard prevents fixture data from reaching production
-   regardless of when that wiring lands.
+   (`tests/unit/lib/runtime.test.ts`). `runs` was moved to a database-backed
+   read path by issue #12. Issue #37 moved the remaining guarded portal pages
+   (`dashboard`, `catalog`, `loops`, `approvals`, and `settings`) to seeded
+   database reads with explicit `source` / `fallbackReason` semantics via
+   `src/lib/portal/records.ts`. Those pages no longer use `FixtureGatedPage`;
+   production database failures return unavailable live-data states instead of
+   static fixture records (`tests/unit/portal/portal-records.test.ts` and
+   `tests/unit/portal/pages.test.tsx`). The `FixtureGatedPage` primitive and
+   tests remain as a reusable fail-closed guard for future fixture-only
+   surfaces.
 4. **Done.** Adding a new fixture state:
    - If the state is a new Drizzle enum value, add it to the enum in
      `src/db/schema.ts` and run `bun run db:generate` for the migration.

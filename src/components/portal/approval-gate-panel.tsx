@@ -21,8 +21,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { getApprovalChecklistStatus, getApprovalStatus } from "@/components/portal/status-mapping";
 import type { ApprovalGateRecord } from "@/lib/types";
 
-export function ApprovalGatePanel({ approval }: Readonly<{ approval: ApprovalGateRecord }>) {
+export function ApprovalGatePanel({
+  approval,
+  emptyDetail = "Approval rows will appear after a loop or run requests review.",
+  sourceLabel = "Unavailable",
+}: Readonly<{
+  approval: ApprovalGateRecord | null;
+  emptyDetail?: string;
+  sourceLabel?: string;
+}>) {
   const [open, setOpen] = useState(false);
+
+  if (!approval) {
+    return (
+      <Card className="shadow-none">
+        <CardHeader className="flex-row items-end justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle>Approval gate</CardTitle>
+            <CardDescription>{emptyDetail}</CardDescription>
+          </div>
+          <StatusBadge status="empty" label={sourceLabel} />
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-dashed p-6">
+            <div className="text-sm font-medium">No approval gates available</div>
+            <p className="mt-1 text-sm text-muted-foreground">{emptyDetail}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const approvalStatus = getApprovalStatus(approval.state);
 
   return (
@@ -34,7 +63,10 @@ export function ApprovalGatePanel({ approval }: Readonly<{ approval: ApprovalGat
             Security signoff is required before high-risk automation or write paths advance.
           </CardDescription>
         </div>
-        <StatusBadge status={approvalStatus.status} label={approvalStatus.label} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status="ready" label={sourceLabel} showIcon={false} />
+          <StatusBadge status={approvalStatus.status} label={approvalStatus.label} />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -49,7 +81,7 @@ export function ApprovalGatePanel({ approval }: Readonly<{ approval: ApprovalGat
                     <div className="text-sm font-medium">{item.label}</div>
                     <div className="text-xs text-muted-foreground">
                       {item.done
-                        ? "Verified against the fixture state."
+                        ? "Verified against the current portal state."
                         : "Needs explicit maintainer review."}
                     </div>
                   </div>
@@ -88,7 +120,7 @@ export function ApprovalGatePanel({ approval }: Readonly<{ approval: ApprovalGat
                     <Label htmlFor="notes">Reviewer notes</Label>
                     <Textarea
                       id="notes"
-                      defaultValue="Verified GitHub scoping, preview visibility, and redaction rules against the local fixture."
+                      defaultValue="Verified GitHub scoping, preview visibility, and redaction rules against the current portal state."
                     />
                   </div>
                 </div>
