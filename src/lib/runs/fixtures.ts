@@ -1,4 +1,79 @@
-import type { RunRecord } from "@/lib/types";
+import type { RunRecord, ValidationGateSummaryRecord } from "@/lib/types";
+
+const emptyValidationSummary: ValidationGateSummaryRecord = {
+  detail: "No validation gates have completed for this run yet.",
+  gates: [],
+  state: "empty",
+};
+
+const mixedValidationSummary: ValidationGateSummaryRecord = {
+  detail: "Validation report: 1 passed, 1 failed, 1 skipped.",
+  generatedAt: "2026-06-30T08:55:00.000Z",
+  gates: [
+    {
+      command: "bun run typecheck",
+      detail: "Strict TypeScript completed without emitting.",
+      duration: "18s",
+      key: "typecheck",
+      name: "Typecheck",
+      outcome: "pass",
+      phase: "before_review",
+      rawArtifactHref: "https://github.com/ncolesummers/loopworks/actions/runs/demo-typecheck",
+      required: true,
+    },
+    {
+      command: "bun run test",
+      detail: "Focused validation failed before review.",
+      duration: "1m 12s",
+      key: "unit-tests",
+      name: "Unit tests",
+      outcome: "fail",
+      phase: "before_review",
+      rawArtifactHref: "https://github.com/ncolesummers/loopworks/actions/runs/demo-unit",
+      required: true,
+    },
+    {
+      command: "bun run test:e2e",
+      detail: "Browser checks were skipped for this fixture gate.",
+      duration: "0s",
+      key: "playwright",
+      name: "Playwright",
+      outcome: "skipped",
+      phase: "before_rollout",
+      required: false,
+    },
+  ],
+  state: "ready",
+};
+
+const invalidRawArtifactValidationSummary: ValidationGateSummaryRecord = {
+  detail: "Validation report: 0 passed, 1 failed, 1 skipped.",
+  generatedAt: "2026-06-30T08:46:20.000Z",
+  gates: [
+    {
+      command: "bun run validate",
+      detail: "Deterministic validation stopped before review.",
+      duration: "35s",
+      key: "aggregate-validation",
+      name: "Aggregate validation",
+      outcome: "fail",
+      phase: "before_review",
+      rawArtifactHref: "javascript:alert(1)",
+      required: true,
+    },
+    {
+      command: "bun run lighthouse",
+      detail: "Lighthouse waits for a healthy preview.",
+      duration: "0s",
+      key: "lighthouse",
+      name: "Lighthouse",
+      outcome: "skipped",
+      phase: "before_rollout",
+      required: false,
+    },
+  ],
+  state: "ready",
+};
 
 export function buildRunFixtureRecords(): RunRecord[] {
   return [
@@ -32,6 +107,7 @@ export function buildRunFixtureRecords(): RunRecord[] {
           kind: "review",
         },
       ],
+      validationSummary: emptyValidationSummary,
       steps: [
         {
           id: "fixture-step-waiting-review",
@@ -77,6 +153,7 @@ export function buildRunFixtureRecords(): RunRecord[] {
           kind: "validation",
         },
       ],
+      validationSummary: invalidRawArtifactValidationSummary,
       steps: [
         {
           id: "fixture-step-blocked-validation",
@@ -154,6 +231,7 @@ export function buildRunFixtureRecords(): RunRecord[] {
           kind: "preview",
         },
       ],
+      validationSummary: mixedValidationSummary,
       steps: [
         {
           id: "fixture-step-planning",

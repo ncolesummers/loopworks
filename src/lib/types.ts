@@ -48,6 +48,10 @@ export type ArtifactKind = "preview" | "validation" | "review" | "log";
 
 export type ValidationResultState = "passed" | "warning" | "failed" | "running" | "skipped";
 
+export type ValidationGateOutcome = "pass" | "fail" | "skipped";
+
+export type ValidationGateSummaryState = "ready" | "empty" | "error";
+
 export type GitHubSettingKey =
   | "sso"
   | "webhooks"
@@ -132,6 +136,25 @@ export interface ValidationResultRecord {
   artifactHref?: string;
 }
 
+export interface ValidationGateRecord {
+  command: string;
+  detail: string;
+  duration: string;
+  key: string;
+  name: string;
+  outcome: ValidationGateOutcome;
+  phase: string;
+  rawArtifactHref?: string;
+  required: boolean;
+}
+
+export interface ValidationGateSummaryRecord {
+  detail: string;
+  gates: ValidationGateRecord[];
+  generatedAt?: string;
+  state: ValidationGateSummaryState;
+}
+
 export interface ApprovalChecklistItem {
   label: string;
   done: boolean;
@@ -182,6 +205,7 @@ export interface RunRecord {
   repositoryFullName: string;
   status: RunStatus;
   steps: TimelineEvent[];
+  validationSummary: ValidationGateSummaryRecord;
 }
 
 export interface GitHubSettingRecord {

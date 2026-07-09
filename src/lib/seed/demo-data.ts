@@ -12,6 +12,7 @@ import {
   runSteps,
   vercelProjects,
 } from "@/db/schema";
+import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-report";
 
 export type SeedDatabase = Pick<typeof db, "transaction">;
 
@@ -26,6 +27,71 @@ export type SeedCounts = {
   approvalTransitionEvents: number;
   deployments: number;
 };
+
+const demoValidationReportMetadata = createValidationReportArtifactMetadata({
+  counts: {
+    failed: 1,
+    passed: 1,
+    skipped: 1,
+    total: 3,
+  },
+  generatedAt: "2026-06-30T08:46:20.000Z",
+  overallOutcome: "fail",
+  results: [
+    {
+      command: "bun run typecheck",
+      durationMs: 18_000,
+      exitCode: 0,
+      key: "typecheck",
+      message: "Strict TypeScript completed without emitting.",
+      name: "Typecheck",
+      outcome: "pass",
+      output: {
+        sha256: "a".repeat(64),
+        stderrBytes: 0,
+        stdoutBytes: 84,
+        truncated: false,
+        uri: "https://github.com/ncolesummers/loopworks/actions/runs/demo-typecheck",
+      },
+      phase: "before_review",
+      produces: "validation_report",
+      required: true,
+    },
+    {
+      command: "bun run test",
+      durationMs: 72_000,
+      exitCode: 1,
+      key: "unit-tests",
+      message: "Focused validation failed before review.",
+      name: "Unit tests",
+      outcome: "fail",
+      output: {
+        sha256: "b".repeat(64),
+        stderrBytes: 128,
+        stdoutBytes: 0,
+        truncated: false,
+        uri: "https://github.com/ncolesummers/loopworks/actions/runs/demo-unit",
+      },
+      phase: "before_review",
+      produces: "validation_report",
+      required: true,
+    },
+    {
+      command: "bun run test:e2e",
+      durationMs: 0,
+      exitCode: null,
+      key: "playwright",
+      name: "Playwright",
+      outcome: "skipped",
+      phase: "before_rollout",
+      produces: "validation_report",
+      required: false,
+      skipReason: "Browser checks were skipped for this fixture gate.",
+    },
+  ],
+  schemaId: "loopworks.validation_report.v1",
+  version: 1,
+});
 
 const seedNamespaces = {
   repositories: 1,
@@ -91,6 +157,7 @@ export const demoSeedIds = {
     logSummary: seedId("artifacts", 5),
     trace: seedId("artifacts", 6),
     other: seedId("artifacts", 7),
+    validationReportSucceeded: seedId("artifacts", 8),
   },
   approvals: {
     requested: seedId("approvals", 0),
@@ -516,6 +583,16 @@ export function buildDemoSeedData(): DemoSeedData {
       type: "validation_report",
       title: "Validation report",
       uri: "https://github.com/ncolesummers/delivery-ops/actions/runs/demo-validation-report",
+      metadata: demoValidationReportMetadata,
+    },
+    {
+      id: ids.artifacts.validationReportSucceeded,
+      runId: ids.loopRuns.succeeded,
+      stepId: ids.runSteps.succeeded,
+      type: "validation_report",
+      title: "Validation report",
+      uri: "https://github.com/ncolesummers/loopworks-web/actions/runs/demo-validation-report",
+      metadata: demoValidationReportMetadata,
     },
     {
       id: ids.artifacts.patch,

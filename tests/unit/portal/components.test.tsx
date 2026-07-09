@@ -5,6 +5,7 @@ import { DeploymentSummary } from "@/components/portal/deployment-summary";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
 import { RunRecordsView } from "@/components/portal/run-records-view";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
+import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
 import { ValidationResultSummary } from "@/components/portal/validation-result-summary";
 import {
   createDevelopmentLoopRunSkeleton,
@@ -16,10 +17,17 @@ import type {
   DeploymentRecord,
   RepoRecord,
   RunRecord,
+  ValidationGateSummaryRecord,
   ValidationResultRecord,
 } from "@/lib/types";
 
 afterEach(cleanup);
+
+const emptyValidationSummary: ValidationGateSummaryRecord = {
+  detail: "No validation gates have completed for this run yet.",
+  gates: [],
+  state: "empty",
+};
 
 describe("portal reusable components", () => {
   it("renders explicit empty states for reusable list summaries", () => {
@@ -60,6 +68,93 @@ describe("portal reusable components", () => {
     render(<ValidationResultSummary results={[result]} />);
     expect(screen.queryByRole("link", { name: "Open Unsafe evidence" })).toBeNull();
     expect(screen.getByText("Invalid Evidence Link")).toBeTruthy();
+  });
+
+  it("renders validation gate pass, fail, skipped, and raw artifact states", () => {
+    const summary: ValidationGateSummaryRecord = {
+      detail: "Validation report: 1 passed, 1 failed, 1 skipped.",
+      generatedAt: "2026-07-08T16:00:00.000Z",
+      state: "ready",
+      gates: [
+        {
+          command: "bun run format:check",
+          detail: "Biome formatting passed.",
+          duration: "1.8s",
+          key: "format",
+          name: "Format check",
+          outcome: "pass",
+          phase: "before_review",
+          rawArtifactHref: "artifact://validation/format.log",
+          required: true,
+        },
+        {
+          command: "bun run test",
+          detail: "A focused unit test failed.",
+          duration: "1m 12s",
+          key: "unit-tests",
+          name: "Unit tests",
+          outcome: "fail",
+          phase: "before_review",
+          rawArtifactHref: "javascript:alert(1)",
+          required: true,
+        },
+        {
+          command: "bun run test:e2e",
+          detail: "No browser-impacting change in this fixture.",
+          duration: "0s",
+          key: "playwright",
+          name: "Playwright",
+          outcome: "skipped",
+          phase: "before_rollout",
+          required: false,
+        },
+      ],
+    };
+
+    render(<ValidationGateSummary summary={summary} />);
+
+    expect(screen.getByRole("region", { name: "Validation gates" })).toBeTruthy();
+    expect(screen.getByText("Format check")).toBeTruthy();
+    expect(screen.getByText("Unit tests")).toBeTruthy();
+    expect(screen.getByText("Playwright")).toBeTruthy();
+    expect(screen.getByText("Passed")).toBeTruthy();
+    expect(screen.getByText("Failed")).toBeTruthy();
+    expect(screen.getByText("Skipped")).toBeTruthy();
+    expect(screen.getAllByText("Required")).toHaveLength(2);
+    expect(screen.getByText("Optional")).toBeTruthy();
+    expect(screen.getByText("bun run format:check")).toBeTruthy();
+    expect(screen.getByText("Biome formatting passed.")).toBeTruthy();
+    expect(screen.getByText("Biome formatting passed.").className).toContain("break-words");
+    expect(
+      screen.getByRole("link", { name: "Open raw artifact for Format check" }).getAttribute("href"),
+    ).toBe("artifact://validation/format.log");
+    expect(screen.queryByRole("link", { name: "Open raw artifact for Unit tests" })).toBeNull();
+    expect(screen.getByText("Invalid raw artifact link")).toBeTruthy();
+    expect(screen.getByText("No raw artifact")).toBeTruthy();
+  });
+
+  it("renders stable validation gate empty, loading, and error states", () => {
+    render(<ValidationGateSummary summary={emptyValidationSummary} />);
+    expect(screen.getByText("No validation gates yet")).toBeTruthy();
+    expect(screen.getByText("No validation gates have completed for this run yet.")).toBeTruthy();
+
+    cleanup();
+    render(<ValidationGateSummary loading summary={emptyValidationSummary} />);
+    expect(screen.getByText("Loading validation gates")).toBeTruthy();
+    expect(screen.queryByText("No validation gates yet")).toBeNull();
+
+    cleanup();
+    render(
+      <ValidationGateSummary
+        summary={{
+          detail: "Validation report metadata could not be parsed.",
+          gates: [],
+          state: "error",
+        }}
+      />,
+    );
+    expect(screen.getByText("Validation summary unavailable")).toBeTruthy();
+    expect(screen.getByText("Validation report metadata could not be parsed.")).toBeTruthy();
   });
 
   it("renders the shared agent-ready development run timeline and artifact contract", () => {
@@ -135,6 +230,7 @@ describe("portal reusable components", () => {
             kind: "review",
           },
         ],
+        validationSummary: emptyValidationSummary,
         steps: [
           {
             id: "step-review",
@@ -161,6 +257,7 @@ describe("portal reusable components", () => {
         blockedReason: "Blocked on missing Vercel scope grant.",
         approvals: [],
         artifacts: [],
+        validationSummary: emptyValidationSummary,
         steps: [],
       },
     ];
