@@ -124,13 +124,34 @@ describe("seed-demo-data CLI", () => {
     }
   });
 
+  it("requires an explicit DATABASE_URL before seeding", async () => {
+    const seedSpy = vi.fn(async () => emptyCounts());
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const exitCode = await runSeedCli(
+      [],
+      { NODE_ENV: "development" },
+      {
+        seedDemoData: seedSpy,
+        database: fakeDatabase,
+      },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(seedSpy).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.flat().join(" ")).not.toContain("DATABASE_URL=");
+  });
+
   it("seeds successfully in a non-production environment", async () => {
     const seedSpy = vi.fn(async () => ({ ...emptyCounts(), repositories: 4 }));
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     const exitCode = await runSeedCli(
       [],
-      { NODE_ENV: "development" },
+      {
+        NODE_ENV: "development",
+        DATABASE_URL: "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks",
+      },
       {
         seedDemoData: seedSpy,
         database: fakeDatabase,
@@ -147,7 +168,10 @@ describe("seed-demo-data CLI", () => {
 
     const exitCode = await runSeedCli(
       ["--reset"],
-      { NODE_ENV: "development" },
+      {
+        NODE_ENV: "development",
+        DATABASE_URL: "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks",
+      },
       {
         seedDemoData: seedSpy,
         database: fakeDatabase,
@@ -164,7 +188,10 @@ describe("seed-demo-data CLI", () => {
 
     const exitCode = await runSeedCli(
       ["--dry-run"],
-      { NODE_ENV: "development" },
+      {
+        NODE_ENV: "development",
+        DATABASE_URL: "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks",
+      },
       {
         seedDemoData: seedSpy,
         database: fakeDatabase,

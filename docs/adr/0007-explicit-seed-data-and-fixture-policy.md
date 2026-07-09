@@ -26,13 +26,19 @@ Seed data must never contain real tokens, private keys, customer data, or secret
 3. Logs include fallback reasons without logging secrets or raw payloads.
 4. Playwright and Storybook exercise fixture data intentionally.
 5. Production environments reject unsafe local auth bypasses and unsupported in-memory stores.
-6. `bun run db:seed` / `bun run db:seed:reset` refuse to run when either the
-   runtime looks like production (`NODE_ENV`/`VERCEL_ENV`) or `DATABASE_URL`
-   does not point at a loopback host, before touching the database. Portal
+6. `bun run db:seed` / `bun run db:seed:reset` require an explicit Postgres
+   `DATABASE_URL` and refuse to run when either the runtime looks like
+   production (`NODE_ENV`/`VERCEL_ENV`) or the URL does not point at a loopback
+   host, before touching the database. Portal
    pages that are still fixture-only render an explicit degraded notice, and
    log a structured warning identifying the fixture-gate reason, instead of
    fixture data in production. See `tests/unit/scripts/seed-demo-data.test.ts`,
    `tests/unit/lib/runtime.test.ts`, and `tests/unit/portal/fixture-gated-page.test.tsx`.
+7. Database-mutating test orchestration validates its target before migrations
+   as well as before seeding. The seeded Playwright lane requires the dedicated
+   loopback `loopworks_e2e` database; the normal Playwright lane enables an
+   explicit non-production fixture mode and proves fixture fallback. Production
+   ignores that mode and continues to fail closed.
 
 ## Follow-Ups
 
@@ -50,8 +56,8 @@ Seed data must never contain real tokens, private keys, customer data, or secret
    Verified by `tests/unit/seed/demo-data.test.ts`.
 3. **Done.** Tests that fixture fallback cannot run in production:
    `scripts/seed-demo-data.ts` checks `isProductionRuntime()` **and** that
-   `DATABASE_URL` resolves to a loopback host, before any database dependency
-   is touched, and refuses to seed if either check fails
+   `DATABASE_URL` is explicit Postgres and resolves to a loopback host, before
+   any database dependency is touched, and refuses to seed if either check fails
    (`tests/unit/scripts/seed-demo-data.test.ts`). The `DATABASE_URL` check
    exists because a runtime-label check alone is not sufficient: an
    operator's local shell can have `DATABASE_URL` pointed at a real Postgres
@@ -80,3 +86,9 @@ Seed data must never contain real tokens, private keys, customer data, or secret
      `src/components/ui/status-badge.tsx` if it introduces a new status value.
    - Add or update the relevant Storybook story so the state is reviewable in
      isolation, per `src/components/AGENTS.md`.
+5. **Done.** Seeded Postgres Playwright coverage uses a separate command and CI
+   job. Its preparation runner validates the dedicated `loopworks_e2e` target
+   before migrations, then migrates, resets the fixed-id demo data, and runs
+   browser assertions that require live database labels and representative
+   rows across dashboard, catalog, loops, approvals, and settings. The fixture
+   Playwright command remains separate and deterministic.

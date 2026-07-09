@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:seeded": "bun run scripts/test-seeded-postgres.ts",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
     "review:ui": "bun run scripts/review-ui.mjs",

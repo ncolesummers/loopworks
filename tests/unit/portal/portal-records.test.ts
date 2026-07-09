@@ -136,6 +136,59 @@ describe("portal records (pglite integration)", () => {
     expect(result.records.loops).toEqual(portalFixture.loops);
   });
 
+  it("uses explicit non-production fixture mode without reading the database", async () => {
+    const database = {
+      select: vi.fn(() => {
+        throw new Error("database should not be read");
+      }),
+    };
+    const logger = {
+      warn: vi.fn(),
+    };
+
+    const result = await getPortalRecordsForPortal({
+      database: database as never,
+      env: {
+        LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
+        NODE_ENV: "development",
+      },
+      logger: logger as never,
+    });
+
+    expect(database.select).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      fallbackReason: "explicit_fixture_mode",
+      source: "fixtures",
+      usedFallback: true,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      { fallbackReason: "explicit_fixture_mode" },
+      "portal_records_fixture_mode_enabled",
+    );
+  });
+
+  it("never honors explicit fixture mode in production", async () => {
+    const unavailableDatabase = {
+      select: vi.fn(() => {
+        throw new Error("database unavailable");
+      }),
+    };
+
+    const result = await getPortalRecordsForPortal({
+      database: unavailableDatabase as never,
+      env: {
+        LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
+        NODE_ENV: "production",
+      },
+    });
+
+    expect(unavailableDatabase.select).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      source: "unavailable",
+      usedFallback: false,
+    });
+  });
+
   it("never returns fixtures for unavailable production database reads", async () => {
     const unavailableDatabase = {
       select() {

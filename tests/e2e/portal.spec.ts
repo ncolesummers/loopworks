@@ -23,7 +23,7 @@ const portalRoutes = [
   },
 ] as const;
 
-const portalSourceLabel = /Live database|Fixture fallback/;
+const portalSourceLabel = "Fixture fallback";
 const dbBackedPortalPaths = ["/", "/catalog", "/loops", "/approvals", "/settings"] as const;
 
 test.describe("Loopworks portal", () => {
@@ -72,7 +72,7 @@ test.describe("Loopworks portal", () => {
   test("shows explicit portal data source labels on database-backed pages", async ({ page }) => {
     for (const path of dbBackedPortalPaths) {
       await page.goto(path);
-      await expect(page.getByText(portalSourceLabel).first()).toBeVisible();
+      await expect(page.getByText(portalSourceLabel, { exact: true }).first()).toBeVisible();
     }
   });
 
@@ -341,7 +341,7 @@ test.describe("Loopworks portal", () => {
 
     for (const path of dbBackedPortalPaths) {
       await page.goto(path);
-      await expect(page.getByText(portalSourceLabel).first()).toBeVisible();
+      await expect(page.getByText(portalSourceLabel, { exact: true }).first()).toBeVisible();
 
       const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
       const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);

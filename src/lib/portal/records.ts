@@ -466,13 +466,28 @@ export async function getPortalRecordsForPortal(input: {
   logger?: LoopworksLogger;
   now?: Date;
 }): Promise<PortalRecordsResult> {
+  const env = input.env ?? process.env;
+  if (!isProductionRuntime(env) && env.LOOPWORKS_PORTAL_DATA_MODE === "fixtures") {
+    input.logger?.warn(
+      { fallbackReason: "explicit_fixture_mode" },
+      "portal_records_fixture_mode_enabled",
+    );
+
+    return {
+      fallbackReason: "explicit_fixture_mode",
+      records: fixturePortalRecords(),
+      source: "fixtures",
+      usedFallback: true,
+    };
+  }
+
   try {
     const result = await readPortalRecords({
       database: input.database,
       now: input.now,
     });
 
-    if (isProductionRuntime(input.env) && !hasRequiredPortalData(result.records)) {
+    if (isProductionRuntime(env) && !hasRequiredPortalData(result.records)) {
       input.logger?.warn(
         {
           approvalCount: result.records.approval ? 1 : 0,
@@ -496,7 +511,7 @@ export async function getPortalRecordsForPortal(input: {
       "portal_records_read_failed",
     );
 
-    if (isProductionRuntime(input.env)) {
+    if (isProductionRuntime(env)) {
       return unavailableResult();
     }
 
