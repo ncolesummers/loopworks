@@ -124,9 +124,16 @@ function repoMatchesSearch(repo: RepoRecord, query: string) {
 }
 
 export function RepoCatalog({
+  emptyDetail = "Connect a GitHub installation or adjust repo filters to populate the catalog.",
   repos,
   loading = false,
-}: Readonly<{ repos: RepoRecord[]; loading?: boolean }>) {
+  sourceLabel,
+}: Readonly<{
+  emptyDetail?: string;
+  repos: RepoRecord[];
+  loading?: boolean;
+  sourceLabel?: string;
+}>) {
   const [searchQuery, setSearchQuery] = useState("");
   const [healthFilter, setHealthFilter] = useState<RepoHealthFilter>("all");
 
@@ -150,12 +157,19 @@ export function RepoCatalog({
             portal is tracking.
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" asChild>
-          <Link href="/github">
-            <Settings2 className="h-4 w-4" />
-            Repo filters
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {sourceLabel ? (
+            <span className="inline-flex h-6 items-center rounded-md border bg-background px-2 text-xs font-medium">
+              {sourceLabel}
+            </span>
+          ) : null}
+          <Button variant="outline" size="sm" className="gap-2" asChild>
+            <Link href="/github">
+              <Settings2 className="h-4 w-4" />
+              Repo filters
+            </Link>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent id="repos">
         {loading ? (
@@ -165,11 +179,7 @@ export function RepoCatalog({
             status="loading"
           />
         ) : repos.length === 0 ? (
-          <CatalogState
-            title="No repositories tracked"
-            detail="Connect a GitHub installation or adjust repo filters to populate the catalog."
-            status="empty"
-          />
+          <CatalogState title="No repositories tracked" detail={emptyDetail} status="empty" />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">

@@ -8,6 +8,7 @@ const meta = {
   component: ApprovalGatePanel,
   args: {
     approval: portalFixture.approval,
+    sourceLabel: "Fixture fallback",
   },
 } satisfies Meta<typeof ApprovalGatePanel>;
 
