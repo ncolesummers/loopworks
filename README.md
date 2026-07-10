@@ -50,6 +50,7 @@ Copy `.env.example` to `.env.local` for local development. The fixture server on
 - `LOOPWORKS_AGENT_READY_LOOP_ENABLED`
 - `LOOPWORKS_DEVELOPMENT_LOOP_ENABLED`
 - `LOOPWORKS_RESEARCH_LOOP_ENABLED`
+- `LOOPWORKS_PORTAL_DATA_MODE`
 - `LOG_LEVEL`
 - `DATABASE_URL`
 - `OTEL_EXPORTER_OTLP_PROTOCOL`
@@ -87,6 +88,27 @@ bun run storybook:build
 bun run test:e2e
 ```
 
+`bun run test:e2e` owns a fresh development server with explicit non-production
+fixture mode. It deterministically verifies the `Fixture fallback` path and
+does not attach to an existing server. `LOOPWORKS_PORTAL_DATA_MODE=fixtures`
+is ignored in production, where database failures continue to fail closed.
+
+The seeded Postgres browser lane is separate. It requires a local
+`loopworks_e2e` database owned by the `loopworks` role:
+
+```bash
+createdb --host 127.0.0.1 --username loopworks loopworks_e2e
+DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
+  bun run test:e2e:seeded
+```
+
+The seeded command refuses production runtimes, non-Postgres URLs,
+non-loopback hosts, and database names other than `loopworks_e2e` before it
+runs migrations. It then runs migrations, resets only the fixed-id demo rows,
+and requires `Live database` browser evidence. Migration or seed failures name
+the failed stage; confirm Postgres is running and that the local role and
+database exist.
+
 The aggregate command is:
 
 ```bash
@@ -120,7 +142,10 @@ The pre-commit hook runs `bun run precommit`, which mirrors CI validation: Biome
 
 ## Database Seed Data
 
-After the database bootstrap (`bun run db:migrate`), seed a demo dataset covering repos, loops, runs, run steps, artifacts, approvals, and Vercel deployment states in every status:
+After the database bootstrap (`bun run db:migrate`), seed a demo dataset
+covering repos, loops, runs, run steps, artifacts, approvals, and Vercel
+deployment states in every status. `DATABASE_URL` must explicitly identify a
+local Postgres database:
 
 ```bash
 bun run db:seed
@@ -134,4 +159,10 @@ bun run db:seed:reset
 
 Reset only deletes the exact rows this script owns, not the whole table, so any other data in those tables is left untouched.
 
-Add `-- --dry-run` to either command to print the planned row counts without writing. Per [ADR 0007](docs/adr/0007-explicit-seed-data-and-fixture-policy.md), both commands refuse to run when `NODE_ENV` or `VERCEL_ENV` is `production`, or when `DATABASE_URL` does not point at a loopback host (`localhost`/`127.0.0.1`/`::1`) — Loopworks demo data must never write into a database that isn't obviously local.
+Add `-- --dry-run` to either command to print the planned row counts without
+writing. Per
+[ADR 0007](docs/adr/0007-explicit-seed-data-and-fixture-policy.md), both
+commands refuse to run when `DATABASE_URL` is missing or malformed, when
+`NODE_ENV` or `VERCEL_ENV` is `production`, or when the URL is not Postgres on
+a loopback host (`localhost`/`127.0.0.1`/`::1`) — Loopworks demo data must never
+write into a database that isn't explicitly and obviously local.

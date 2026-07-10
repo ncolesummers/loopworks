@@ -291,7 +291,7 @@ export function DashboardView({
         <div className="min-w-0">
           <Tabs defaultValue="overview" className="w-full">
             <Card className="shadow-none">
-              <CardHeader className="flex-row items-end justify-between gap-4">
+              <CardHeader className="gap-4 md:flex-row md:items-end md:justify-between">
                 <div className="space-y-1">
                   <CardTitle>Workflow lens</CardTitle>
                   <CardDescription>

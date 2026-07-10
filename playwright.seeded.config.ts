@@ -8,28 +8,24 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:3100",
     trace: "on-first-retry",
   },
   webServer: {
-    command: "bun run dev:fixture",
-    url: "http://127.0.0.1:3000",
+    command: "bun run dev:fixture -- -p 3100",
+    url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
-      LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
+      DATABASE_URL: process.env.DATABASE_URL ?? "",
+      LOOPWORKS_PORTAL_DATA_MODE: "",
     },
   },
   projects: [
     {
-      name: "chromium",
+      name: "seeded-postgres",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /portal\.spec\.ts/,
-    },
-    {
-      name: "auth-guard",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /auth-guard\.spec\.ts/,
+      testMatch: /seeded-postgres\.spec\.ts/,
     },
   ],
 });

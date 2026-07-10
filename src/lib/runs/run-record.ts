@@ -474,6 +474,21 @@ export async function getRunRecordsForPortal(input: {
   logger?: LoopworksLogger;
   now?: Date;
 }): Promise<RunRecordsResult> {
+  const env = input.env ?? process.env;
+  if (!isProductionRuntime(env) && env.LOOPWORKS_PORTAL_DATA_MODE === "fixtures") {
+    input.logger?.warn(
+      { fallbackReason: "explicit_fixture_mode" },
+      "run_records_fixture_mode_enabled",
+    );
+
+    return {
+      fallbackReason: "explicit_fixture_mode",
+      runs: input.fixtureRuns,
+      source: "fixtures",
+      usedFallback: true,
+    };
+  }
+
   try {
     return await readRunRecords({
       database: input.database,
@@ -487,7 +502,7 @@ export async function getRunRecordsForPortal(input: {
       "run_records_read_failed",
     );
 
-    if (isProductionRuntime(input.env)) {
+    if (isProductionRuntime(env)) {
       return {
         error: "Run data store unavailable.",
         runs: [],

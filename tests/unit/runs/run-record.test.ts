@@ -6,7 +6,11 @@ import {
   createValidationReportArtifactMetadata,
   type ValidationReportV1,
 } from "@/lib/loops/validation-report";
-import { readRunRecords, getRunRecordsForResult } from "@/lib/runs/run-record";
+import {
+  getRunRecordsForPortal,
+  getRunRecordsForResult,
+  readRunRecords,
+} from "@/lib/runs/run-record";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
 import { demoSeedIds, seedDemoData, type SeedDatabase } from "@/lib/seed/demo-data";
 
@@ -371,5 +375,55 @@ describe("run records (pglite integration)", () => {
         fixtureRuns,
       ),
     ).toEqual([]);
+  });
+
+  it("uses explicit non-production fixture mode without reading run records", async () => {
+    const fixtureRuns = buildRunFixtureRecords();
+    const database = {
+      select: vi.fn(() => {
+        throw new Error("database should not be read");
+      }),
+    };
+
+    const result = await getRunRecordsForPortal({
+      database: database as never,
+      env: {
+        LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
+        NODE_ENV: "development",
+      },
+      fixtureRuns,
+    });
+
+    expect(database.select).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      fallbackReason: "explicit_fixture_mode",
+      runs: fixtureRuns,
+      source: "fixtures",
+      usedFallback: true,
+    });
+  });
+
+  it("never honors explicit run fixture mode in production", async () => {
+    const fixtureRuns = buildRunFixtureRecords();
+    const database = {
+      select: vi.fn(() => {
+        throw new Error("database unavailable");
+      }),
+    };
+
+    const result = await getRunRecordsForPortal({
+      database: database as never,
+      env: {
+        LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
+        NODE_ENV: "production",
+      },
+      fixtureRuns,
+    });
+
+    expect(database.select).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      source: "unavailable",
+      usedFallback: false,
+    });
   });
 });

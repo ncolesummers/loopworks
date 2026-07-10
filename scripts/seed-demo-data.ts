@@ -1,39 +1,13 @@
 #!/usr/bin/env bun
 
-import { isIP } from "node:net";
-
 import { db } from "@/db/client";
-import { isProductionRuntime } from "@/lib/runtime";
 import {
   buildDemoSeedData,
   type SeedCounts,
   type SeedDatabase,
   seedDemoData,
 } from "@/lib/seed/demo-data";
-
-const defaultLocalDatabaseUrl = "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks";
-
-/**
- * Mirrors `isLoopbackWebhookUrl` in `scripts/github-webhook-fixture.ts`. The
- * production-runtime check alone is not enough: an operator's shell can have
- * `DATABASE_URL` pointed at a real (non-production-labeled) Postgres host
- * while `NODE_ENV`/`VERCEL_ENV` are unset. Seeding must refuse that too.
- */
-function isLoopbackDatabaseUrl(value: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return false;
-  }
-
-  return (
-    parsed.hostname === "localhost" ||
-    parsed.hostname === "::1" ||
-    parsed.hostname === "[::1]" ||
-    (isIP(parsed.hostname) === 4 && parsed.hostname.split(".")[0] === "127")
-  );
-}
+import { getLocalDatabaseSafetyError } from "./local-database-safety";
 
 export type RunSeedCliDependencies = {
   database: SeedDatabase;
@@ -97,22 +71,9 @@ export async function runSeedCli(
     return 1;
   }
 
-  if (isProductionRuntime(env)) {
-    console.error(
-      "Refusing to seed demo data: this looks like a production environment " +
-        "(NODE_ENV or VERCEL_ENV is 'production'). Loopworks demo seed data must " +
-        "never run against production, per ADR 0007.",
-    );
-    return 1;
-  }
-
-  if (!isLoopbackDatabaseUrl(env.DATABASE_URL ?? defaultLocalDatabaseUrl)) {
-    console.error(
-      "Refusing to seed demo data: DATABASE_URL does not point at a loopback " +
-        "host (localhost/127.0.0.1/::1). Loopworks demo seed data must only run " +
-        "against a local Postgres instance, per ADR 0007 - a production-labeled " +
-        "runtime is not the only way this could write into a real database.",
-    );
+  const safetyError = getLocalDatabaseSafetyError(env, { requireExplicitUrl: true });
+  if (safetyError) {
+    console.error(safetyError);
     return 1;
   }
 
