@@ -12,9 +12,11 @@ import {
 export async function RunsPageContent({
   database = db,
   env = process.env,
+  initialRunId,
 }: Readonly<{
   database?: RunRecordDatabase;
   env?: Partial<NodeJS.ProcessEnv>;
+  initialRunId?: string;
 }> = {}) {
   const requestLogger = createRequestLogger({
     route: "portal.runs",
@@ -33,6 +35,7 @@ export async function RunsPageContent({
       <h1 className="sr-only">Runs</h1>
       <h2 className="sr-only">Run history</h2>
       <RunRecordsView
+        initialRunId={initialRunId}
         runs={runs}
         sourceLabel={getRunSourceLabel(result)}
         emptyDetail={result.source === "unavailable" ? result.error : undefined}
@@ -41,6 +44,11 @@ export async function RunsPageContent({
   );
 }
 
-export default async function RunsPage() {
-  return <RunsPageContent />;
+export default async function RunsPage({
+  searchParams,
+}: Readonly<{
+  searchParams?: Promise<{ run?: string | string[] }>;
+}>) {
+  const run = (await searchParams)?.run;
+  return <RunsPageContent initialRunId={typeof run === "string" ? run : undefined} />;
 }

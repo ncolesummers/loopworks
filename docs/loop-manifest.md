@@ -126,6 +126,44 @@ validation artifacts carry `validationReportMetadataKind:
 validation_report_result`, `validationReportSchemaId`, and the parseable V1
 report payload.
 
+## PR Intent And Guarded Creation
+
+The PR stage persists `loopworks.pr_intent.v1`. The strict versioned payload
+contains the deterministic PR title and body, source-issue and run links,
+`validation_report.v1` summary and artifact link, ordered safe artifact links,
+optional deployment context, and the SHA-256 change digest used for a live
+commit. It does not accept raw prompts, validation stdout or stderr, arbitrary
+artifact metadata, credentials, or credential-bearing URLs. Secret-like text
+selected from persisted titles is redacted before composition.
+
+Queued PR artifacts use `pr_intent_contract` metadata with the expected schema
+id and version. Completed artifacts use `pr_intent_result` metadata containing
+the parseable payload and, for live mode, the confirmed GitHub PR number, URL,
+head branch, and head SHA.
+
+Both execution modes use the same transition boundary:
+
+1. Validation must have advanced with every repository-required gate present
+   and passing; code review and commit predecessor steps must have succeeded.
+2. Exactly one `external-write-review` approval must be `approved`. Live mode
+   also requires its `prChangeDigest` evidence to match the normalized commit
+   message and file bytes exactly; bypassed approvals do not qualify.
+3. Development mode persists the artifact without constructing a GitHub client
+   or using network and non-loopback services.
+4. Live mode uses a GitHub App installation token, creates a deterministic
+   `loopworks/run-{runId}` branch and marked commit, and opens a draft PR.
+5. An active approval carries a short-lived write claim so ordinary approval
+   transitions cannot race the GitHub mutation. The approval becomes `applied`
+   only after GitHub confirmation and durable finalization.
+6. Provider failures store only typed failure codes, leave the PR step failed
+   and inspectable, and reuse the existing retry transition. Replays verify the
+   run and change markers before reconciling an existing branch or PR.
+
+GitHub writes occur outside the database transaction. The deterministic branch,
+commit trailers, change digest, and existing-PR lookup are the reconciliation
+key if the process stops between provider success and local finalization. See
+[ADR 0014](adr/0014-guarded-github-pr-write-reconciliation.md).
+
 ## Operating Rules
 
 1. Do not advance a loop without recording why the state changed.

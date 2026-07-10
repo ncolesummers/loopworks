@@ -12,6 +12,7 @@ import {
   runSteps,
 } from "@/db/schema";
 import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
+import { createPrIntentArtifactContractMetadata } from "@/lib/loops/pr-intent";
 import { recordDevelopmentLoopRunCreatedObservability } from "@/lib/observability/metrics";
 import { getActiveTraceId, isValidW3cTraceId } from "@/lib/observability/trace-context";
 import { createValidationReportArtifactContractMetadata } from "@/lib/loops/validation-report";
@@ -398,6 +399,7 @@ export async function createDevelopmentLoopRun(input: {
           deliveryId: input.trigger.deliveryId,
           labels: input.trigger.labels ?? [],
           milestone: input.trigger.milestone ?? null,
+          issueTitle: input.trigger.title ?? `Issue #${input.trigger.issueNumber}`,
           source: "github_issue",
           stageCount: skeleton.stages.length,
         },
@@ -441,6 +443,7 @@ export async function createDevelopmentLoopRun(input: {
                   detail: artifact.detail,
                 })
               : {}),
+            ...(artifact.type === "pr_intent" ? createPrIntentArtifactContractMetadata() : {}),
           },
           runId,
           stepId: stepIds[index],

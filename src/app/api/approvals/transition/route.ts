@@ -5,6 +5,7 @@ import { applyApprovalTransition } from "@/lib/approval-transitions";
 import {
   ApprovalExpectedStatusError,
   ApprovalNotFoundError,
+  ApprovalWriteInProgressError,
   type ApprovalTransitionDatabase,
   ApprovalTransitionError,
   approvalActionValues,
@@ -108,6 +109,17 @@ export async function handleApprovalTransitionPost(
       { status: 200 },
     );
   } catch (error) {
+    if (error instanceof ApprovalWriteInProgressError) {
+      requestLogger.warn(
+        { approvalId: error.approvalId },
+        "approval_transition_external_write_in_progress",
+      );
+      return NextResponse.json(
+        { approvalId: error.approvalId, error: error.message },
+        { status: 409 },
+      );
+    }
+
     if (error instanceof ApprovalNotFoundError) {
       requestLogger.warn(
         {

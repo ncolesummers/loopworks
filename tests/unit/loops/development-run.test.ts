@@ -19,6 +19,7 @@ import {
   recordDevelopmentLoopNoop,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
+import { prIntentSchemaId } from "@/lib/loops/pr-intent";
 import { validationReportSchemaId } from "@/lib/loops/validation-runner";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
@@ -190,6 +191,11 @@ describe("agent-ready development loop run skeleton", () => {
         validationReportVersion: 1,
       }),
     ]);
+    expect(artifactRows.find((artifact) => artifact.type === "pr_intent")?.metadata).toMatchObject({
+      expectedPrIntentSchemaId: prIntentSchemaId,
+      prIntentMetadataKind: "pr_intent_contract",
+      prIntentVersion: 1,
+    });
     expect(planRows).toHaveLength(1);
     expect(planRows[0]).toMatchObject({
       agentName: "planning-agent",

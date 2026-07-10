@@ -77,6 +77,9 @@ describe("loop manifest schema", () => {
         }),
       ]),
     );
+    expect(developmentLoop.artifacts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "pr_intent", required: true })]),
+    );
     expect(developmentLoop.retryPolicy).toMatchObject({
       maxAttempts: 2,
       retryableStatuses: [...retryableStatusValues],

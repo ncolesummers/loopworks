@@ -244,6 +244,45 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByText("morgan-dev")).toBeVisible();
   });
 
+  // Persona R01: persisted PR bodies can deep-link reviewers to the exact run.
+  test("run deep links select the requested evidence and fail safely for unknown ids", async ({
+    page,
+  }) => {
+    await page.goto("/runs?run=fixture-run-blocked");
+    await expect(page.getByRole("button", { name: /ncolesummers\/delivery-ops/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByText("Blocked on missing Vercel scope grant.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Validation report" })).toBeVisible();
+
+    await page.goto("/runs?run=fixture-run-succeeded");
+    await expect(page.getByRole("button", { name: /ncolesummers\/loopworks-web/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByRole("link", { name: "PR intent" })).toBeVisible();
+
+    await page.goto("/runs?run=unknown-run");
+    await expect(page.getByRole("button", { name: /ncolesummers\/loopworks-web/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("blocked run deep links remain usable at mobile width", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/runs?run=fixture-run-blocked");
+
+    await expect(page.getByRole("button", { name: /ncolesummers\/delivery-ops/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+
   test("validation gate summary stays readable at mobile width", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/runs");

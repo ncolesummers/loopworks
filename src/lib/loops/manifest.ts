@@ -95,7 +95,7 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
         },
         {
           type: "pr_intent",
-          required: false,
+          required: true,
           description: "Draft PR metadata prepared after validation and approval gates pass.",
           retention: "pr",
         },

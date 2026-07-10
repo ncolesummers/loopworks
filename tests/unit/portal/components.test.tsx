@@ -281,6 +281,17 @@ describe("portal reusable components", () => {
     expect(screen.getByText("Requested at 08:56")).toBeTruthy();
     expect(screen.getByText(/morgan-dev/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Approval evidence" })).toBeTruthy();
+
+    cleanup();
+    render(
+      <RunRecordsView initialRunId="run-blocked" runs={runs} sourceLabel="Fixture fallback" />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: /ncolesummers\/delivery-ops/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getAllByText("Blocked on missing Vercel scope grant.").length).toBeGreaterThan(0);
   });
 
   it("renders normalized Vercel deployment state, environment, metadata, and safe links", () => {
