@@ -60,6 +60,13 @@ export class ApprovalExpectedStatusError extends Error {
   }
 }
 
+export class ApprovalWriteInProgressError extends Error {
+  constructor(public readonly approvalId: string) {
+    super(`Approval ${approvalId} has an external write in progress.`);
+    this.name = "ApprovalWriteInProgressError";
+  }
+}
+
 const approvalTransitionMap: Record<
   ApprovalStatus,
   Partial<Record<ApprovalAction, ApprovalStatus>>

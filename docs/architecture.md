@@ -139,7 +139,7 @@ MVP capabilities:
 5. Label and milestone bootstrap script.
 6. Issue trigger for `agent-ready`.
 7. `spike` plus `agent-ready` classification for research workflows.
-8. PR creation path or PR intent artifact.
+8. Guarded draft-PR creation plus an offline PR-intent artifact path.
 
 Later capabilities:
 
@@ -147,7 +147,7 @@ Later capabilities:
 2. Durable issue comments with run links.
 3. GitHub Project field synchronization.
 4. ADR proposal generation from durable decisions.
-5. Branch and PR automation with stricter policy controls.
+5. Broader branch policies, merge automation, and non-PR GitHub writes.
 
 ## Vercel Integration
 

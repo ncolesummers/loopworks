@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 
 import type { Session } from "next-auth";
+import { eq } from "drizzle-orm";
 import {
   handleApprovalTransitionPost,
   POST as postApprovalTransition,
@@ -8,7 +9,7 @@ import {
 import { auth } from "@/auth";
 import { approvals, approvalTransitionEvents, loopRuns, repositories } from "@/db/schema";
 import { applyApprovalTransition } from "@/lib/approval-transitions";
-import type { ApprovalTransitionDatabase } from "@/lib/approvals";
+import { type ApprovalTransitionDatabase, ApprovalWriteInProgressError } from "@/lib/approvals";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
 vi.mock("@/auth", () => ({
@@ -147,6 +148,42 @@ describe("approval transition API", () => {
         gate: "pr-write",
       },
     ]);
+  });
+
+  it("refuses to cancel an approved gate while its external write claim is active", async () => {
+    const { approvalId } = await insertRequestedApproval();
+    await context.db
+      .update(approvals)
+      .set({
+        metadata: {
+          prWriteClaim: {
+            claimedAt: "2026-07-02T16:06:00.000Z",
+            changeDigest: `sha256:${"a".repeat(64)}`,
+          },
+        },
+        resolvedAt: new Date("2026-07-02T16:05:00.000Z"),
+        resolvedBy: "ncolesummers",
+        status: "approved",
+      })
+      .where(eq(approvals.id, approvalId));
+
+    await expect(
+      applyApprovalTransition({
+        action: "cancel",
+        actorId: "ncolesummers",
+        approvalId,
+        database: context.db as unknown as ApprovalTransitionDatabase,
+        expectedStatus: "approved",
+        occurredAt: new Date("2026-07-02T16:07:00.000Z"),
+      }),
+    ).rejects.toBeInstanceOf(ApprovalWriteInProgressError);
+
+    const [approval] = await context.db
+      .select()
+      .from(approvals)
+      .where(eq(approvals.id, approvalId));
+    expect(approval.status).toBe("approved");
+    expect(await context.db.select().from(approvalTransitionEvents)).toHaveLength(0);
   });
 
   it.each([

@@ -13,20 +13,25 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { RunRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function preferredInitialRun(runs: RunRecord[]): string | undefined {
+function preferredInitialRun(runs: RunRecord[], initialRunId?: string): string | undefined {
+  if (initialRunId && runs.some((run) => run.id === initialRunId)) {
+    return initialRunId;
+  }
   return runs.find((run) => run.status === "succeeded")?.id ?? runs[0]?.id;
 }
 
 export function RunRecordsView({
   runs,
   sourceLabel,
+  initialRunId,
   emptyDetail = "Run state will appear after the control-plane store is available.",
 }: Readonly<{
   emptyDetail?: string;
+  initialRunId?: string;
   runs: RunRecord[];
   sourceLabel: string;
 }>) {
-  const [selectedRunId, setSelectedRunId] = useState(() => preferredInitialRun(runs));
+  const [selectedRunId, setSelectedRunId] = useState(() => preferredInitialRun(runs, initialRunId));
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? runs[0],
     [runs, selectedRunId],

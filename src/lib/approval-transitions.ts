@@ -1,10 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { approvals, approvalTransitionEvents } from "@/db/schema";
 import {
   type ApprovalAction,
   ApprovalExpectedStatusError,
   ApprovalNotFoundError,
+  ApprovalWriteInProgressError,
   type ApprovalStatus,
   type ApprovalTransition,
   type ApprovalTransitionDatabase,
@@ -83,7 +84,15 @@ export async function applyApprovalTransition(
         resolvedAt: new Date(transition.occurredAt),
         ...(note ? { note } : {}),
       })
-      .where(and(eq(approvals.id, input.approvalId), eq(approvals.status, input.expectedStatus)))
+      .where(
+        and(
+          eq(approvals.id, input.approvalId),
+          eq(approvals.status, input.expectedStatus),
+          input.action === "apply"
+            ? undefined
+            : sql`not coalesce(${approvals.metadata} ? 'prWriteClaim', false)`,
+        ),
+      )
       .returning({
         id: approvals.id,
         requestedAt: approvals.requestedAt,
@@ -96,6 +105,7 @@ export async function applyApprovalTransition(
       const [currentApproval] = await tx
         .select({
           id: approvals.id,
+          metadata: approvals.metadata,
           status: approvals.status,
         })
         .from(approvals)
@@ -104,6 +114,13 @@ export async function applyApprovalTransition(
 
       if (!currentApproval) {
         throw new ApprovalNotFoundError(input.approvalId);
+      }
+
+      if (
+        currentApproval.status === input.expectedStatus &&
+        (currentApproval.metadata as { prWriteClaim?: unknown } | null)?.prWriteClaim
+      ) {
+        throw new ApprovalWriteInProgressError(input.approvalId);
       }
 
       throw new ApprovalExpectedStatusError(
