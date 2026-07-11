@@ -307,7 +307,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       duplicate: false,
       agentReadyTrigger: { shouldTrigger: true, workflow: "development" },
       developmentRun: {
-        artifactCount: 8,
+        artifactCount: 9,
         mode: "created",
         stageCount: 8,
       },
@@ -351,7 +351,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       .from(observabilityEvents)
       .where(eq(observabilityEvents.eventType, "development_loop_run_created"));
     expect(event.traceId).toBe(runRows[0]?.traceId);
-    expect(artifactRows).toHaveLength(8);
+    expect(artifactRows).toHaveLength(9);
     expect(planRows).toHaveLength(1);
 
     // A replayed delivery is rejected at the route boundary without creating new rows.
@@ -369,7 +369,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     expect(await context.db.select().from(idempotencyLocks)).toHaveLength(1);
     expect(await context.db.select().from(loopRuns)).toHaveLength(1);
     expect(await context.db.select().from(runSteps)).toHaveLength(8);
-    expect(await context.db.select().from(artifacts)).toHaveLength(8);
+    expect(await context.db.select().from(artifacts)).toHaveLength(9);
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
   });
 

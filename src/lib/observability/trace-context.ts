@@ -1,4 +1,10 @@
-import { trace, type Span, type SpanOptions, type Tracer } from "@opentelemetry/api";
+import {
+  type Span,
+  type SpanOptions,
+  SpanStatusCode,
+  type Tracer,
+  trace,
+} from "@opentelemetry/api";
 
 const w3cTraceIdPattern = /^[0-9a-f]{32}$/;
 const emptyTraceId = "00000000000000000000000000000000";
@@ -14,6 +20,15 @@ export function startLoopworksSpan(
   tracer = getLoopworksTracer(),
 ): Span {
   return tracer.startSpan(name, options);
+}
+
+export function markLoopworksSpanOk(span: Span): void {
+  span.setStatus({ code: SpanStatusCode.OK });
+}
+
+export function markLoopworksSpanError(span: Span, error: unknown): void {
+  span.recordException(error instanceof Error ? error : String(error));
+  span.setStatus({ code: SpanStatusCode.ERROR });
 }
 
 export function isValidW3cTraceId(traceId: unknown): traceId is string {

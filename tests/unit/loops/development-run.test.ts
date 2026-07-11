@@ -1,9 +1,11 @@
 /** @vitest-environment node */
-import { eq } from "drizzle-orm";
-import { context as otelContext, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
+import { redTestEvidenceSchemaId, testPlanSchemaId } from "@agent/test-writing-agent";
+import { context as otelContext, type Span, TraceFlags, trace } from "@opentelemetry/api";
+import { eq } from "drizzle-orm";
 import {
   agentPlans,
+  approvals,
   artifacts,
   loopRuns,
   observabilityEvents,
@@ -13,11 +15,11 @@ import {
 import {
   createDevelopmentLoopRun,
   createDevelopmentLoopRunSkeleton,
+  type DevelopmentLoopRunDatabase,
   developmentLoopStages,
   projectDevelopmentLoopArtifacts,
   projectDevelopmentLoopTimeline,
   recordDevelopmentLoopNoop,
-  type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import { prIntentSchemaId } from "@/lib/loops/pr-intent";
 import { validationReportSchemaId } from "@/lib/loops/validation-runner";
@@ -34,6 +36,10 @@ const issueTrigger = {
   labels: ["agent-ready", "area:loops", "area:agents", "loop:development", "priority:p0"],
   milestone: "M3 Durable Loop MVP",
   repositoryFullName: "ncolesummers/loopworks",
+  repositoryRevision: {
+    ref: "main",
+    commitSha: "a".repeat(40),
+  },
   title: "Agent-ready development loop skeleton",
 };
 
@@ -86,7 +92,11 @@ describe("agent-ready development loop run skeleton", () => {
       "pr",
       "done",
     ]);
-    expect(developmentLoopStages.every((stage) => stage.artifact.required)).toBe(true);
+    expect(
+      developmentLoopStages.every((stage) =>
+        stage.artifacts.every((artifact) => artifact.required),
+      ),
+    ).toBe(true);
     expect(developmentLoopStages.findIndex((stage) => stage.key === "validation")).toBeLessThan(
       developmentLoopStages.findIndex((stage) => stage.key === "code-review"),
     );
@@ -106,7 +116,7 @@ describe("agent-ready development loop run skeleton", () => {
     const artifactRecords = projectDevelopmentLoopArtifacts(skeleton);
 
     expect(skeleton.stages).toHaveLength(8);
-    expect(skeleton.artifacts).toHaveLength(8);
+    expect(skeleton.artifacts).toHaveLength(9);
     expect(timeline.map((event) => event.title)).toEqual([
       "Planning",
       "Test writing",
@@ -121,6 +131,7 @@ describe("agent-ready development loop run skeleton", () => {
     expect(artifactRecords.map((artifact) => artifact.label)).toEqual([
       "Plan artifact",
       "Red test evidence",
+      "Automated test plan",
       "Patch artifact",
       "Validation report",
       "Code review notes",
@@ -130,19 +141,20 @@ describe("agent-ready development loop run skeleton", () => {
     ]);
   });
 
-  it("creates one durable run, eight stage rows, eight artifacts, and an agent plan", async () => {
+  it("creates one durable run, eight stage rows, nine artifacts, and an agent plan", async () => {
     await insertRepository(context);
 
     const result = await withTestTrace(() =>
       createDevelopmentLoopRun({
         database: testDatabase(context),
         now: () => new Date("2026-07-02T16:00:00.000Z"),
+        traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
         trigger: issueTrigger,
       }),
     );
 
     expect(result).toMatchObject({
-      artifactCount: 8,
+      artifactCount: 9,
       mode: "created",
       stageCount: 8,
     });
@@ -151,6 +163,7 @@ describe("agent-ready development loop run skeleton", () => {
     const stepRows = await context.db.select().from(runSteps);
     const artifactRows = await context.db.select().from(artifacts);
     const planRows = await context.db.select().from(agentPlans);
+    const approvalRows = await context.db.select().from(approvals);
 
     expect(runRows).toHaveLength(1);
     expect(runRows[0]).toMatchObject({
@@ -173,32 +186,51 @@ describe("agent-ready development loop run skeleton", () => {
     expect(stepRows.map((step) => step.stage)).toEqual(
       developmentLoopStages.map((stage) => stage.key),
     );
-    expect(artifactRows).toHaveLength(8);
+    expect(artifactRows).toHaveLength(9);
     expect(artifactRows.every((artifact) => artifact.runId === runRows[0]?.id)).toBe(true);
     expect(
-      artifactRows
-        .filter((artifact) => artifact.type === "validation_report")
-        .map((artifact) => artifact.metadata),
-    ).toEqual([
-      expect.objectContaining({
-        expectedValidationReportSchemaId: validationReportSchemaId,
-        validationReportMetadataKind: "validation_report_contract",
-        validationReportVersion: 1,
-      }),
-      expect.objectContaining({
-        expectedValidationReportSchemaId: validationReportSchemaId,
-        validationReportMetadataKind: "validation_report_contract",
-        validationReportVersion: 1,
-      }),
-    ]);
+      artifactRows.find(
+        (artifact) =>
+          artifact.type === "validation_report" && artifact.metadata?.stage === "test-writing",
+      )?.metadata,
+    ).toMatchObject({
+      expectedRedTestEvidenceSchemaId: redTestEvidenceSchemaId,
+      redTestEvidenceMetadataKind: "red_test_evidence_contract",
+      redTestEvidenceVersion: 1,
+    });
+    expect(
+      artifactRows.find(
+        (artifact) =>
+          artifact.type === "validation_report" && artifact.metadata?.stage === "validation",
+      )?.metadata,
+    ).toMatchObject({
+      expectedValidationReportSchemaId: validationReportSchemaId,
+      validationReportMetadataKind: "validation_report_contract",
+      validationReportVersion: 1,
+    });
+    expect(artifactRows.find((artifact) => artifact.type === "test_plan")?.metadata).toMatchObject({
+      expectedTestPlanSchemaId: testPlanSchemaId,
+      testPlanMetadataKind: "test_plan_contract",
+      testPlanVersion: 1,
+    });
     expect(artifactRows.find((artifact) => artifact.type === "pr_intent")?.metadata).toMatchObject({
       expectedPrIntentSchemaId: prIntentSchemaId,
       prIntentMetadataKind: "pr_intent_contract",
       prIntentVersion: 1,
     });
     expect(planRows).toHaveLength(1);
+    expect(approvalRows).toHaveLength(1);
+    expect(approvalRows[0]).toMatchObject({
+      runId: runRows[0]?.id,
+      scope: "plan-review",
+      status: "requested",
+      metadata: {
+        planId: planRows[0]?.id,
+        planSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+    });
     expect(planRows[0]).toMatchObject({
-      agentName: "planning-agent",
+      agentName: "planner",
       issueNumber: 11,
       plan: expect.objectContaining({
         issue: expect.objectContaining({
@@ -241,7 +273,7 @@ describe("agent-ready development loop run skeleton", () => {
     expect(second).toEqual(first);
     expect(await context.db.select().from(loopRuns)).toHaveLength(1);
     expect(await context.db.select().from(runSteps)).toHaveLength(8);
-    expect(await context.db.select().from(artifacts)).toHaveLength(8);
+    expect(await context.db.select().from(artifacts)).toHaveLength(9);
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
   });
 

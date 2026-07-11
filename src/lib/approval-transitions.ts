@@ -1,14 +1,14 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import { approvals, approvalTransitionEvents } from "@/db/schema";
+import { agentPlans, approvals, approvalTransitionEvents, loopRuns, runSteps } from "@/db/schema";
 import {
   type ApprovalAction,
   ApprovalExpectedStatusError,
   ApprovalNotFoundError,
-  ApprovalWriteInProgressError,
   type ApprovalStatus,
   type ApprovalTransition,
   type ApprovalTransitionDatabase,
+  ApprovalWriteInProgressError,
   transitionApproval,
 } from "@/lib/approvals";
 import type { LoopworksLogger } from "@/lib/observability/logger";
@@ -95,6 +95,7 @@ export async function applyApprovalTransition(
       )
       .returning({
         id: approvals.id,
+        metadata: approvals.metadata,
         requestedAt: approvals.requestedAt,
         runId: approvals.runId,
         scope: approvals.scope,
@@ -144,6 +145,36 @@ export async function applyApprovalTransition(
       runId: approval.runId,
       toStatus: transition.to,
     });
+
+    if (approval.scope === "plan-review") {
+      const planId =
+        approval.metadata && typeof approval.metadata.planId === "string"
+          ? approval.metadata.planId
+          : undefined;
+      if (!planId) {
+        throw new Error("Plan-review approval metadata must include planId.");
+      }
+      if (!approval.runId) {
+        throw new Error("Plan-review approval must belong to a run.");
+      }
+      await tx
+        .update(agentPlans)
+        .set({ status: transition.to })
+        .where(and(eq(agentPlans.id, planId), eq(agentPlans.runId, approval.runId)));
+      await tx
+        .update(loopRuns)
+        .set({
+          ...(transition.to === "approved" ? { currentStage: "test-writing" } : {}),
+          status: transition.to === "approved" ? "running" : "blocked",
+        })
+        .where(eq(loopRuns.id, approval.runId));
+      if (transition.to === "approved") {
+        await tx
+          .update(runSteps)
+          .set({ status: "queued" })
+          .where(and(eq(runSteps.runId, approval.runId), eq(runSteps.stage, "test-writing")));
+      }
+    }
 
     input.logger?.info(
       {
