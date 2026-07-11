@@ -2,13 +2,15 @@ import { createHash } from "node:crypto";
 
 import { z } from "zod";
 
+import { canonicalJsonStringify } from "./lib/canonical-json";
+
 export const testWriterModelLabel = "openai/gpt-5.6-terra-xhigh";
 export const testPlanSchemaId = "loopworks.test_plan.v1";
 export const redTestEvidenceSchemaId = "loopworks.red_test_evidence.v1";
 export const maxTestPatchBytes = 256 * 1024;
 
 export function computeTestPlanDigest(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return createHash("sha256").update(canonicalJsonStringify(value)).digest("hex");
 }
 
 const safeTestPathPattern =

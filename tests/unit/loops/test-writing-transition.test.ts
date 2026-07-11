@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { createTestExecutionReceipt } from "@agent/subagents/test-writer/lib/tool-policy";
 import {
+  computeTestPlanDigest,
   redTestEvidenceSchemaId,
   type TestWritingAgentOutput,
   testPlanSchemaId,
@@ -87,7 +88,7 @@ function outputForPlan(plan: { id: string; sha256: string }): TestWritingAgentOu
       schemaId: redTestEvidenceSchemaId,
       planId: plan.id,
       planSha256: plan.sha256,
-      testPlanSha256: sha256(JSON.stringify(testPlan)),
+      testPlanSha256: computeTestPlanDigest(testPlan),
       results: [
         {
           id: "red-ac-1",
@@ -218,10 +219,10 @@ describe("test-writing stage transition", () => {
       ]),
     );
     expect(artifactRows.find((artifact) => artifact.type === "validation_report")?.sha256).toBe(
-      sha256(JSON.stringify(outputForPlan(prepared.plan).redEvidence)),
+      computeTestPlanDigest(outputForPlan(prepared.plan).redEvidence),
     );
     expect(artifactRows.find((artifact) => artifact.type === "test_plan")?.sha256).toBe(
-      sha256(JSON.stringify(outputForPlan(prepared.plan).testPlan)),
+      computeTestPlanDigest(outputForPlan(prepared.plan).testPlan),
     );
     expect(new Set(artifactRows.map((artifact) => artifact.sha256)).size).toBe(2);
   });

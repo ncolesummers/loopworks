@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 
 import {
+  computeTestPlanDigest,
   isAllowedFocusedTestCommand,
   isAllowedTestArtifactPath,
   redTestEvidenceSchemaId,
@@ -12,6 +13,18 @@ import {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function reverseKeyOrder(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reverseKeyOrder);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .reverse()
+        .map(([key, entry]) => [key, reverseKeyOrder(entry)]),
+    );
+  }
+  return value;
 }
 
 const patch = [
@@ -74,7 +87,7 @@ function validOutput() {
       schemaId: redTestEvidenceSchemaId,
       planId: testPlan.plan.id,
       planSha256: testPlan.plan.sha256,
-      testPlanSha256: sha256(JSON.stringify(testPlan)),
+      testPlanSha256: computeTestPlanDigest(testPlan),
       results: [
         {
           id: "red-1",
@@ -99,6 +112,12 @@ function validOutput() {
 }
 
 describe("Test-writing artifact contract", () => {
+  it("computes the same test-plan digest regardless of JSON key order", () => {
+    const testPlan = validOutput().testPlan;
+
+    expect(computeTestPlanDigest(reverseKeyOrder(testPlan))).toBe(computeTestPlanDigest(testPlan));
+  });
+
   it("accepts a complete AC-mapped test plan and expected-red evidence", () => {
     expect(testWritingAgentOutputSchema.parse(validOutput())).toMatchObject({
       model: "openai/gpt-5.6-terra-xhigh",
@@ -143,7 +162,7 @@ describe("Test-writing artifact contract", () => {
     test.path = "tests/unit/other.test.ts";
     test.command = "bun run test -- tests/unit/other.test.ts";
     patchEvidence.command = "bun run test -- tests/unit/other.test.ts";
-    mismatchedPatch.redEvidence.testPlanSha256 = sha256(JSON.stringify(mismatchedPatch.testPlan));
+    mismatchedPatch.redEvidence.testPlanSha256 = computeTestPlanDigest(mismatchedPatch.testPlan);
     expect(testWritingAgentOutputSchema.safeParse(mismatchedPatch).success).toBe(false);
   });
 
@@ -183,7 +202,7 @@ describe("Test-writing artifact contract", () => {
       unsafe.testPlan.patch.content = `${unsafe.testPlan.patch.content}\n${dangerousLine}`;
       unsafe.testPlan.patch.sha256 = sha256(unsafe.testPlan.patch.content);
       unsafe.testPlan.patch.byteCount = Buffer.byteLength(unsafe.testPlan.patch.content);
-      unsafe.redEvidence.testPlanSha256 = sha256(JSON.stringify(unsafe.testPlan));
+      unsafe.redEvidence.testPlanSha256 = computeTestPlanDigest(unsafe.testPlan);
       expect(testWritingAgentOutputSchema.safeParse(unsafe).success).toBe(false);
     }
 
@@ -191,7 +210,7 @@ describe("Test-writing artifact contract", () => {
     pathless.testPlan.patch.content = "+expect(false).toBe(true);";
     pathless.testPlan.patch.sha256 = sha256(pathless.testPlan.patch.content);
     pathless.testPlan.patch.byteCount = Buffer.byteLength(pathless.testPlan.patch.content);
-    pathless.redEvidence.testPlanSha256 = sha256(JSON.stringify(pathless.testPlan));
+    pathless.redEvidence.testPlanSha256 = computeTestPlanDigest(pathless.testPlan);
     expect(testWritingAgentOutputSchema.safeParse(pathless).success).toBe(false);
   });
 });

@@ -1,10 +1,24 @@
 /** @vitest-environment node */
 import {
+  computePlanningArtifactDigest,
   createPlanningAgentSeedPlan,
+  type PlanningAgentOutput,
   pinnedPlanningAgentOutputSchema,
   planningAgentModelLabel,
   planningAgentOutputSchema,
 } from "@agent/planning-agent";
+
+function reverseKeyOrder(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reverseKeyOrder);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .reverse()
+        .map(([key, entry]) => [key, reverseKeyOrder(entry)]),
+    );
+  }
+  return value;
+}
 
 const issue13Input = {
   repositoryFullName: "ncolesummers/loopworks",
@@ -26,6 +40,13 @@ const issue13Input = {
 };
 
 describe("Planning agent artifact contract", () => {
+  it("computes the same plan digest regardless of JSON key order", () => {
+    const plan = createPlanningAgentSeedPlan(issue13Input);
+    const reordered = reverseKeyOrder(plan) as PlanningAgentOutput;
+
+    expect(computePlanningArtifactDigest(reordered)).toBe(plan.identity.sha256);
+  });
+
   it("builds the issue #13 executable planning artifact shape", () => {
     const plan = createPlanningAgentSeedPlan(issue13Input);
 

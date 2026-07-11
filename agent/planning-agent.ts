@@ -5,6 +5,7 @@ import { z } from "zod";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 
 import { type LoopManifest, loopStateValues } from "../schemas/loop-manifest";
+import { canonicalJsonStringify } from "./lib/canonical-json";
 
 export const planningAgentModelLabel = "openai/gpt-5.6-sol-xhigh";
 
@@ -148,7 +149,7 @@ export function computePlanningArtifactDigest(
     ...artifact,
     identity: artifact.identity ? { id: artifact.identity.id } : undefined,
   };
-  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+  return createHash("sha256").update(canonicalJsonStringify(canonical)).digest("hex");
 }
 
 export const planningAgentDefinition = {

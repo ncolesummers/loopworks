@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
+import { canonicalJsonStringify } from "../../../lib/canonical-json";
 import {
   isAllowedFocusedTestCommand,
   isAllowedTestArtifactPath,
@@ -87,7 +88,7 @@ export function createTestExecutionReceipt(
   secret: string,
 ): string {
   if (!secret.trim()) throw new Error("Test execution receipt secret is required.");
-  return createHmac("sha256", secret).update(JSON.stringify(payload)).digest("hex");
+  return createHmac("sha256", secret).update(canonicalJsonStringify(payload)).digest("hex");
 }
 
 export function verifyTestExecutionReceipt(
