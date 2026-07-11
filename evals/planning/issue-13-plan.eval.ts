@@ -85,7 +85,7 @@ export default defineEval({
     const artifact = getPlanningArtifactCandidate(turn.data, t.reply, turn.toolCalls);
     const artifactText = JSON.stringify(artifact);
 
-    t.completed();
+    t.succeeded();
     t.noFailedActions();
     t.calledTool("emit_plan_artifact", {
       output: (output: unknown) => pinnedPlanningAgentOutputSchema.safeParse(output).success,
