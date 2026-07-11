@@ -27,7 +27,10 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function outputForPlan(plan: { id: string; sha256: string }): TestWritingAgentOutput {
+function outputForPlan(
+  plan: { id: string; sha256: string },
+  options: { receiptPlanSha256?: string } = {},
+): TestWritingAgentOutput {
   const patch = [
     "diff --git a/tests/unit/red.test.ts b/tests/unit/red.test.ts",
     "new file mode 100644",
@@ -76,6 +79,7 @@ function outputForPlan(plan: { id: string; sha256: string }): TestWritingAgentOu
       outcome: "expected_failure",
       outputSha256,
       patchSha256: testPlan.patch.sha256,
+      planSha256: options.receiptPlanSha256 ?? plan.sha256,
       testPaths: ["tests/unit/red.test.ts"],
     },
     "test-secret",
@@ -259,6 +263,19 @@ describe("test-writing stage transition", () => {
         runId: prepared.runId,
       }),
     ).rejects.toThrow(DevelopmentLoopTransitionError);
+  });
+
+  it("rejects red evidence receipts minted for a different plan digest", async () => {
+    const prepared = await prepareRun();
+
+    await expect(
+      applyDevelopmentLoopTestWritingResult({
+        database: context.db as unknown as DevelopmentLoopTransitionDatabase,
+        output: outputForPlan(prepared.plan, { receiptPlanSha256: "b".repeat(64) }),
+        receiptSecret: "test-secret",
+        runId: prepared.runId,
+      }),
+    ).rejects.toThrow("Red evidence receipt is invalid");
   });
 
   it("rejects self-attested evidence without a valid execution receipt", async () => {

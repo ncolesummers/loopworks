@@ -18,6 +18,7 @@ const inputSchema = z.object({
     .min(1),
   expectedAssertions: z.array(z.string().min(1)).min(1),
   patchSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  planSha256: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 export default defineTool({
@@ -68,6 +69,7 @@ export default defineTool({
           outcome,
           outputSha256: digest,
           patchSha256: input.patchSha256,
+          planSha256: input.planSha256,
           testPaths,
         },
         receiptSecret,

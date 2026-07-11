@@ -411,6 +411,7 @@ export async function applyDevelopmentLoopTestWritingResult(
               outcome: result.outcome,
               outputSha256: result.outputReference.sha256,
               patchSha256: output.testPlan.patch.sha256,
+              planSha256: plan.identity.sha256,
               testPaths: [test.path],
             },
             result.executionReceipt,

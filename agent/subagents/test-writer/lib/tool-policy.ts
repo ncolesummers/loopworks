@@ -18,6 +18,7 @@ export type TestExecutionReceiptPayload = {
   outcome: "expected_failure" | "invalid_failure";
   outputSha256: string;
   patchSha256: string;
+  planSha256: string;
   testPaths: string[];
 };
 

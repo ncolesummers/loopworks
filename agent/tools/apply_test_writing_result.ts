@@ -27,6 +27,7 @@ export default defineTool({
               outcome: result.outcome,
               outputSha256: result.outputReference.sha256,
               patchSha256: parsed.testPlan.patch.sha256,
+              planSha256: parsed.testPlan.plan.sha256,
               testPaths: [test.path],
             },
             result.executionReceipt,

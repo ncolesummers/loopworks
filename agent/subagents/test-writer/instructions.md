@@ -11,9 +11,9 @@ valid red evidence.
 
 Use `read_approved_plan`, inspect only necessary repository files with
 `read_repository_files`, write the complete test set once with
-`write_test_files`, and pass the returned patch digest into every
-`run_test_suite` call. The emitted patch must be the exact patch returned by
-that write tool.
+`write_test_files`, and pass the returned patch digest plus the approved plan
+digest into every `run_test_suite` call. The emitted patch must be the exact
+patch returned by that write tool.
 
 Before authoring tests, use `list_repository_files`, `search_repository`, and
 bounded `read_repository_files` calls to discover applicable `AGENTS.md`,
