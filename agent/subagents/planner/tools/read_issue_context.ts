@@ -1,9 +1,9 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { extractAcceptanceCriteria } from "../planning-agent";
+import { extractAcceptanceCriteria } from "../../../planning-agent";
 
-const readIssueContextInputSchema = z.object({
+const schema = z.object({
   body: z.string().default(""),
   labels: z.array(z.string()).default([]),
   milestone: z.string().nullable().default(null),
@@ -14,9 +14,8 @@ const readIssueContextInputSchema = z.object({
 });
 
 export default defineTool({
-  description:
-    "Read supplied GitHub issue context and return normalized planning metadata without mutating GitHub.",
-  inputSchema: readIssueContextInputSchema,
+  description: "Normalize supplied GitHub issue context without mutating GitHub.",
+  inputSchema: schema,
   execute(input) {
     return {
       acceptanceCriteria: extractAcceptanceCriteria(input.body),

@@ -1,10 +1,12 @@
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 
 import { type LoopManifest, loopStateValues } from "../schemas/loop-manifest";
 
-export const planningAgentModelLabel = "openai/gpt-5.5-xhigh";
+export const planningAgentModelLabel = "openai/gpt-5.6-sol-xhigh";
 
 export const planningAgentInputSchema = z.object({
   repositoryFullName: z.string().min(1),
@@ -14,6 +16,13 @@ export const planningAgentInputSchema = z.object({
   body: z.string().default(""),
   labels: z.array(z.string().min(1)).default([]),
   milestone: z.string().min(1).nullable().default(null),
+  repositoryRevision: z
+    .object({
+      ref: z.string().min(1),
+      commitSha: z.string().regex(/^[a-f0-9]{40}$/),
+    })
+    .nullable()
+    .default(null),
 });
 
 export const planningAgentIssueSchema = z.object({
@@ -93,9 +102,19 @@ export const planningAgentToolContractSchema = z.object({
 });
 
 export const planningAgentOutputSchema = z.object({
+  identity: z.object({
+    id: z.string().min(1),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
   summary: z.string().min(1),
   model: z.literal(planningAgentModelLabel),
   issue: planningAgentIssueSchema,
+  repositoryRevision: z
+    .object({
+      ref: z.string().min(1),
+      commitSha: z.string().regex(/^[a-f0-9]{40}$/),
+    })
+    .nullable(),
   initialState: z.enum(loopStateValues).default("planned"),
   checkpoints: z.array(z.string().min(1)).min(1),
   stages: z.array(planningAgentStageSchema).min(1),
@@ -110,6 +129,27 @@ export const planningAgentOutputSchema = z.object({
 
 export type PlanningAgentInput = z.infer<typeof planningAgentInputSchema>;
 export type PlanningAgentOutput = z.infer<typeof planningAgentOutputSchema>;
+
+export const pinnedPlanningAgentOutputSchema = planningAgentOutputSchema.refine(
+  (
+    plan,
+  ): plan is PlanningAgentOutput & {
+    repositoryRevision: NonNullable<PlanningAgentOutput["repositoryRevision"]>;
+  } => plan.repositoryRevision !== null,
+  "Planning artifacts require an inspected, pinned repository revision.",
+);
+
+export function computePlanningArtifactDigest(
+  artifact: Omit<PlanningAgentOutput, "identity"> & {
+    identity?: { id: string; sha256?: string };
+  },
+): string {
+  const canonical = {
+    ...artifact,
+    identity: artifact.identity ? { id: artifact.identity.id } : undefined,
+  };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
 
 export const planningAgentDefinition = {
   name: "planning-agent",
@@ -199,7 +239,10 @@ export function createPlanningAgentSeedPlan(input: PlanningAgentInput): Planning
   const acceptanceCriteria = extractAcceptanceCriteria(parsed.body);
   const issueUrl = getIssueUrl(parsed);
 
-  return planningAgentOutputSchema.parse({
+  const planWithoutDigest = {
+    identity: {
+      id: `plan:${parsed.repositoryFullName}#${parsed.issueNumber}`,
+    },
     summary: `Initial plan for issue #${parsed.issueNumber} in ${parsed.repositoryFullName}.`,
     model: planningAgentModelLabel,
     issue: {
@@ -211,6 +254,7 @@ export function createPlanningAgentSeedPlan(input: PlanningAgentInput): Planning
       title: parsed.title,
       url: issueUrl,
     },
+    repositoryRevision: parsed.repositoryRevision,
     initialState: "planned",
     checkpoints,
     stages: [
@@ -359,6 +403,30 @@ export function createPlanningAgentSeedPlan(input: PlanningAgentInput): Planning
       planArtifactOnlyWrite: true,
       allowedTools: [
         {
+          name: "prepare_repository_context",
+          capability: "Prepare a read-only isolated checkout pinned to an exact commit.",
+          mutates: false,
+          auditFields: ["agent", "repo", "issue", "run", "step", "traceId"],
+        },
+        {
+          name: "list_repository_files",
+          capability: "Discover bounded tracked repository paths by safe glob patterns.",
+          mutates: false,
+          auditFields: ["agent", "repo", "issue", "run", "step", "traceId"],
+        },
+        {
+          name: "search_repository",
+          capability: "Search bounded repository text with path and line provenance.",
+          mutates: false,
+          auditFields: ["agent", "repo", "issue", "run", "step", "traceId"],
+        },
+        {
+          name: "read_repository_files",
+          capability: "Read bounded file ranges from the pinned repository context.",
+          mutates: false,
+          auditFields: ["agent", "repo", "issue", "run", "step", "traceId"],
+        },
+        {
           name: "read_issue_context",
           capability: "Read supplied GitHub issue context and summarize acceptance criteria.",
           mutates: false,
@@ -391,6 +459,22 @@ export function createPlanningAgentSeedPlan(input: PlanningAgentInput): Planning
         "arbitrary web fetch/search",
         "copy-agent delegation",
       ],
+    },
+  };
+
+  const normalizedPlan = planningAgentOutputSchema.parse({
+    ...planWithoutDigest,
+    identity: {
+      id: planWithoutDigest.identity.id,
+      sha256: "0".repeat(64),
+    },
+  });
+
+  return planningAgentOutputSchema.parse({
+    ...normalizedPlan,
+    identity: {
+      id: normalizedPlan.identity.id,
+      sha256: computePlanningArtifactDigest(normalizedPlan),
     },
   });
 }

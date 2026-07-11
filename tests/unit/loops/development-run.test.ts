@@ -204,7 +204,7 @@ describe("agent-ready development loop run skeleton", () => {
         issue: expect.objectContaining({
           acceptanceCriteria: ["Development-loop planning stores the issue acceptance criteria."],
         }),
-        model: "openai/gpt-5.5-xhigh",
+        model: "openai/gpt-5.6-sol-xhigh",
         stages: expect.arrayContaining([
           expect.objectContaining({
             key: "plan-artifact",

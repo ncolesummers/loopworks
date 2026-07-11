@@ -14,11 +14,15 @@ and metric contract.
 
 ## Decision
 
-Loopworks will define the planning agent as an Eve-backed planning-only runtime. The
-agent emits a typed plan artifact containing issue metadata, stages, validation
+Loopworks defines the planner as an Eve-backed planning-only declared subagent
+under the neutral stage orchestrator established by ADR
+[0015](0015-stage-orchestrator-and-isolated-subagent-handoffs.md). This 2026-07-11
+placement update preserves the original planning contract while removing stage
+orchestration from the planner. The subagent emits a typed plan artifact containing issue metadata, stages, validation
 gates, approval points, risks, fixture mode, eval coverage, and tool-contract
-summary. The selected planning model is `openai/gpt-5.5` with OpenAI reasoning
-effort `xhigh`, reported in artifacts as `openai/gpt-5.5-xhigh`.
+summary. The selected planning model is `openai/gpt-5.6-sol` with OpenAI
+reasoning effort `xhigh`, reported in artifacts as
+`openai/gpt-5.6-sol-xhigh`.
 
 The model-visible CLI surface is a guarded `bash` replacement for read-only
 inspection through tools such as `gh`, `az`, and read-only `git` commands.
@@ -41,6 +45,9 @@ Planning can use SaaS CLIs for context gathering without granting a generic
 shell or source mutation surface. The first agent contract is testable through
 deterministic golden fixtures and Eve eval discovery before broader model,
 prompt, or tool changes.
+
+The planner no longer owns the root Eve runtime. It is a sibling of other stage
+subagents and cannot invoke them or transition durable run state.
 
 The implementation intentionally defers telemetry exporter wiring, production
 masking policy, metrics backend activation, and trace collector setup to ADR

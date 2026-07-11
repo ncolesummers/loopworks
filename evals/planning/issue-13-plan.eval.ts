@@ -4,7 +4,7 @@ import { defineEval } from "eve/evals";
 import { includes, matches } from "eve/evals/expect";
 import type { EveEvalToolCall } from "eve/evals";
 
-import { planningAgentOutputSchema } from "@agent/planning-agent";
+import { pinnedPlanningAgentOutputSchema } from "@agent/planning-agent";
 
 type IssueFixture = {
   body: string;
@@ -88,9 +88,9 @@ export default defineEval({
     t.completed();
     t.noFailedActions();
     t.calledTool("emit_plan_artifact", {
-      output: (output: unknown) => planningAgentOutputSchema.safeParse(output).success,
+      output: (output: unknown) => pinnedPlanningAgentOutputSchema.safeParse(output).success,
     });
-    t.check(artifact, matches(planningAgentOutputSchema));
+    t.check(artifact, matches(pinnedPlanningAgentOutputSchema));
     t.notCalledTool("write_file");
     t.notCalledTool("web_fetch");
     t.maxToolCalls(5);
