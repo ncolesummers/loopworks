@@ -70,6 +70,84 @@ describe("plan-review approval synchronization", () => {
     expect(updatedPlan?.status).toBe("approved");
   });
 
+  it("marks the plan rejected and blocks the run when its review is bypassed", async () => {
+    const run = await createDevelopmentLoopRun({
+      database: context.db as unknown as DevelopmentLoopRunDatabase,
+      trigger: {
+        issueNumber: 47,
+        repositoryFullName: "ncolesummers/loopworks",
+        repositoryRevision: { ref: "main", commitSha: "a".repeat(40) },
+        title: "Test-writing subagent",
+      },
+    });
+    if (run.mode !== "created") throw new Error("Expected created run.");
+    const [approval] = await context.db
+      .select()
+      .from(approvals)
+      .where(eq(approvals.runId, run.runId));
+    if (!approval) throw new Error("Expected plan review fixture.");
+
+    await applyApprovalTransition({
+      action: "bypass",
+      actorId: "maintainer",
+      approvalId: approval.id,
+      database: context.db as unknown as ApprovalTransitionDatabase,
+      expectedStatus: "requested",
+    });
+
+    const [plan] = await context.db
+      .select()
+      .from(agentPlans)
+      .where(eq(agentPlans.runId, run.runId));
+    const [blockedRun] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, run.runId));
+    expect(plan?.status).toBe("rejected");
+    expect(blockedRun?.status).toBe("blocked");
+  });
+
+  it("leaves an advanced run untouched when an approved plan review is applied", async () => {
+    const run = await createDevelopmentLoopRun({
+      database: context.db as unknown as DevelopmentLoopRunDatabase,
+      trigger: {
+        issueNumber: 47,
+        repositoryFullName: "ncolesummers/loopworks",
+        repositoryRevision: { ref: "main", commitSha: "a".repeat(40) },
+        title: "Test-writing subagent",
+      },
+    });
+    if (run.mode !== "created") throw new Error("Expected created run.");
+    const [approval] = await context.db
+      .select()
+      .from(approvals)
+      .where(eq(approvals.runId, run.runId));
+    if (!approval) throw new Error("Expected plan review fixture.");
+
+    await applyApprovalTransition({
+      action: "approve",
+      actorId: "maintainer",
+      approvalId: approval.id,
+      database: context.db as unknown as ApprovalTransitionDatabase,
+      expectedStatus: "requested",
+    });
+    await applyApprovalTransition({
+      action: "apply",
+      actorId: "loopworks",
+      approvalId: approval.id,
+      database: context.db as unknown as ApprovalTransitionDatabase,
+      expectedStatus: "approved",
+    });
+
+    const [plan] = await context.db
+      .select()
+      .from(agentPlans)
+      .where(eq(agentPlans.runId, run.runId));
+    const [advancedRun] = await context.db
+      .select()
+      .from(loopRuns)
+      .where(eq(loopRuns.id, run.runId));
+    expect(plan?.status).toBe("approved");
+    expect(advancedRun).toMatchObject({ currentStage: "test-writing", status: "running" });
+  });
+
   it("records a planner-pinned revision before creating the durable review", async () => {
     const run = await createDevelopmentLoopRun({
       database: context.db as unknown as DevelopmentLoopRunDatabase,

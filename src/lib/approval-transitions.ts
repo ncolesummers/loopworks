@@ -146,7 +146,9 @@ export async function applyApprovalTransition(
       toStatus: transition.to,
     });
 
-    if (approval.scope === "plan-review") {
+    // "applied" records that an already-approved review was acted on; it must
+    // not re-block a run that advanced when the review was approved.
+    if (approval.scope === "plan-review" && transition.to !== "applied") {
       const planId =
         approval.metadata && typeof approval.metadata.planId === "string"
           ? approval.metadata.planId
@@ -157,18 +159,19 @@ export async function applyApprovalTransition(
       if (!approval.runId) {
         throw new Error("Plan-review approval must belong to a run.");
       }
+      const approved = transition.to === "approved";
       await tx
         .update(agentPlans)
-        .set({ status: transition.to })
+        .set({ status: approved ? "approved" : "rejected" })
         .where(and(eq(agentPlans.id, planId), eq(agentPlans.runId, approval.runId)));
       await tx
         .update(loopRuns)
         .set({
-          ...(transition.to === "approved" ? { currentStage: "test-writing" } : {}),
-          status: transition.to === "approved" ? "running" : "blocked",
+          ...(approved ? { currentStage: "test-writing" } : {}),
+          status: approved ? "running" : "blocked",
         })
         .where(eq(loopRuns.id, approval.runId));
-      if (transition.to === "approved") {
+      if (approved) {
         await tx
           .update(runSteps)
           .set({ status: "queued" })
