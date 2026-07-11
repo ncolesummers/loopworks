@@ -42,7 +42,7 @@ export default defineEval({
       ].join("\n"),
     );
 
-    t.completed();
+    t.succeeded();
     t.noFailedActions();
     t.calledTool("read_run_stage_context");
     t.calledSubagent("test-writer", {
