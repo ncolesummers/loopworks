@@ -56,6 +56,7 @@ export const runStepStatusEnum = pgEnum("run_step_status", [
 export const artifactTypeEnum = pgEnum("artifact_type", [
   "plan",
   "validation_report",
+  "test_plan",
   "patch",
   "pr_intent",
   "deployment_summary",
@@ -460,7 +461,7 @@ export const agentPlans = pgTable(
     loopId: uuid("loop_id").references(() => loops.id, { onDelete: "set null" }),
     runId: uuid("run_id").references(() => loopRuns.id, { onDelete: "set null" }),
     issueNumber: integer("issue_number"),
-    agentName: text("agent_name").default("planning-agent").notNull(),
+    agentName: text("agent_name").default("planner").notNull(),
     status: text("status").default("pending").notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull(),
     plan: jsonb("plan").$type<Record<string, unknown>>(),

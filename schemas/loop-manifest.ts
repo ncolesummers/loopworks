@@ -75,6 +75,7 @@ export const approvalBypassPolicyValues = ["none", "maintainer_override"] as con
 export const artifactContractTypeValues = [
   "plan",
   "validation_report",
+  "test_plan",
   "patch",
   "pr_intent",
   "summary",

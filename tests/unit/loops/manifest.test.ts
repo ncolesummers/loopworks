@@ -1,7 +1,6 @@
+import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
 import { loopManifestSchema, retryableStatusValues } from "../../../schemas/loop-manifest";
 import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
-
-import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
 
 type JsonSchemaObject = {
   required?: string[];
@@ -72,13 +71,20 @@ describe("loop manifest schema", () => {
     expect(developmentLoop.approvals.gates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          key: "plan-review",
+          required: true,
+        }),
+        expect.objectContaining({
           key: "external-write-review",
           required: true,
         }),
       ]),
     );
     expect(developmentLoop.artifacts).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "pr_intent", required: true })]),
+      expect.arrayContaining([
+        expect.objectContaining({ type: "test_plan", required: true }),
+        expect.objectContaining({ type: "pr_intent", required: true }),
+      ]),
     );
     expect(developmentLoop.retryPolicy).toMatchObject({
       maxAttempts: 2,

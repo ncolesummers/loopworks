@@ -76,7 +76,8 @@ planning, test-writing, development, validation, code review, commit, PR, and
 done. Each stage has a required visible artifact contract:
 
 1. Planning: plan artifact.
-2. Test-writing: red test evidence.
+2. Test-writing: red test evidence and an automated test plan with explicit
+   fixtures and a bounded test-only patch.
 3. Development: patch artifact.
 4. Validation: validation report.
 5. Code review: code review notes.
@@ -89,6 +90,16 @@ development-loop triggers must not create a run; they record a durable
 skipped/no-op reason such as `loop_disabled` so operators can explain why an
 `agent-ready` issue did not start. Research-loop disabled evidence is tracked
 separately from the development-loop skeleton.
+
+The planning-to-test-writing boundary requires an `approved` `plan-review`
+record tied to the exact run, plan row, and canonical plan digest. The
+test-writing stage succeeds only when every approved-plan acceptance criterion
+has expected assertion-failure evidence. Its `validation_report` row carries
+`loopworks.red_test_evidence.v1`; its `test_plan` row carries
+`loopworks.test_plan.v1`. Both remain separate from the later green validation
+report. Expected-red entries include a verified execution receipt bound to the
+persisted test patch; setup, infrastructure, timeout, crash, unrelated, or
+passing outcomes cannot advance the stage.
 
 ## Validation Report Artifact
 
