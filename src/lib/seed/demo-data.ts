@@ -2,8 +2,8 @@ import { inArray } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import {
-  approvalTransitionEvents,
   approvals,
+  approvalTransitionEvents,
   artifacts,
   deployments,
   loopRuns,
@@ -158,6 +158,7 @@ export const demoSeedIds = {
     trace: seedId("artifacts", 6),
     other: seedId("artifacts", 7),
     validationReportSucceeded: seedId("artifacts", 8),
+    testPlan: seedId("artifacts", 9),
   },
   approvals: {
     requested: seedId("approvals", 0),
@@ -584,6 +585,14 @@ export function buildDemoSeedData(): DemoSeedData {
       title: "Validation report",
       uri: "https://github.com/ncolesummers/delivery-ops/actions/runs/demo-validation-report",
       metadata: demoValidationReportMetadata,
+    },
+    {
+      id: ids.artifacts.testPlan,
+      runId: ids.loopRuns.running,
+      stepId: ids.runSteps.running,
+      type: "test_plan",
+      title: "Automated test plan",
+      uri: "artifact://demo/test-plan",
     },
     {
       id: ids.artifacts.validationReportSucceeded,

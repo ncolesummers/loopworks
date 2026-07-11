@@ -95,9 +95,9 @@ Risks:
 | M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, Vercel project links, and search/filter controls. | Playwright, Storybook |
 | M02 | Maintainer | Turning a loop off prevents trigger execution and records a skipped reason. | Unit, Playwright |
 | M03 | Maintainer | Missing Vercel credentials in dev returns explicit fixture fallback metadata; production does not silently return fixtures. | Unit, integration |
-| A01 | Agent Supervisor | Run detail shows planning, test-writing, development, validation, code review, commit, PR, and done stages with artifacts. | Storybook, Playwright |
-| A02 | Agent Supervisor | Approval gates show requested, approved, rejected, bypassed, and expired states with actor and evidence. | Unit, Storybook, Playwright |
-| A03 | Agent Supervisor | Deterministic validation output appears before LLM review or judgment. | Integration, Playwright |
+| A01 | Agent Supervisor | Run detail shows planning, test-writing, development, validation, code review, commit, PR, and done stages, including separate red-evidence and automated-test-plan artifacts. | Unit, Storybook, Playwright |
+| A02 | Agent Supervisor | Approval gates show requested, approved, rejected, bypassed, and expired states with actor and evidence; test writing requires an exact approved plan review. | Unit, Storybook, Playwright |
+| A03 | Agent Supervisor | AC-mapped expected-red evidence appears before implementation, and green deterministic validation appears before LLM review or judgment. | Integration, Playwright |
 | R01 | Reviewer | A PR intent or created PR links to the source issue, run, validation artifacts, and Vercel preview. | Integration, Playwright |
 | R02 | Reviewer | UI changes include Storybook stories, design-token usage, and browser workflow coverage with axe passing in light and dark before the task is complete. | CI, Storybook build, Playwright, a11y |
 | S01 | Security Reviewer | GitHub webhook requests with invalid signatures are rejected before payload processing. | Unit, integration |

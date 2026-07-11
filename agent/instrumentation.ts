@@ -11,7 +11,7 @@ export default defineInstrumentation({
     "step.started"(input) {
       return {
         runtimeContext: {
-          "loopworks.agent": "planning-agent",
+          "loopworks.agent": "stage-orchestrator",
           "loopworks.telemetry.policy": telemetryPolicy.reason,
           "loopworks.raw_io_capture": telemetryPolicy.captureRawIO,
           "loopworks.session.id": input.session.id,

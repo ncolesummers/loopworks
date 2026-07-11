@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
-
+import { createPlanningAgentSeedPlan } from "../../../agent/planning-agent";
 import sandbox from "../../../agent/sandbox";
 import {
   getPlanningArtifactCandidate,
-  planningEvalTimeoutMs,
   parsePlanningArtifactReply,
+  planningEvalTimeoutMs,
   readIssueFixture,
   resolveIssueFixturePath,
 } from "../../../evals/planning/issue-13-plan.eval";
-import { createPlanningAgentSeedPlan } from "../../../agent/planning-agent";
 
 function resolveSandboxBackendName(): string {
   const backend = typeof sandbox.backend === "function" ? sandbox.backend() : sandbox.backend;
@@ -40,11 +39,12 @@ describe("planning eval fixture loading", () => {
       labels: ["loop:development"],
       milestone: null,
       repositoryFullName: "ncolesummers/loopworks",
+      repositoryRevision: { commitSha: "a".repeat(40), ref: "main" },
       title: "Initial Eve planning agent",
     });
 
     expect(parsePlanningArtifactReply(JSON.stringify(artifact))).toMatchObject({
-      model: "openai/gpt-5.5-xhigh",
+      model: "openai/gpt-5.6-sol-xhigh",
       issue: { number: 13 },
     });
     expect(

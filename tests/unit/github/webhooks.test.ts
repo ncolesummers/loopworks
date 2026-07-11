@@ -484,7 +484,7 @@ describe("GitHub webhook helpers", () => {
         workflow: "development",
       },
       developmentRun: {
-        artifactCount: 8,
+        artifactCount: 9,
         mode: "simulated",
         stageCount: 8,
       },
@@ -605,7 +605,7 @@ describe("GitHub webhook helpers", () => {
       deliveryId: "successful-processing-route-delivery",
       metadata: {
         developmentRun: {
-          artifactCount: 8,
+          artifactCount: 9,
           mode: "simulated",
           stageCount: 8,
         },

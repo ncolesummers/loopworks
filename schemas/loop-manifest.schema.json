@@ -424,6 +424,7 @@
       "enum": [
         "plan",
         "validation_report",
+        "test_plan",
         "patch",
         "pr_intent",
         "summary",

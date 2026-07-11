@@ -1,9 +1,24 @@
 /** @vitest-environment node */
 import {
+  computePlanningArtifactDigest,
   createPlanningAgentSeedPlan,
-  planningAgentOutputSchema,
+  type PlanningAgentOutput,
+  pinnedPlanningAgentOutputSchema,
   planningAgentModelLabel,
+  planningAgentOutputSchema,
 } from "@agent/planning-agent";
+
+function reverseKeyOrder(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reverseKeyOrder);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .reverse()
+        .map(([key, entry]) => [key, reverseKeyOrder(entry)]),
+    );
+  }
+  return value;
+}
 
 const issue13Input = {
   repositoryFullName: "ncolesummers/loopworks",
@@ -18,15 +33,26 @@ const issue13Input = {
   ].join("\n"),
   labels: ["loop:development", "area:agents", "priority:p1"],
   milestone: null,
+  repositoryRevision: {
+    ref: "main",
+    commitSha: "a".repeat(40),
+  },
 };
 
 describe("Planning agent artifact contract", () => {
+  it("computes the same plan digest regardless of JSON key order", () => {
+    const plan = createPlanningAgentSeedPlan(issue13Input);
+    const reordered = reverseKeyOrder(plan) as PlanningAgentOutput;
+
+    expect(computePlanningArtifactDigest(reordered)).toBe(plan.identity.sha256);
+  });
+
   it("builds the issue #13 executable planning artifact shape", () => {
     const plan = createPlanningAgentSeedPlan(issue13Input);
 
     expect(planningAgentOutputSchema.parse(plan)).toEqual(plan);
     expect(plan.model).toBe(planningAgentModelLabel);
-    expect(plan.model).toBe("openai/gpt-5.5-xhigh");
+    expect(plan.model).toBe("openai/gpt-5.6-sol-xhigh");
     expect(plan.issue).toMatchObject({
       number: 13,
       repositoryFullName: "ncolesummers/loopworks",
@@ -38,6 +64,14 @@ describe("Planning agent artifact contract", () => {
       "Agent tools are narrow and auditable.",
       "Future model/prompt/tool changes have a path to eval coverage.",
     ]);
+    expect(plan.identity).toMatchObject({
+      id: "plan:ncolesummers/loopworks#13",
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(plan.repositoryRevision).toEqual({
+      ref: "main",
+      commitSha: "a".repeat(40),
+    });
     expect(plan.stages.map((stage) => stage.key)).toEqual([
       "resolve-issue",
       "plan-artifact",
@@ -66,6 +100,13 @@ describe("Planning agent artifact contract", () => {
     );
   });
 
+  it("rejects an emitted planning artifact that has no inspected repository pin", () => {
+    const plan = createPlanningAgentSeedPlan({ ...issue13Input, repositoryRevision: null });
+
+    expect(planningAgentOutputSchema.safeParse(plan).success).toBe(true);
+    expect(pinnedPlanningAgentOutputSchema.safeParse(plan).success).toBe(false);
+  });
+
   it("documents the planning-only tool contract and fixture/eval coverage", () => {
     const plan = createPlanningAgentSeedPlan(issue13Input);
 
@@ -85,6 +126,10 @@ describe("Planning agent artifact contract", () => {
           mutates: true,
           capability: expect.stringContaining("plan artifact"),
         }),
+        expect.objectContaining({ name: "prepare_repository_context", mutates: false }),
+        expect.objectContaining({ name: "list_repository_files", mutates: false }),
+        expect.objectContaining({ name: "search_repository", mutates: false }),
+        expect.objectContaining({ name: "read_repository_files", mutates: false }),
       ]),
     );
     expect(plan.fixtureMode).toMatchObject({

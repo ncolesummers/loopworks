@@ -1,0 +1,12 @@
+{
+  "repositoryFullName": "ncolesummers/loopworks",
+  "issueNumber": 47,
+  "title": "Test-writing subagent for the development loop",
+  "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "acceptanceCriteria": [
+    "Red evidence is tied to the plan acceptance criteria.",
+    "The automated test plan and fixture data are reusable downstream.",
+    "Future model, prompt, and tool changes have eval coverage.",
+    "ADR 0015 records the orchestrator, sibling subagents, isolated sandboxes, and artifact handoff."
+  ]
+}

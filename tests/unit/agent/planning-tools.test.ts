@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "@agent/lib/cli-inspection";
 
 const eveFrameworkToolNames = new Set([
+  "agent",
   "ask_question",
   "bash",
   "glob",

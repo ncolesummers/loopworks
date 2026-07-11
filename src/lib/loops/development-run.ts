@@ -1,21 +1,24 @@
 import { randomUUID } from "node:crypto";
-
+import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
+import {
+  createRedTestEvidenceArtifactContractMetadata,
+  createTestPlanArtifactContractMetadata,
+} from "@agent/test-writing-agent";
 import { and, eq, sql } from "drizzle-orm";
-
 import type { db } from "@/db/client";
 import {
   agentPlans,
+  approvals,
   artifacts,
   loopRuns,
   observabilityEvents,
   repositories,
   runSteps,
 } from "@/db/schema";
-import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
 import { createPrIntentArtifactContractMetadata } from "@/lib/loops/pr-intent";
+import { createValidationReportArtifactContractMetadata } from "@/lib/loops/validation-report";
 import { recordDevelopmentLoopRunCreatedObservability } from "@/lib/observability/metrics";
 import { getActiveTraceId, isValidW3cTraceId } from "@/lib/observability/trace-context";
-import { createValidationReportArtifactContractMetadata } from "@/lib/loops/validation-report";
 import type { ArtifactRecord, TimelineEvent, TimelineKind } from "@/lib/types";
 
 export const developmentLoopKey = "development-loop";
@@ -34,6 +37,7 @@ export type DevelopmentLoopStageKey =
 export type DevelopmentLoopArtifactType =
   | "plan"
   | "validation_report"
+  | "test_plan"
   | "patch"
   | "pr_intent"
   | "log_summary"
@@ -48,7 +52,7 @@ type DevelopmentLoopArtifactContract = {
 type DevelopmentLoopStageContract = {
   actorId: string;
   actorType: "agent" | "ci" | "human" | "system";
-  artifact: DevelopmentLoopArtifactContract;
+  artifacts: readonly DevelopmentLoopArtifactContract[];
   key: DevelopmentLoopStageKey;
   summary: string;
   timelineKind: TimelineKind;
@@ -61,7 +65,7 @@ export const developmentLoopStages = [
   {
     actorId: "planning-agent",
     actorType: "agent",
-    artifact: { label: "Plan artifact", required: true, type: "plan" },
+    artifacts: [{ label: "Plan artifact", required: true, type: "plan" }],
     key: "planning",
     summary:
       "Create an issue-backed execution plan with acceptance criteria and validation mapping.",
@@ -69,9 +73,12 @@ export const developmentLoopStages = [
     title: "Planning",
   },
   {
-    actorId: "eve-builder-agent",
+    actorId: "test-writer",
     actorType: "agent",
-    artifact: { label: "Red test evidence", required: true, type: "validation_report" },
+    artifacts: [
+      { label: "Red test evidence", required: true, type: "validation_report" },
+      { label: "Automated test plan", required: true, type: "test_plan" },
+    ],
     key: "test-writing",
     summary: "Write focused failing tests before production code changes.",
     timelineKind: "test",
@@ -82,7 +89,7 @@ export const developmentLoopStages = [
   {
     actorId: "eve-builder-agent",
     actorType: "agent",
-    artifact: { label: "Patch artifact", required: true, type: "patch" },
+    artifacts: [{ label: "Patch artifact", required: true, type: "patch" }],
     key: "development",
     summary: "Implement the smallest green change for the issue scope.",
     timelineKind: "development",
@@ -91,7 +98,7 @@ export const developmentLoopStages = [
   {
     actorId: "ci-runner",
     actorType: "ci",
-    artifact: { label: "Validation report", required: true, type: "validation_report" },
+    artifacts: [{ label: "Validation report", required: true, type: "validation_report" }],
     key: "validation",
     summary: "Run deterministic checks before review, LLM judgment, commit, or PR stages.",
     timelineKind: "validation",
@@ -102,7 +109,7 @@ export const developmentLoopStages = [
   {
     actorId: "reviewer",
     actorType: "human",
-    artifact: { label: "Code review notes", required: true, type: "log_summary" },
+    artifacts: [{ label: "Code review notes", required: true, type: "log_summary" }],
     key: "code-review",
     summary: "Review assumptions, security/a11y risks, and validation evidence.",
     timelineKind: "review",
@@ -111,7 +118,7 @@ export const developmentLoopStages = [
   {
     actorId: "maintainer",
     actorType: "human",
-    artifact: { label: "Commit intent", required: true, type: "other" },
+    artifacts: [{ label: "Commit intent", required: true, type: "other" }],
     key: "commit",
     summary: "Prepare an atomic conventional commit only after validation and review.",
     timelineKind: "commit",
@@ -120,7 +127,7 @@ export const developmentLoopStages = [
   {
     actorId: "maintainer",
     actorType: "human",
-    artifact: { label: "PR intent", required: true, type: "pr_intent" },
+    artifacts: [{ label: "PR intent", required: true, type: "pr_intent" }],
     key: "pr",
     summary: "Prepare PR metadata linking the source issue, run, and validation evidence.",
     timelineKind: "pull_request",
@@ -129,7 +136,7 @@ export const developmentLoopStages = [
   {
     actorId: "loopworks",
     actorType: "system",
-    artifact: { label: "Completion summary", required: true, type: "other" },
+    artifacts: [{ label: "Completion summary", required: true, type: "other" }],
     key: "done",
     summary: "Close the run only after deterministic validation and review evidence are present.",
     timelineKind: "done",
@@ -145,6 +152,10 @@ export type DevelopmentLoopTrigger = {
   labels?: readonly string[];
   milestone?: string | null;
   repositoryFullName: string;
+  repositoryRevision?: {
+    ref: string;
+    commitSha: string;
+  };
   title?: string | null;
 };
 
@@ -176,7 +187,7 @@ type DevelopmentLoopRunTransactionResult = {
 type DevelopmentLoopStageInstance = {
   actorId: string;
   actorType: string;
-  artifact: DevelopmentLoopArtifactInstance;
+  artifacts: DevelopmentLoopArtifactInstance[];
   completedAt?: Date;
   key: DevelopmentLoopStageKey;
   queuedAt: Date;
@@ -192,6 +203,7 @@ type DevelopmentLoopArtifactInstance = {
   detail: string;
   label: string;
   required: true;
+  stageKey: DevelopmentLoopStageKey;
   type: DevelopmentLoopArtifactType;
   uri: string;
 };
@@ -217,8 +229,16 @@ function getIssueUrl(trigger: DevelopmentLoopTrigger): string {
   return `https://github.com/${trigger.repositoryFullName}/issues/${trigger.issueNumber}`;
 }
 
-function getArtifactUri(trigger: DevelopmentLoopTrigger, stage: DevelopmentLoopStageContract) {
-  return `${getIssueUrl(trigger)}#development-loop-${stage.key}`;
+function getArtifactUri(
+  trigger: DevelopmentLoopTrigger,
+  stage: DevelopmentLoopStageContract,
+  artifact: DevelopmentLoopArtifactContract,
+) {
+  const suffix =
+    artifact.type === "validation_report"
+      ? artifact.label.toLowerCase().replaceAll(" ", "-")
+      : artifact.type.replaceAll("_", "-");
+  return `${getIssueUrl(trigger)}#development-loop-${stage.key}-${suffix}`;
 }
 
 function formatTimelineTime(date: Date): string {
@@ -245,18 +265,19 @@ export function createDevelopmentLoopRunSkeleton(input: {
 }): DevelopmentLoopRunSkeleton {
   const stages = developmentLoopStages.map((stageDefinition, index) => {
     const stage: DevelopmentLoopStageContract = stageDefinition;
-    const artifact = {
+    const stageArtifacts = stage.artifacts.map((artifact) => ({
       detail: stage.summary,
-      label: stage.artifact.label,
-      required: stage.artifact.required,
-      type: stage.artifact.type,
-      uri: getArtifactUri(input.trigger, stage),
-    };
+      label: artifact.label,
+      required: artifact.required,
+      stageKey: stage.key,
+      type: artifact.type,
+      uri: getArtifactUri(input.trigger, stage, artifact),
+    }));
 
     return {
       actorId: stage.actorId,
       actorType: stage.actorType,
-      artifact,
+      artifacts: stageArtifacts,
       key: stage.key,
       queuedAt: minutesAfter(input.now, index),
       status: "queued" as const,
@@ -269,7 +290,7 @@ export function createDevelopmentLoopRunSkeleton(input: {
   });
 
   return {
-    artifacts: stages.map((stage) => stage.artifact),
+    artifacts: stages.flatMap((stage) => stage.artifacts),
     loopKey: developmentLoopKey,
     mode: input.mode,
     ...(input.runId ? { runId: input.runId } : {}),
@@ -283,7 +304,7 @@ export function projectDevelopmentLoopTimeline(
 ): TimelineEvent[] {
   return skeleton.stages.map((stage) => ({
     actor: stage.actorId,
-    artifact: stage.artifact.label,
+    artifact: stage.artifacts.map((artifact) => artifact.label).join(", "),
     at: formatTimelineTime(stage.queuedAt),
     detail: stage.summary,
     kind: stage.timelineKind,
@@ -409,17 +430,17 @@ export async function createDevelopmentLoopRun(input: {
         traceId,
       });
 
-      const stepIds: string[] = [];
+      const stepIdsByStage = new Map<DevelopmentLoopStageKey, string>();
       for (const stage of skeleton.stages) {
         const stepId = randomUUID();
-        stepIds.push(stepId);
+        stepIdsByStage.set(stage.key, stepId);
         await tx.insert(runSteps).values({
           id: stepId,
           actorId: stage.actorId,
           actorType: stage.actorType,
           metadata: {
-            artifactLabel: stage.artifact.label,
-            requiredArtifact: stage.artifact.required,
+            artifactLabels: stage.artifacts.map((artifact) => artifact.label),
+            requiredArtifacts: stage.artifacts.every((artifact) => artifact.required),
           },
           queuedAt: stage.queuedAt,
           runId,
@@ -433,28 +454,45 @@ export async function createDevelopmentLoopRun(input: {
       }
 
       await tx.insert(artifacts).values(
-        skeleton.artifacts.map((artifact, index) => ({
+        skeleton.artifacts.map((artifact) => ({
           id: randomUUID(),
           metadata: {
             required: artifact.required,
-            stage: skeleton.stages[index]?.key,
-            ...(artifact.type === "validation_report"
+            stage: artifact.stageKey,
+            ...(artifact.type === "validation_report" && artifact.stageKey === "validation"
               ? createValidationReportArtifactContractMetadata({
                   detail: artifact.detail,
                 })
               : {}),
+            ...(artifact.type === "validation_report" && artifact.stageKey === "test-writing"
+              ? createRedTestEvidenceArtifactContractMetadata()
+              : {}),
+            ...(artifact.type === "test_plan" ? createTestPlanArtifactContractMetadata() : {}),
             ...(artifact.type === "pr_intent" ? createPrIntentArtifactContractMetadata() : {}),
           },
           runId,
-          stepId: stepIds[index],
+          stepId: stepIdsByStage.get(artifact.stageKey),
           title: artifact.label,
           type: artifact.type,
           uri: artifact.uri,
         })),
       );
 
+      const planId = randomUUID();
+      const plan = createPlanningAgentSeedPlan({
+        body: input.trigger.body ?? "",
+        issueNumber: input.trigger.issueNumber,
+        issueUrl: getIssueUrl(input.trigger),
+        labels: [...(input.trigger.labels ?? [])],
+        milestone: input.trigger.milestone ?? null,
+        repositoryFullName: input.trigger.repositoryFullName,
+        repositoryRevision: input.trigger.repositoryRevision ?? null,
+        title: input.trigger.title ?? `Issue #${input.trigger.issueNumber}`,
+      });
+
       await tx.insert(agentPlans).values({
-        agentName: "planning-agent",
+        id: planId,
+        agentName: "planner",
         input: {
           issueNumber: input.trigger.issueNumber,
           labels: input.trigger.labels ?? [],
@@ -463,18 +501,23 @@ export async function createDevelopmentLoopRun(input: {
           title: input.trigger.title ?? "",
         },
         issueNumber: input.trigger.issueNumber,
-        plan: createPlanningAgentSeedPlan({
-          body: input.trigger.body ?? "",
-          issueNumber: input.trigger.issueNumber,
-          issueUrl: getIssueUrl(input.trigger),
-          labels: [...(input.trigger.labels ?? [])],
-          milestone: input.trigger.milestone ?? null,
-          repositoryFullName: input.trigger.repositoryFullName,
-          title: input.trigger.title ?? `Issue #${input.trigger.issueNumber}`,
-        }),
+        plan,
         runId,
         status: "pending",
       });
+
+      if (plan.repositoryRevision) {
+        await tx.insert(approvals).values({
+          metadata: {
+            planId,
+            planSha256: plan.identity.sha256,
+          },
+          requestedBy: "planner",
+          runId,
+          scope: "plan-review",
+          status: "requested",
+        });
+      }
 
       const emitObservability = await recordDevelopmentLoopRunCreatedObservability({
         artifactCount: skeleton.artifacts.length,

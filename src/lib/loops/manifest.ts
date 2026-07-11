@@ -65,6 +65,13 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
         bypassPolicy: "none",
         gates: [
           {
+            key: "plan-review",
+            name: "Plan review",
+            required: true,
+            reviewers: ["maintainer"],
+            evidence: ["plan"],
+          },
+          {
             key: "external-write-review",
             name: "External write review",
             required: true,
@@ -85,6 +92,13 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
           type: "validation_report",
           required: true,
           description: "Deterministic command evidence collected before review or rollout.",
+          retention: "audit",
+        },
+        {
+          type: "test_plan",
+          required: true,
+          description:
+            "AC-mapped automated test plan with explicit fixtures and a bounded test-only patch.",
           retention: "audit",
         },
         {
