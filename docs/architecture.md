@@ -166,7 +166,14 @@ Non-MVP:
 
 ## Agent Architecture
 
-The first agent is a planning agent. It should:
+The root Eve runtime is a neutral stage orchestrator. It reads durable run
+state, verifies approvals and artifact prerequisites, delegates to one declared
+stage subagent, validates the typed result, and invokes deterministic
+control-plane transitions. Stage subagents are siblings with independent model,
+tool, and isolated sandbox contracts; they do not own GitHub writes or workflow
+state transitions.
+
+The planner subagent should:
 
 1. Read a GitHub issue and repo metadata.
 2. Create or update an executable plan artifact.
@@ -174,16 +181,16 @@ The first agent is a planning agent. It should:
 4. Produce a clear next-action summary.
 5. Avoid mutating code or GitHub state outside explicit tool contracts.
 
-Later agents are tracked as backlog items, one per development-loop stage that still lacks an LLM agent:
+Stage subagents are tracked as backlog items, one per loop stage that still lacks an LLM specialist:
 
 1. Research loop skeleton, research planner, researcher, and research author agents — the `spike` plus `agent-ready` research loop, run in parallel to the development loop.
-2. Test-writing agent — test-writing stage, red test evidence plus a reusable automated test plan and seed data.
-3. Implementation agent — development stage, patch artifact.
-4. Validation review agent — code review stage, code review notes and UI screenshot evidence.
-5. PR preparation agent — PR stage, PR intent content including screenshots.
-6. Release notes agent — done stage, completion summary.
+2. Test-writer subagent — test-writing stage, red test evidence plus a reusable automated test plan, explicit seed data, and a bounded test-only patch.
+3. Implementation subagent — development stage, patch artifact.
+4. Validation review subagent — code review stage, code review notes and UI screenshot evidence.
+5. PR preparation subagent — PR stage, PR intent content including screenshots.
+6. Release notes subagent — done stage, completion summary.
 
-The commit stage intentionally stays mechanical, owned by the PR creation path rather than a dedicated agent. Each agent needs eval coverage before promotion to default use.
+The commit stage intentionally stays mechanical, owned by the PR creation path rather than a dedicated subagent. Typed artifacts bridge isolated subagent sandboxes, and each subagent needs eval coverage before promotion to default use.
 
 ## Security Architecture
 

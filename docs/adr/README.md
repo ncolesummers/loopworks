@@ -35,6 +35,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0012](0012-telemetry-backend-and-metric-contract.md) | Proposed | Adopt Axiom as the OTel telemetry backend and define the metric, span, and correlation contract. |
 | [0013](0013-planning-agent-contract.md) | Proposed | Define the planning agent as a planning-only runtime with guarded CLI inspection, explicit fixtures, eval coverage, and ADR 0012-aligned telemetry boundaries. |
 | [0014](0014-guarded-github-pr-write-reconciliation.md) | Proposed | Guard GitHub PR writes with digest-bound approval, deterministic branches, and two-phase reconciliation. |
+| [0015](0015-stage-orchestrator-and-isolated-subagent-handoffs.md) | Proposed | Use a neutral root orchestrator, independent sibling subagents, and typed artifact handoffs between isolated sandboxes. |
 
 ## Template
 
