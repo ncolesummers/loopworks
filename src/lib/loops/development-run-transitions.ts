@@ -101,6 +101,7 @@ export async function recordDevelopmentLoopPlanArtifact(
         id: loopRuns.id,
         queuedAt: loopRuns.queuedAt,
         repositoryFullName: repositories.fullName,
+        startedAt: loopRuns.startedAt,
       })
       .from(loopRuns)
       .innerJoin(repositories, eq(loopRuns.repositoryId, repositories.id))
@@ -197,7 +198,7 @@ export async function recordDevelopmentLoopPlanArtifact(
       .where(eq(runSteps.id, planningStep.id));
     await tx
       .update(loopRuns)
-      .set({ startedAt: run.queuedAt, status: "waiting_for_approval" })
+      .set({ startedAt: run.startedAt ?? run.queuedAt, status: "waiting_for_approval" })
       .where(eq(loopRuns.id, input.runId));
 
     return { approvalId, planId: planRow.id, runId: input.runId, status: "waiting_for_approval" };

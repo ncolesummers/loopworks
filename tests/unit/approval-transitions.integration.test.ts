@@ -188,4 +188,41 @@ describe("plan-review approval synchronization", () => {
     });
     expect(updatedRun?.status).toBe("waiting_for_approval");
   });
+
+  it("preserves an existing run start time when recording the plan artifact", async () => {
+    const run = await createDevelopmentLoopRun({
+      database: context.db as unknown as DevelopmentLoopRunDatabase,
+      trigger: {
+        body: "## Acceptance Criteria\n- Planner output is pinned before review.",
+        issueNumber: 47,
+        repositoryFullName: "ncolesummers/loopworks",
+        title: "Test-writing subagent",
+      },
+    });
+    if (run.mode !== "created") throw new Error("Expected created run.");
+    const startedAt = new Date("2026-07-11T15:30:00.000Z");
+    await context.db
+      .update(loopRuns)
+      .set({ startedAt, status: "running" })
+      .where(eq(loopRuns.id, run.runId));
+
+    const plan = createPlanningAgentSeedPlan({
+      body: "## Acceptance Criteria\n- Planner output is pinned before review.",
+      issueNumber: 47,
+      labels: [],
+      milestone: null,
+      repositoryFullName: "ncolesummers/loopworks",
+      repositoryRevision: { commitSha: "a".repeat(40), ref: "main" },
+      title: "Test-writing subagent",
+    });
+    await recordDevelopmentLoopPlanArtifact({
+      database: context.db as unknown as DevelopmentLoopTransitionDatabase,
+      plan,
+      runId: run.runId,
+    });
+
+    const [updatedRun] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, run.runId));
+    expect(updatedRun?.startedAt).toEqual(startedAt);
+    expect(updatedRun?.status).toBe("waiting_for_approval");
+  });
 });
