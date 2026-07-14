@@ -28,8 +28,9 @@ uses `openai/gpt-5.6-terra`. Each retains independent `xhigh` reasoning
 configuration so model routing can evolve per stage without changing the
 shared topology.
 
-Planner and test-writer receive repository-scoped discovery, text search, and
-line-range read tools against their isolated commit-pinned checkouts. The tools
+Planner, test-writer, and implementer receive repository-scoped discovery, text
+search, and line-range read tools against their isolated commit-pinned
+checkouts. The tools
 exclude secret, generated, dependency, and traversal paths; bound queries and
 outputs; reject symlink escape; and return commit/path/line provenance. The
 framework's permissive filesystem tools remain disabled. Planner web access is
@@ -51,6 +52,17 @@ or mismatched approvals fail closed. Expected assertion failures complete the
 test-writing stage successfully; environment, setup, timeout, crash, unrelated,
 or passing results do not advance the run.
 
+The implementation sibling uses `openai/gpt-5.6-terra` with independent
+`xhigh` reasoning configuration. It consumes the exact persisted test plan,
+test-only patch, red evidence, and fixture records without re-derivation. Its
+guarded tools apply that patch once, permit one bounded production-only write,
+run every exact planned test plus `bun run validate`, and emit
+`loopworks.implementation_result.v1`. Signed green receipts bind the plan,
+test-plan, test-patch, production-patch, command, paths, and redacted output
+digests. The root revalidates the approval and complete handoff before storing
+the result in the existing development `patch` artifact and advancing to the
+separate validation stage.
+
 ## Consequences
 
 Each stage can tune its model and capabilities independently without granting
@@ -63,19 +75,21 @@ deterministic control-plane behavior rather than model judgment.
 
 ## Validation
 
-1. Eve discovery reports the root plus declared `planner` and `test-writer`
-   subagents without diagnostics.
+1. Eve discovery reports the root plus declared `planner`, `test-writer`, and
+   `implementer` subagents without diagnostics.
 2. Unit tests cover tool allowlists, fixture fail-closed behavior, patch safety,
    AC coverage, red-evidence classification, and sanitized telemetry.
 3. PGlite tests prove exact plan approval, two-artifact persistence, idempotency,
    and advancement only for complete expected-red evidence.
-4. Eve eval discovery includes planner and test-writing routing scenarios.
+4. Eve eval discovery includes planner, test-writing, and implementation
+   routing scenarios.
 5. `bun run validate` and `bun run build` pass before review.
 
 ## Follow-Ups
 
-1. Issue #48 consumes the persisted test-only patch and produces the smallest
-   green implementation patch in a separate sandbox.
+1. **Done by issue #48.** The implementer consumes the persisted test-only
+   patch and produces the smallest green implementation patch in a separate
+   sandbox.
 2. Issues #44-#46 and #49-#51 implement additional sibling subagents under this
    orchestration contract.
 3. Accept this ADR only after maintainer review of issue #47.

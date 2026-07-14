@@ -1,6 +1,7 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
-import { canonicalJsonStringify } from "../../../lib/canonical-json";
+import { createExecutionReceipt, verifyExecutionReceipt } from "../../../lib/receipts";
+import { redactSecrets } from "../../../lib/redaction";
 import {
   isAllowedFocusedTestCommand,
   isAllowedTestArtifactPath,
@@ -52,17 +53,7 @@ export function assertCommandMatchesPlannedTests(
 }
 
 export function redactTestOutput(value: string): string {
-  return value
-    .replace(/(authorization:\s*bearer\s+)\S+/gi, "$1[REDACTED]")
-    .replace(/\b(?:gh[pousr]_|sk-)[A-Za-z0-9_-]+\b/g, "[REDACTED]")
-    .replace(/\bgithub_pat_[A-Za-z0-9_]+\b/g, "[REDACTED]")
-    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[REDACTED]")
-    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED]")
-    .replace(
-      /((?:password|secret|token|api[_-]?key|cookie|set-cookie)\s*[=:]\s*)\S+/gi,
-      "$1[REDACTED]",
-    )
-    .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s:/]+:)[^@\s]+@/gi, "$1[REDACTED]@");
+  return redactSecrets(value);
 }
 
 export function classifyTestRun(input: {
@@ -89,7 +80,7 @@ export function createTestExecutionReceipt(
   secret: string,
 ): string {
   if (!secret.trim()) throw new Error("Test execution receipt secret is required.");
-  return createHmac("sha256", secret).update(canonicalJsonStringify(payload)).digest("hex");
+  return createExecutionReceipt(payload, secret);
 }
 
 export function verifyTestExecutionReceipt(
@@ -97,9 +88,7 @@ export function verifyTestExecutionReceipt(
   receipt: string,
   secret: string,
 ): boolean {
-  const expected = Buffer.from(createTestExecutionReceipt(payload, secret), "hex");
-  const actual = Buffer.from(receipt, "hex");
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  return verifyExecutionReceipt(payload, receipt, secret);
 }
 
 export function sha256(value: string): string {

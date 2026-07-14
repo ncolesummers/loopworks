@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createImplementationArtifactContractMetadata } from "@agent/implementation-agent";
 import { createPlanningAgentSeedPlan } from "@agent/planning-agent";
 import {
   createRedTestEvidenceArtifactContractMetadata,
@@ -87,7 +88,7 @@ export const developmentLoopStages = [
     validationStatus: "red",
   },
   {
-    actorId: "eve-builder-agent",
+    actorId: "implementer",
     actorType: "agent",
     artifacts: [{ label: "Patch artifact", required: true, type: "patch" }],
     key: "development",
@@ -468,6 +469,7 @@ export async function createDevelopmentLoopRun(input: {
               ? createRedTestEvidenceArtifactContractMetadata()
               : {}),
             ...(artifact.type === "test_plan" ? createTestPlanArtifactContractMetadata() : {}),
+            ...(artifact.type === "patch" ? createImplementationArtifactContractMetadata() : {}),
             ...(artifact.type === "pr_intent" ? createPrIntentArtifactContractMetadata() : {}),
           },
           runId,
