@@ -12,13 +12,12 @@ import {
   implementationResultSchemaId,
 } from "./implementation-agent";
 import { createPlanningAgentSeedPlan } from "./planning-agent";
-import type { ValidationReviewContext } from "./subagents/validation-reviewer/lib/context";
 import { computeTestPlanDigest, testPlanSchemaId } from "./test-writing-agent";
 import { computeValidationReviewDigest } from "./validation-review-agent";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-export function createValidationReviewFixtureContext(): ValidationReviewContext {
+export function createValidationReviewFixtureContext() {
   const plan = createPlanningAgentSeedPlan({
     body: "## Acceptance Criteria\n- Review cites deterministic results and relevant screenshots.",
     issueNumber: 49,
