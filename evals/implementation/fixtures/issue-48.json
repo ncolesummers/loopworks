@@ -1,0 +1,11 @@
+{
+  "repositoryFullName": "ncolesummers/loopworks",
+  "issueNumber": 48,
+  "title": "Implementation subagent for the development loop",
+  "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "acceptanceCriteria": [
+    "The exact hashed test patch turns green with a scoped production patch.",
+    "Test-writing fixtures and seed data are reused unchanged.",
+    "Future model, prompt, and tool changes have eval coverage."
+  ]
+}
