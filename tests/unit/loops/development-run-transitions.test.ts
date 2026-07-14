@@ -311,6 +311,31 @@ describe("development-loop run transitions", () => {
     });
   });
 
+  it("rejects a report generated before the current validation attempt", async () => {
+    const runId = await createRun(context);
+    const report = validationReportV1Schema.parse({
+      ...validationReport([
+        gateResult({
+          durationMs: 1000,
+          exitCode: 0,
+          key: "focused-tests",
+          outcome: "pass",
+          required: true,
+        }),
+      ]),
+      generatedAt: "2026-07-08T15:59:59.000Z",
+    });
+
+    await expect(
+      applyDevelopmentLoopValidationReport({
+        database: transitionDatabase(context),
+        occurredAt: new Date("2026-07-08T16:05:00.000Z"),
+        report,
+        runId,
+      }),
+    ).rejects.toThrow("Validation report timestamp is stale");
+  });
+
   it("returns the persisted blocked reason when a failed validation transition is replayed", async () => {
     const runId = await createRun(context);
     const metrics = createMetricRecorder();

@@ -1,20 +1,31 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-
 import {
-  validationReportSchemaId,
-  validationReportV1Schema,
-  validationReportVersion,
+  type CaptureValidationScreenshotsInput,
+  captureValidationScreenshots,
+  type ScreenshotEvidence,
+} from "./screenshot-evidence";
+import {
   type ValidationGate,
   type ValidationGateOutcome,
   type ValidationGateResultV1,
   type ValidationOutputReference,
   type ValidationReportV1,
+  validationReportSchemaId,
+  validationReportV1Schema,
+  validationReportVersion,
 } from "./validation-report";
+
 export {
   createValidationReportArtifactContractMetadata,
   createValidationReportArtifactMetadata,
   summarizeValidationReport,
+  type ValidationGate,
+  type ValidationGateOutcome,
+  type ValidationGateResultV1,
+  type ValidationOutputReference,
+  type ValidationReportArtifactMetadata,
+  type ValidationReportV1,
   validationGateOutcomeValues,
   validationGateResultV1Schema,
   validationOutputReferenceSchema,
@@ -22,12 +33,6 @@ export {
   validationReportSchemaId,
   validationReportV1Schema,
   validationReportVersion,
-  type ValidationGate,
-  type ValidationGateOutcome,
-  type ValidationGateResultV1,
-  type ValidationOutputReference,
-  type ValidationReportArtifactMetadata,
-  type ValidationReportV1,
 } from "./validation-report";
 
 const allowedBunRunScripts = new Set([
@@ -39,10 +44,11 @@ const allowedBunRunScripts = new Set([
   "storybook:build",
   "test",
   "test:e2e",
+  "test:e2e:validation-evidence",
   "typecheck",
   "validate",
 ]);
-const allowedBunRunScriptsWithArgs = new Set(["test", "test:e2e"]);
+const allowedBunRunScriptsWithArgs = new Set(["test", "test:e2e", "test:e2e:validation-evidence"]);
 const defaultTimeoutMs = 10 * 60_000;
 const defaultMaxOutputBytes = 128_000;
 const shellConstructPattern = /&&|\|\||[;|<>`$\\\n\r]/;
@@ -125,6 +131,10 @@ export type RunValidationGatesInput = {
   outputWriter?: ValidationOutputWriter;
   shouldSkipGate?: (gate: ValidationGate) => ValidationGateSkipDecision;
   timeoutMs?: number;
+};
+
+export type RunValidationWithScreenshotEvidenceInput = RunValidationGatesInput & {
+  screenshot: CaptureValidationScreenshotsInput;
 };
 
 function parseValidationCommand(command: string): string[] {
@@ -499,4 +509,23 @@ export async function runValidationGates(
     schemaId: validationReportSchemaId,
     version: validationReportVersion,
   });
+}
+
+export async function runValidationWithScreenshotEvidence(
+  input: RunValidationWithScreenshotEvidenceInput,
+): Promise<{ report: ValidationReportV1; screenshotEvidence?: ScreenshotEvidence }> {
+  const { screenshot, ...validation } = input;
+  const report = await runValidationGates(validation);
+  if (
+    report.overallOutcome !== "pass" ||
+    report.results.some(
+      ({ outcome, required }) => outcome === "fail" || (required && outcome !== "pass"),
+    )
+  ) {
+    return { report };
+  }
+  return {
+    report,
+    screenshotEvidence: await captureValidationScreenshots(screenshot),
+  };
 }

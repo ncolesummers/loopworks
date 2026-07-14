@@ -159,6 +159,7 @@ export const demoSeedIds = {
     other: seedId("artifacts", 7),
     validationReportSucceeded: seedId("artifacts", 8),
     testPlan: seedId("artifacts", 9),
+    screenshot: seedId("artifacts", 10),
   },
   approvals: {
     requested: seedId("approvals", 0),
@@ -602,6 +603,19 @@ export function buildDemoSeedData(): DemoSeedData {
       title: "Validation report",
       uri: "https://github.com/ncolesummers/loopworks-web/actions/runs/demo-validation-report",
       metadata: demoValidationReportMetadata,
+    },
+    {
+      id: ids.artifacts.screenshot,
+      runId: ids.loopRuns.failed,
+      stepId: ids.runSteps.failed,
+      type: "screenshot",
+      title: "Validation screenshots",
+      uri: "artifact://demo/validation-screenshots",
+      metadata: {
+        expectedScreenshotEvidenceSchemaId: "loopworks.screenshot_evidence.v1",
+        screenshotEvidenceMetadataKind: "screenshot_evidence_contract",
+        screenshotEvidenceVersion: 1,
+      },
     },
     {
       id: ids.artifacts.patch,

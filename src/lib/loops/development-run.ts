@@ -5,6 +5,7 @@ import {
   createRedTestEvidenceArtifactContractMetadata,
   createTestPlanArtifactContractMetadata,
 } from "@agent/test-writing-agent";
+import { createValidationReviewArtifactContractMetadata } from "@agent/validation-review-agent";
 import { and, eq, sql } from "drizzle-orm";
 import type { db } from "@/db/client";
 import {
@@ -17,6 +18,7 @@ import {
   runSteps,
 } from "@/db/schema";
 import { createPrIntentArtifactContractMetadata } from "@/lib/loops/pr-intent";
+import { createScreenshotEvidenceArtifactContractMetadata } from "@/lib/loops/screenshot-evidence";
 import { createValidationReportArtifactContractMetadata } from "@/lib/loops/validation-report";
 import { recordDevelopmentLoopRunCreatedObservability } from "@/lib/observability/metrics";
 import { getActiveTraceId, isValidW3cTraceId } from "@/lib/observability/trace-context";
@@ -42,6 +44,7 @@ export type DevelopmentLoopArtifactType =
   | "patch"
   | "pr_intent"
   | "log_summary"
+  | "screenshot"
   | "other";
 
 type DevelopmentLoopArtifactContract = {
@@ -99,7 +102,10 @@ export const developmentLoopStages = [
   {
     actorId: "ci-runner",
     actorType: "ci",
-    artifacts: [{ label: "Validation report", required: true, type: "validation_report" }],
+    artifacts: [
+      { label: "Validation report", required: true, type: "validation_report" },
+      { label: "Validation screenshots", required: true, type: "screenshot" },
+    ],
     key: "validation",
     summary: "Run deterministic checks before review, LLM judgment, commit, or PR stages.",
     timelineKind: "validation",
@@ -108,8 +114,8 @@ export const developmentLoopStages = [
     validationStatus: "required",
   },
   {
-    actorId: "reviewer",
-    actorType: "human",
+    actorId: "validation-reviewer",
+    actorType: "agent",
     artifacts: [{ label: "Code review notes", required: true, type: "log_summary" }],
     key: "code-review",
     summary: "Review assumptions, security/a11y risks, and validation evidence.",
@@ -470,6 +476,12 @@ export async function createDevelopmentLoopRun(input: {
               : {}),
             ...(artifact.type === "test_plan" ? createTestPlanArtifactContractMetadata() : {}),
             ...(artifact.type === "patch" ? createImplementationArtifactContractMetadata() : {}),
+            ...(artifact.type === "screenshot"
+              ? createScreenshotEvidenceArtifactContractMetadata()
+              : {}),
+            ...(artifact.type === "log_summary" && artifact.stageKey === "code-review"
+              ? createValidationReviewArtifactContractMetadata()
+              : {}),
             ...(artifact.type === "pr_intent" ? createPrIntentArtifactContractMetadata() : {}),
           },
           runId,
