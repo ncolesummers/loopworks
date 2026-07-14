@@ -6,6 +6,7 @@ import { startLoopworksSpan } from "@/lib/observability/trace-context";
 import { computeTestPlanDigest } from "../../../test-writing-agent";
 import { loadImplementationHandoff } from "../lib/context";
 import { resolveImplementerFixtureMode } from "../lib/fixture-mode";
+import { parseWorkingTreePaths, sandboxWorkingTreeStatusCommand } from "../lib/tool-policy";
 
 export default defineTool({
   description: "Apply only the exact persisted, digest-bound test patch to the pinned checkout.",
@@ -39,10 +40,10 @@ export default defineTool({
         });
         if (applied.exitCode !== 0) throw new Error("Exact test patch could not be applied.");
         const changed = await sandbox.run({
-          command: "cd repo && git diff --name-only",
+          command: sandboxWorkingTreeStatusCommand,
           abortSignal: AbortSignal.timeout(5_000),
         });
-        const paths = changed.stdout.split(/\r?\n/).filter(Boolean).sort();
+        const paths = parseWorkingTreePaths(changed.stdout);
         const expected = [...handoff.testPlan.patch.paths].sort();
         if (JSON.stringify(paths) !== JSON.stringify(expected)) {
           throw new Error("Applied test patch changed undeclared paths.");

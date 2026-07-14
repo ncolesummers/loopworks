@@ -51,7 +51,9 @@ export default defineTool({
             abortSignal: AbortSignal.timeout(900_000),
           });
       const redacted = redactImplementationOutput(`${result.stdout}\n${result.stderr}`);
-      if (result.exitCode !== 0 || /(?:error: script|tests? failed|build failed)/i.test(redacted)) {
+      // The exit code is authoritative; phrase scans misfire on passing output
+      // that merely mentions failure (e.g. a test titled "renders build failed").
+      if (result.exitCode !== 0) {
         throw new Error("Aggregate implementation validation failed.");
       }
       const outputSha256 = sha256(redacted);

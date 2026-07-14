@@ -47,8 +47,7 @@ export function isAllowedProductionArtifactPath(path: string): boolean {
     !segments.some((segment) => segment === "." || segment === "..") &&
     !segments.some((segment) => forbiddenProductionSegments.has(segment.toLowerCase())) &&
     !forbiddenProductionFilePattern.test(filename) &&
-    !/\.(?:test|spec|stories)\.[^/]+$/i.test(filename) &&
-    !/(?:^|[-_.])fixture(?:[-_.]|$)/i.test(filename)
+    !/\.(?:test|spec|stories)\.[^/]+$/i.test(filename)
   );
 }
 

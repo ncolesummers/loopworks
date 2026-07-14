@@ -1,10 +1,13 @@
+import { SpanStatusCode } from "@opentelemetry/api";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { startLoopworksSpan } from "@/lib/observability/trace-context";
 import { computeImplementationDigest } from "../../../implementation-agent";
 import { computeTestPlanDigest } from "../../../test-writing-agent";
 import { resolveImplementerFixtureMode } from "../lib/fixture-mode";
 import { loadImplementationHandoff } from "../lib/context";
+import { assertWellFormedRepositoryFullName } from "../lib/tool-policy";
 
 export default defineTool({
   description: "Load and verify the approved plan, exact test patch, red evidence, and fixtures.",
@@ -24,11 +27,15 @@ export default defineTool({
     };
     const sandbox = await ctx.getSandbox();
     if (!resolveImplementerFixtureMode().enabled) {
+      assertWellFormedRepositoryFullName(handoff.plan.issue.repositoryFullName);
       const repoUrl = `https://github.com/${handoff.plan.issue.repositoryFullName}.git`;
-      await sandbox.setNetworkPolicy({
-        allow: ["github.com", "objects.githubusercontent.com", "registry.npmjs.org"],
+      const span = startLoopworksSpan("loopworks.implementation.checkout", {
+        attributes: { "loopworks.agent": "implementer", "loopworks.stage": "development" },
       });
       try {
+        await sandbox.setNetworkPolicy({
+          allow: ["github.com", "objects.githubusercontent.com", "registry.npmjs.org"],
+        });
         const result = await sandbox.run({
           command: [
             `git clone --filter=blob:none ${JSON.stringify(repoUrl)} repo`,
@@ -41,8 +48,14 @@ export default defineTool({
           abortSignal: AbortSignal.timeout(120_000),
         });
         if (result.exitCode !== 0) throw new Error("Commit-pinned checkout failed.");
+        span.setStatus({ code: SpanStatusCode.OK });
+      } catch (error) {
+        span.recordException(error instanceof Error ? error : String(error));
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw error;
       } finally {
         await sandbox.setNetworkPolicy("deny-all");
+        span.end();
       }
     }
     await sandbox.run({ command: "mkdir -p .loopworks" });

