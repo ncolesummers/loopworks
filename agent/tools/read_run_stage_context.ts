@@ -4,13 +4,64 @@ import { z } from "zod";
 
 import { db } from "@/db/client";
 import { agentPlans, approvals, artifacts, loopRuns, runSteps } from "@/db/schema";
+import { createImplementationFixtureHandoff } from "../implementation-fixture";
 import { createPlanningAgentSeedPlan } from "../planning-agent";
+import { computeTestPlanDigest } from "../test-writing-agent";
+import { resolveImplementerFixtureMode } from "../subagents/implementer/lib/fixture-mode";
 import { resolveTestWriterFixtureMode } from "../subagents/test-writer/lib/fixture-mode";
 
 export default defineTool({
   description: "Read durable run, plan, approval, step, and artifact context for stage routing.",
   inputSchema: z.object({ runId: z.string().uuid() }),
   async execute({ runId }) {
+    if (resolveImplementerFixtureMode().enabled) {
+      const { plan, redEvidence, testPlan } = createImplementationFixtureHandoff();
+      const planId = "00000000-0000-4000-8000-000000000148";
+      return {
+        approvals: [
+          {
+            id: "00000000-0000-4000-8000-000000000248",
+            metadata: { planId, planSha256: plan.identity.sha256 },
+            status: "approved",
+          },
+        ],
+        artifacts: [
+          {
+            id: "00000000-0000-4000-8000-000000000448",
+            metadata: { testPlan, testPlanMetadataKind: "test_plan_result" },
+            sha256: computeTestPlanDigest(testPlan),
+            stepId: "00000000-0000-4000-8000-000000000347",
+            type: "test_plan",
+            uri: "artifact://fixture/test-plan",
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000548",
+            metadata: {
+              redTestEvidence: redEvidence,
+              redTestEvidenceMetadataKind: "red_test_evidence_result",
+            },
+            sha256: computeTestPlanDigest(redEvidence),
+            stepId: "00000000-0000-4000-8000-000000000347",
+            type: "validation_report",
+            uri: "artifact://fixture/red-evidence",
+          },
+        ],
+        plans: [{ id: planId, plan, status: "approved" }],
+        run: { currentStage: "development", id: runId, status: "running" },
+        steps: [
+          {
+            id: "00000000-0000-4000-8000-000000000347",
+            stage: "test-writing",
+            status: "succeeded",
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000348",
+            stage: "development",
+            status: "running",
+          },
+        ],
+      };
+    }
     if (resolveTestWriterFixtureMode().enabled) {
       const planId = "00000000-0000-4000-8000-000000000147";
       const plan = createPlanningAgentSeedPlan({
