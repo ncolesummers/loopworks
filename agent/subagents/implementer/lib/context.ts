@@ -8,6 +8,8 @@ import {
   computeTestPlanDigest,
   redTestEvidenceSchema,
   testPlanArtifactSchema,
+  testWriterModelLabel,
+  testWritingAgentOutputSchema,
 } from "../../../test-writing-agent";
 import { resolveImplementerFixtureMode } from "./fixture-mode";
 
@@ -51,16 +53,32 @@ export async function loadImplementationHandoff(runId: string) {
     .select()
     .from(artifacts)
     .where(and(eq(artifacts.runId, runId), eq(artifacts.stepId, testStep.id)));
-  const testPlanRow = rows.find(({ type }) => type === "test_plan");
-  const redRow = rows.find(({ type }) => type === "validation_report");
+  // Verification must stay at parity with applyDevelopmentLoopImplementationResult:
+  // anything the root rejects, the subagent must reject before burning the stage.
+  const testPlanRows = rows.filter(({ type }) => type === "test_plan");
+  const redRows = rows.filter(({ type }) => type === "validation_report");
+  if (testPlanRows.length !== 1 || redRows.length !== 1) {
+    throw new Error("Implementation requires exactly one test plan and red-evidence artifact.");
+  }
+  const testPlanRow = testPlanRows[0];
+  const redRow = redRows[0];
   const testPlan = testPlanArtifactSchema.parse(testPlanRow?.metadata?.testPlan);
   const redEvidence = redTestEvidenceSchema.parse(redRow?.metadata?.redTestEvidence);
+  const compositeHandoff = testWritingAgentOutputSchema.safeParse({
+    model: testWriterModelLabel,
+    testPlan,
+    redEvidence,
+  });
   if (
+    !compositeHandoff.success ||
     testPlanRow?.sha256 !== computeTestPlanDigest(testPlan) ||
     redRow?.sha256 !== computeTestPlanDigest(redEvidence) ||
     redEvidence.testPlanSha256 !== computeTestPlanDigest(testPlan) ||
+    redEvidence.planId !== plan.identity.id ||
+    redEvidence.planSha256 !== plan.identity.sha256 ||
     testPlan.plan.id !== plan.identity.id ||
     testPlan.plan.sha256 !== plan.identity.sha256 ||
+    testPlan.plan.repositoryFullName !== plan.issue.repositoryFullName ||
     testPlan.plan.commitSha !== plan.repositoryRevision.commitSha
   ) {
     throw new Error("Implementation handoff artifacts are stale or mismatched.");
