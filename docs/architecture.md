@@ -185,7 +185,10 @@ Stage subagents are tracked as backlog items, one per loop stage that still lack
 
 1. Research loop skeleton, research planner, researcher, and research author agents — the `spike` plus `agent-ready` research loop, run in parallel to the development loop.
 2. Test-writer subagent — test-writing stage, red test evidence plus a reusable automated test plan, explicit seed data, and a bounded test-only patch.
-3. Implementation subagent — development stage, patch artifact.
+3. Implementation subagent — development stage, digest-bound production patch
+   plus signed focused and aggregate green evidence. It reuses the exact
+   test-writing patch and fixtures, while the root owns persistence and the
+   transition to validation.
 4. Validation review subagent — code review stage, code review notes and UI screenshot evidence.
 5. PR preparation subagent — PR stage, PR intent content including screenshots.
 6. Release notes subagent — done stage, completion summary.
