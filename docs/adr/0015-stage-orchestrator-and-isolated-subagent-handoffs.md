@@ -1,9 +1,11 @@
 # ADR 0015: Stage Orchestrator And Isolated Subagent Handoffs
 
 Status: Proposed
-Date: 2026-07-11
+Date: 2026-07-13
 
-Driving issue: [#47](https://github.com/ncolesummers/loopworks/issues/47)
+Driving issues: [#47](https://github.com/ncolesummers/loopworks/issues/47),
+[#48](https://github.com/ncolesummers/loopworks/issues/48), and
+[#49](https://github.com/ncolesummers/loopworks/issues/49)
 
 ## Context
 
@@ -23,10 +25,10 @@ reads durable run state, verifies approval and artifact prerequisites, delegates
 one stage, validates the typed result, and invokes deterministic control-plane
 transitions.
 
-The root orchestrator and planner use `openai/gpt-5.6-sol`; the test-writer
-uses `openai/gpt-5.6-terra`. Each retains independent `xhigh` reasoning
-configuration so model routing can evolve per stage without changing the
-shared topology.
+The root orchestrator and planner use `openai/gpt-5.6-sol`; the test-writer,
+implementer, and validation-reviewer use `openai/gpt-5.6-terra`. Each retains
+independent `xhigh` reasoning configuration so model routing can evolve per
+stage without changing the shared topology.
 
 Planner, test-writer, and implementer receive repository-scoped discovery, text
 search, and line-range read tools against their isolated commit-pinned
@@ -63,6 +65,31 @@ digests. The root revalidates the approval and complete handoff before storing
 the result in the existing development `patch` artifact and advancing to the
 separate validation stage.
 
+Validation owns browser screenshot evidence rather than the reviewer. A
+deterministic UI classification checks production app, component, and style
+paths plus browser or Storybook coverage in the persisted test plan. UI runs
+must persist `loopworks.screenshot_evidence.v1`, bound to the repository commit,
+test-plan digest, and production-patch digest. It contains one PNG reference for
+every browser test at `390x844`, `1280x832`, and `1440x960`; non-UI runs persist
+an explicit empty manifest. Missing journeys, captures, or mismatched digests
+block validation.
+
+The validation-reviewer is a sibling with deny-all runtime egress and guarded,
+commit-pinned repository reads. It consumes only the persisted plan, test plan,
+implementation result, passing validation report, and screenshot manifest. It
+emits `loopworks.validation_review_result.v1`: bounded findings with exact
+validation and screenshot citations plus one `commit`, `development`, or
+`test-writing` recommendation. It has no GitHub, generic write, or durable
+transition tool. The root alone validates and applies that result.
+
+Backward recommendations are bounded cycles, not new runs. The control plane
+preserves the approved plan, increments and requeues the affected existing step
+rows, clears execution claims, resets invalidated artifact contracts, and
+records prior review attempt, digest, and route metadata. `development` resets
+development through code review; `test-writing` also resets test writing. The
+manifest retry budget bounds both routes. Exact replay is idempotent and a
+conflicting replay fails closed.
+
 ## Consequences
 
 Each stage can tune its model and capabilities independently without granting
@@ -81,15 +108,22 @@ deterministic control-plane behavior rather than model judgment.
    AC coverage, red-evidence classification, and sanitized telemetry.
 3. PGlite tests prove exact plan approval, two-artifact persistence, idempotency,
    and advancement only for complete expected-red evidence.
-4. Eve eval discovery includes planner, test-writing, and implementation
-   routing scenarios.
-5. `bun run validate` and `bun run build` pass before review.
+4. Eve eval discovery includes planner, test-writing, implementation, and
+   validation-review routing scenarios.
+5. Validation-review transition tests cover forward routing, both backward
+   cycles, retry bounds, claims, artifact reset, stale bindings, and replay.
+6. Screenshot tests cover deterministic UI classification, three required
+   viewports, digest-bound writer output, non-UI manifests, and incomplete
+   evidence.
+7. `bun run validate` and `bun run build` pass before review.
 
 ## Follow-Ups
 
 1. **Done by issue #48.** The implementer consumes the persisted test-only
    patch and produces the smallest green implementation patch in a separate
    sandbox.
-2. Issues #44-#46 and #49-#51 implement additional sibling subagents under this
+2. **Done by issue #49.** The validation-reviewer consumes passing deterministic
+   evidence and recommends a root-controlled forward or bounded backward route.
+3. Issues #44-#46 and #50-#51 implement additional sibling subagents under this
    orchestration contract.
-3. Accept this ADR only after maintainer review of issue #47.
+4. Accept this ADR only after maintainer review of the sibling-stage rollout.
