@@ -1,0 +1,11 @@
+{
+  "repositoryFullName": "ncolesummers/loopworks",
+  "issueNumber": 49,
+  "title": "Validation review subagent for the development loop",
+  "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "acceptanceCriteria": [
+    "Review findings cite exact deterministic results and relevant responsive screenshots.",
+    "Review starts only after validation passes and complete UI evidence is persisted.",
+    "The root orchestrator alone applies commit, development, or test-writing routing."
+  ]
+}
