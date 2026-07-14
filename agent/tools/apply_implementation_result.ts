@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/db/client";
 import { applyDevelopmentLoopImplementationResult } from "@/lib/loops/development-run-transitions";
+import { logger } from "@/lib/observability/logger";
 import { computeImplementationDigest, implementationResultSchema } from "../implementation-agent";
 import { createImplementationFixtureHandoff } from "../implementation-fixture";
 import { computeTestPlanDigest } from "../test-writing-agent";
@@ -81,6 +82,11 @@ export default defineTool({
         stepId: "00000000-0000-4000-8000-000000000348",
       };
     }
-    return applyDevelopmentLoopImplementationResult({ database: db, output: parsed, runId });
+    return applyDevelopmentLoopImplementationResult({
+      database: db,
+      logger,
+      output: parsed,
+      runId,
+    });
   },
 });
