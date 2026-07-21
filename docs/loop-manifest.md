@@ -79,8 +79,8 @@ done. Each stage has a required visible artifact contract:
 2. Test-writing: red test evidence and an automated test plan with explicit
    fixtures and a bounded test-only patch.
 3. Development: patch artifact.
-4. Validation: validation report.
-5. Code review: code review notes.
+4. Validation: validation report and screenshot evidence manifest.
+5. Code review: typed validation-review result in the code review notes artifact.
 6. Commit: commit intent.
 7. PR: PR intent.
 8. Done: completion summary.
@@ -100,6 +100,35 @@ has expected assertion-failure evidence. Its `validation_report` row carries
 report. Expected-red entries include a verified execution receipt bound to the
 persisted test patch; setup, infrastructure, timeout, crash, unrelated, or
 passing outcomes cannot advance the stage.
+
+## Screenshot Evidence And Validation Review
+
+The validation stage classifies a run as UI-affecting when the persisted
+production patch touches app, component, or style paths, or when the test plan
+contains browser or Storybook coverage. UI-affecting runs must have at least one
+persisted browser journey and a `loopworks.screenshot_evidence.v1` manifest with
+one PNG capture per browser test at each required viewport: mobile `390x844`,
+laptop `1280x832`, and desktop `1440x960`. The manifest is bound to the exact
+repository commit, test-plan digest, and production-patch digest. Non-UI runs
+persist the same schema with an explicit empty capture set. Missing, duplicate,
+forged, stale, or incomplete evidence blocks validation.
+
+Code review begins only after deterministic validation has passed. The isolated
+validation-reviewer consumes the persisted plan, test plan, implementation
+result, validation report, and screenshot manifest, then emits
+`loopworks.validation_review_result.v1`. Findings use bounded severity,
+category, path, and line fields and cite exact validation keys and screenshot
+capture IDs. Results cannot contain raw command output, prompts, patch bodies,
+screenshot bytes, credentials, or secrets. `commit` is invalid with blocker or
+high findings; backward routes require cited findings and a non-empty reason.
+
+Only the root transition applies the recommendation. `commit` completes code
+review and advances. `development` requeues development, validation, and code
+review. `test-writing` also requeues test writing. Cycles reuse existing rows,
+increment attempts, clear execution claims, reset invalidated artifact
+contracts, retain the approved plan, and record the prior attempt, result
+digest, and route for audit and idempotent replay. The manifest retry policy
+bounds further backward routing.
 
 ## Validation Report Artifact
 

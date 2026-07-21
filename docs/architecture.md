@@ -106,7 +106,8 @@ The loop manifest should be versioned and validated. It must include:
 3. Trigger labels, issue states, schedules, and manual triggers.
 4. Model policy, tool policy, and budget limits.
 5. Approval gates and bypass policy.
-6. Artifact contracts for plans, validation reports, patches, PR intents, and summaries.
+6. Artifact contracts for plans, validation reports, screenshots, typed review
+   results, patches, PR intents, and summaries.
 7. Validation gates and required commands.
 8. Retry limits and backoff policy.
 9. Concurrency groups and cancellation behavior.
@@ -127,6 +128,10 @@ The validation order is:
 7. LLM review or judgment only after deterministic evidence is available.
 
 Agent-generated claims should reference the deterministic evidence rather than replacing it.
+UI-affecting runs must additionally persist a digest-bound screenshot manifest
+covering every browser journey at mobile `390x844`, laptop `1280x832`, and
+desktop `1440x960`. Validation owns capture and fails closed before LLM review
+when a browser journey or required capture is absent.
 
 ## GitHub Integration
 
@@ -189,7 +194,12 @@ Stage subagents are tracked as backlog items, one per loop stage that still lack
    plus signed focused and aggregate green evidence. It reuses the exact
    test-writing patch and fixtures, while the root owns persistence and the
    transition to validation.
-4. Validation review subagent — code review stage, code review notes and UI screenshot evidence.
+4. Validation review subagent — code review stage, Terra/xhigh typed findings
+   over persisted validation-owned screenshot evidence and deterministic
+   results. It recommends `commit`, `development`, or `test-writing`; only the
+   root applies the route. Backward routes reuse and increment affected step
+   rows, clear execution claims, reset invalidated artifacts, retain the
+   approved plan, and preserve digest/route history for replay.
 5. PR preparation subagent — PR stage, PR intent content including screenshots.
 6. Release notes subagent — done stage, completion summary.
 
