@@ -6,14 +6,47 @@ import { db } from "@/db/client";
 import { agentPlans, approvals, artifacts, loopRuns, runSteps } from "@/db/schema";
 import { createImplementationFixtureHandoff } from "../implementation-fixture";
 import { createPlanningAgentSeedPlan } from "../planning-agent";
-import { computeTestPlanDigest } from "../test-writing-agent";
 import { resolveImplementerFixtureMode } from "../subagents/implementer/lib/fixture-mode";
 import { resolveTestWriterFixtureMode } from "../subagents/test-writer/lib/fixture-mode";
+import { resolveValidationReviewerFixtureMode } from "../subagents/validation-reviewer/lib/fixture-mode";
+import { computeTestPlanDigest } from "../test-writing-agent";
+import { createValidationReviewFixtureContext } from "../validation-review-fixture";
 
 export default defineTool({
   description: "Read durable run, plan, approval, step, and artifact context for stage routing.",
   inputSchema: z.object({ runId: z.string().uuid() }),
   async execute({ runId }) {
+    if (resolveValidationReviewerFixtureMode().enabled) {
+      const context = createValidationReviewFixtureContext();
+      return {
+        approvals: [{ id: "fixture-plan-approval", status: context.approvalStatus }],
+        artifacts: [
+          {
+            type: "test_plan",
+            metadata: { testPlan: context.testPlan },
+            sha256: context.testPlanArtifactSha256,
+          },
+          {
+            type: "patch",
+            metadata: { implementationResult: context.implementationResult },
+            sha256: context.implementationArtifactSha256,
+          },
+          {
+            type: "validation_report",
+            metadata: { validationReport: context.validationReport },
+            sha256: context.validationArtifactSha256,
+          },
+          {
+            type: "screenshot",
+            metadata: { screenshotEvidence: context.screenshotEvidence },
+            sha256: context.screenshotArtifactSha256,
+          },
+        ],
+        plans: [{ id: context.plan.identity.id, plan: context.plan, status: context.planStatus }],
+        run: context.run,
+        steps: [context.validationStep, { ...context.reviewStep, stage: "code-review" }],
+      };
+    }
     if (resolveImplementerFixtureMode().enabled) {
       const { plan, redEvidence, testPlan } = createImplementationFixtureHandoff();
       const planId = "00000000-0000-4000-8000-000000000148";
