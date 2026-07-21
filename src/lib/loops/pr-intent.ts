@@ -100,6 +100,12 @@ export const prIntentArtifactMetadataSchema = z
     prIntentMetadataKind: z.literal("pr_intent_result"),
     prIntentSchemaId: z.literal(prIntentSchemaId),
     prIntentVersion: z.literal(prIntentVersion),
+    prPreparationResult: z.unknown().optional(),
+    prPreparationResultSchemaId: z.literal("loopworks.pr_preparation_result.v1").optional(),
+    prPreparationResultSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
   })
   .strict();
 
@@ -122,6 +128,14 @@ type ComposePrIntentInput = {
     id: string;
     url: string;
   };
+  screenshots?: Array<{
+    id: string;
+    testId: string;
+    viewport: "mobile" | "laptop" | "desktop";
+    uri: string;
+  }>;
+  summary?: string;
+  title?: string;
   validation: {
     artifactUri: string;
     report: ValidationReportV1;
@@ -207,10 +221,18 @@ export function composePrIntent(input: ComposePrIntentInput): PrIntentV1 {
           : []),
       ]
     : ["- No deployment context was recorded for this run."];
-  const title = `Issue #${sourceIssue.number}: ${sourceIssue.title}`;
+  const screenshotLines = input.screenshots?.length
+    ? input.screenshots.map(
+        (screenshot) =>
+          `- ${escapeMarkdownLabel(screenshot.testId)} (${screenshot.viewport}): \`${screenshot.uri}\``,
+      )
+    : ["- No UI screenshot references were recorded for this run."];
+  const title = sanitizeText(input.title ?? `Issue #${sourceIssue.number}: ${sourceIssue.title}`);
+  const summary = input.summary ? sanitizeText(input.summary) : undefined;
   const body = [
     "## Summary",
     "",
+    ...(summary ? [summary, ""] : []),
     `- ${markdownLink(`Source issue #${sourceIssue.number}`, sourceIssue.url)}`,
     `- ${markdownLink("Loopworks run", run.url)}`,
     ...(input.changeDigest ? [`- Approved change digest: \`${input.changeDigest}\``] : []),
@@ -228,6 +250,10 @@ export function composePrIntent(input: ComposePrIntentInput): PrIntentV1 {
     "## Artifacts",
     "",
     ...artifactLines,
+    "",
+    "## Screenshots",
+    "",
+    ...screenshotLines,
     "",
     `Closes #${sourceIssue.number}`,
   ].join("\n");

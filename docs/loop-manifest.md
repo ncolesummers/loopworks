@@ -168,13 +168,21 @@ report payload.
 
 ## PR Intent And Guarded Creation
 
-The PR stage persists `loopworks.pr_intent.v1`. The strict versioned payload
+The isolated PR-preparer emits `loopworks.pr_preparation_result.v1`; the root
+revalidates and persists its nested `loopworks.pr_intent.v1`. The strict
+versioned payload
 contains the deterministic PR title and body, source-issue and run links,
 `validation_report.v1` summary and artifact link, ordered safe artifact links,
-optional deployment context, and the SHA-256 change digest used for a live
-commit. It does not accept raw prompts, validation stdout or stderr, arbitrary
+optional deployment context, and exact validation-owned screenshot references.
+It does not accept raw prompts, validation stdout or stderr, arbitrary
 artifact metadata, credentials, or credential-bearing URLs. Secret-like text
-selected from persisted titles is redacted before composition.
+selected from persisted titles is redacted before composition. Non-UI runs use
+an explicit empty screenshot list. `artifact://` screenshot references remain
+internal audit references and are not uploaded by the subagent.
+The run backlink is canonicalized from `LOOPWORKS_PUBLIC_URL` (or the Vercel
+project URL) and must bind the exact run ID. The final validation link is chosen
+by the validation artifact's persisted digest, so earlier red evidence cannot
+replace it through artifact ordering.
 
 Queued PR artifacts use `pr_intent_contract` metadata with the expected schema
 id and version. Completed artifacts use `pr_intent_result` metadata containing
@@ -184,10 +192,14 @@ head branch, and head SHA.
 Both execution modes use the same transition boundary:
 
 1. Validation must have advanced with every repository-required gate present
-   and passing; code review and commit predecessor steps must have succeeded.
+   and passing; code review and commit predecessor steps must have succeeded;
+   and the root must have persisted an exact typed PR-preparation result.
 2. Exactly one `external-write-review` approval must be `approved`. Live mode
    also requires its `prChangeDigest` evidence to match the normalized commit
-   message and file bytes exactly; bypassed approvals do not qualify.
+   message and file bytes exactly. Both modes require `prIntentDigest` to match
+   the persisted preparation result; bypassed approvals do not qualify.
+   The root adds the intent digest while the approval is still requested, and
+   the authenticated approval transition preserves that evidence binding.
 3. Development mode persists the artifact without constructing a GitHub client
    or using network and non-loopback services.
 4. Live mode uses a GitHub App installation token, creates a deterministic

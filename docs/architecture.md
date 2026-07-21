@@ -186,7 +186,7 @@ The planner subagent should:
 4. Produce a clear next-action summary.
 5. Avoid mutating code or GitHub state outside explicit tool contracts.
 
-Stage subagents are tracked as backlog items, one per loop stage that still lacks an LLM specialist:
+Stage specialists use typed handoffs and independent capability boundaries:
 
 1. Research loop skeleton, research planner, researcher, and research author agents — the `spike` plus `agent-ready` research loop, run in parallel to the development loop.
 2. Test-writer subagent — test-writing stage, red test evidence plus a reusable automated test plan, explicit seed data, and a bounded test-only patch.
@@ -200,7 +200,10 @@ Stage subagents are tracked as backlog items, one per loop stage that still lack
    root applies the route. Backward routes reuse and increment affected step
    rows, clear execution claims, reset invalidated artifacts, retain the
    approved plan, and preserve digest/route history for replay.
-5. PR preparation subagent — PR stage, PR intent content including screenshots.
+5. PR preparation subagent — PR stage, Terra/xhigh bounded narrative plus exact
+   issue, run, validation, review, deployment, artifact, and validation-owned
+   screenshot references. The root persists the typed result; the guarded
+   writer alone owns GitHub mutation.
 6. Release notes subagent — done stage, completion summary.
 
 The commit stage intentionally stays mechanical, owned by the PR creation path rather than a dedicated subagent. Typed artifacts bridge isolated subagent sandboxes, and each subagent needs eval coverage before promotion to default use.

@@ -1,0 +1,11 @@
+{
+  "repositoryFullName": "ncolesummers/loopworks",
+  "issueNumber": 50,
+  "title": "PR preparation subagent for PR intent content",
+  "commitSha": "1111111111111111111111111111111111111111",
+  "acceptanceCriteria": [
+    "Subagent output is a PR intent artifact containing evidence links, artifacts, issue links, deployment context, and screenshots for UI-affecting changes.",
+    "Output feeds the guarded PR creation path; neither the subagent nor its tools mutate GitHub.",
+    "Future model, prompt, and tool changes have a path to eval coverage."
+  ]
+}

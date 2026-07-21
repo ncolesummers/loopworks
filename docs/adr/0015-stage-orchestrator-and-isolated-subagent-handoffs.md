@@ -5,7 +5,8 @@ Date: 2026-07-13
 
 Driving issues: [#47](https://github.com/ncolesummers/loopworks/issues/47),
 [#48](https://github.com/ncolesummers/loopworks/issues/48), and
-[#49](https://github.com/ncolesummers/loopworks/issues/49)
+[#49](https://github.com/ncolesummers/loopworks/issues/49), and
+[#50](https://github.com/ncolesummers/loopworks/issues/50)
 
 ## Context
 
@@ -26,7 +27,7 @@ one stage, validates the typed result, and invokes deterministic control-plane
 transitions.
 
 The root orchestrator and planner use `openai/gpt-5.6-sol`; the test-writer,
-implementer, and validation-reviewer use `openai/gpt-5.6-terra`. Each retains
+implementer, validation-reviewer, and PR-preparer use `openai/gpt-5.6-terra`. Each retains
 independent `xhigh` reasoning configuration so model routing can evolve per
 stage without changing the shared topology.
 
@@ -90,6 +91,15 @@ development through code review; `test-writing` also resets test writing. The
 manifest retry budget bounds both routes. Exact replay is idempotent and a
 conflicting replay fails closed.
 
+The PR-preparer is a sibling with independent Terra/xhigh configuration,
+deny-all egress, no repository checkout, and only bounded readers for issue,
+validation, review, completed artifact, deployment, and screenshot evidence.
+It emits `loopworks.pr_preparation_result.v1`, binding bounded narrative and a
+nested `loopworks.pr_intent.v1` to the approved plan, repository revision,
+validation report, review result, screenshot manifest, completed artifact set,
+optional deployment context, run, and PR attempt. The root validates and
+persists the result; only ADR 0014's guarded transition may use it for GitHub.
+
 ## Consequences
 
 Each stage can tune its model and capabilities independently without granting
@@ -102,20 +112,23 @@ deterministic control-plane behavior rather than model judgment.
 
 ## Validation
 
-1. Eve discovery reports the root plus declared `planner`, `test-writer`, and
-   `implementer` subagents without diagnostics.
+1. Eve discovery reports the root plus declared `planner`, `test-writer`,
+   `implementer`, `validation-reviewer`, and `pr-preparer` subagents without
+   diagnostics.
 2. Unit tests cover tool allowlists, fixture fail-closed behavior, patch safety,
    AC coverage, red-evidence classification, and sanitized telemetry.
 3. PGlite tests prove exact plan approval, two-artifact persistence, idempotency,
    and advancement only for complete expected-red evidence.
-4. Eve eval discovery includes planner, test-writing, implementation, and
-   validation-review routing scenarios.
+4. Eve eval discovery includes planner, test-writing, implementation,
+   validation-review, and PR-preparation routing scenarios.
 5. Validation-review transition tests cover forward routing, both backward
    cycles, retry bounds, claims, artifact reset, stale bindings, and replay.
 6. Screenshot tests cover deterministic UI classification, three required
    viewports, digest-bound writer output, non-UI manifests, and incomplete
    evidence.
-7. `bun run validate` and `bun run build` pass before review.
+7. PR-preparation tests cover exact evidence binding, non-UI empty manifests,
+   idempotent persistence, conflicting replay, and guarded-writer approval.
+8. `bun run validate` and `bun run build` pass before review.
 
 ## Follow-Ups
 
@@ -124,6 +137,8 @@ deterministic control-plane behavior rather than model judgment.
    sandbox.
 2. **Done by issue #49.** The validation-reviewer consumes passing deterministic
    evidence and recommends a root-controlled forward or bounded backward route.
-3. Issues #44-#46 and #50-#51 implement additional sibling subagents under this
+3. **Done by issue #50.** The PR-preparer emits evidence-bound intent while the
+   root and guarded writer retain all persistence and GitHub authority.
+4. Issues #44-#46 and #51 implement additional sibling subagents under this
    orchestration contract.
-4. Accept this ADR only after maintainer review of the sibling-stage rollout.
+5. Accept this ADR only after maintainer review of the sibling-stage rollout.

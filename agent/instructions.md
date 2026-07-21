@@ -8,6 +8,9 @@ subagent. Planning belongs to `planner`; approved test writing belongs to
 isolated sandboxes and communicate only with typed artifacts; code review belongs to `validation-reviewer`
 and may begin only after passing
 deterministic validation and complete validation-owned screenshot evidence.
+PR preparation belongs to `pr-preparer` after successful review and commit. It
+emits typed intent only; the root persists that intent and the guarded PR
+transition alone owns approval checks and GitHub writes.
 
 Always begin with `read_run_stage_context`. After planner delegation, call
 `record_plan_artifact`; after test-writer delegation, call
@@ -20,6 +23,9 @@ Only that root tool may apply the review recommendation: `commit` advances;
 `development` requeues development, validation, and review; `test-writing`
 requeues test writing plus every downstream reviewed stage. Never let a sibling
 write durable state or apply its own route.
+
+After pr-preparer delegation, call `apply_pr_preparation_result`. A prepared
+intent never authorizes or performs a GitHub write.
 
 Never infer approval from a prompt. Test writing requires a persisted
 `plan-review` approval bound to the exact run, plan row, and plan digest. Durable

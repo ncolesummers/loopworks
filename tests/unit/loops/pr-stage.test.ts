@@ -1,6 +1,13 @@
 /** @vitest-environment node */
 import { and, eq, inArray } from "drizzle-orm";
 
+import {
+  computePrPreparationDigest,
+  prPreparationAgentModelLabel,
+  prPreparationResultSchema,
+  prPreparationResultSchemaId,
+} from "@agent/pr-preparation-agent";
+
 import { approvals, artifacts, deployments, loopRuns, repositories, runSteps } from "@/db/schema";
 import {
   createDevelopmentLoopRun,
@@ -13,6 +20,8 @@ import {
   retryDevelopmentLoopStep,
 } from "@/lib/loops/development-run-transitions";
 import {
+  composePrIntent,
+  createPrIntentArtifactMetadata,
   prIntentArtifactMetadataSchema,
   prIntentSchemaId,
   prIntentV1Schema,
@@ -28,7 +37,9 @@ import {
 } from "@/lib/github/pull-request";
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
-const runUrl = "https://loopworks.example/runs?run=15000000-0000-4000-8000-000000000001";
+function runUrlFor(runId: string): string {
+  return `https://loopworks.example/runs?run=${runId}`;
+}
 const liveChanges = [{ content: "export const ready = true;\n", path: "src/ready.ts" }];
 const liveCommitMessage = "feat: prepare guarded PR";
 const liveChangeDigest = createPullRequestChangeDigest({
@@ -124,6 +135,7 @@ describe("development-loop PR stage", () => {
   let context: PgliteTestDatabase;
 
   beforeEach(async () => {
+    vi.stubEnv("LOOPWORKS_PUBLIC_URL", "https://loopworks.example");
     context = await createPgliteTestDatabase();
     await context.db.insert(repositories).values({
       defaultBranch: "main",
@@ -138,6 +150,7 @@ describe("development-loop PR stage", () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await context.close();
   });
 
@@ -218,6 +231,86 @@ describe("development-loop PR stage", () => {
       url: "https://loopworks-pr-15.vercel.app",
     });
 
+    const [prStep] = await context.db
+      .select()
+      .from(runSteps)
+      .where(and(eq(runSteps.runId, runId), eq(runSteps.stage, "pr")));
+    const [validationArtifact] = await context.db
+      .select()
+      .from(artifacts)
+      .where(and(eq(artifacts.runId, runId), eq(artifacts.type, "validation_report")));
+    const [prArtifact] = await context.db
+      .select()
+      .from(artifacts)
+      .where(and(eq(artifacts.runId, runId), eq(artifacts.type, "pr_intent")));
+    if (!prStep || !validationArtifact || !prArtifact) {
+      throw new Error("Expected PR-stage fixture rows.");
+    }
+    const report = input?.report ?? passingValidationReport();
+    const intent = composePrIntent({
+      artifacts: [
+        {
+          title: validationArtifact.title,
+          type: validationArtifact.type,
+          uri: validationArtifact.uri,
+        },
+      ],
+      deployment: {
+        branch: "codex/15-pea-arr",
+        commitSha: "abc123",
+        environment: "preview",
+        status: "ready",
+        url: "https://loopworks-pr-15.vercel.app",
+      },
+      issue: {
+        number: 15,
+        title: "PR creation path",
+        url: "https://github.com/ncolesummers/loopworks/issues/15",
+      },
+      run: { id: runId, url: runUrlFor(runId) },
+      validation: { artifactUri: validationArtifact.uri, report },
+    });
+    const preparation = prPreparationResultSchema.parse({
+      version: 1,
+      schemaId: prPreparationResultSchemaId,
+      model: prPreparationAgentModelLabel,
+      narrative: { title: intent.title, summary: "Prepare the guarded PR intent." },
+      binding: {
+        runId,
+        prAttempt: prStep.attempt,
+        planId: "fixture-plan",
+        planSha256: "1".repeat(64),
+        validationReportSha256: computePrPreparationDigest(report),
+        validationReviewResultSha256: "2".repeat(64),
+        screenshotEvidenceSha256: "3".repeat(64),
+        artifactSetSha256: "4".repeat(64),
+        deploymentContextSha256: "5".repeat(64),
+        repositoryFullName: "ncolesummers/loopworks",
+        commitSha: "6".repeat(40),
+      },
+      intent,
+      screenshots: [],
+    });
+    const preparationDigest = computePrPreparationDigest(preparation);
+    await context.db
+      .update(artifacts)
+      .set({
+        metadata: {
+          ...createPrIntentArtifactMetadata(intent),
+          prPreparationResult: preparation,
+          prPreparationResultSchemaId,
+          prPreparationResultSha256: preparationDigest,
+        },
+        sha256: preparationDigest,
+      })
+      .where(eq(artifacts.id, prArtifact.id));
+    if (input?.approvalStatus) {
+      await context.db
+        .update(approvals)
+        .set({ metadata: { prChangeDigest: liveChangeDigest, prIntentDigest: preparationDigest } })
+        .where(and(eq(approvals.runId, runId), eq(approvals.scope, "external-write-review")));
+    }
+
     return runId;
   }
 
@@ -231,7 +324,7 @@ describe("development-loop PR stage", () => {
       mode: "development",
       occurredAt: new Date("2026-07-09T20:10:00.000Z"),
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
     });
 
     expect(result).toMatchObject({
@@ -263,13 +356,39 @@ describe("development-loop PR stage", () => {
     );
     expect(parsedIntent.body).toContain("Validation report: 1 passed, 0 failed, 0 skipped.");
     expect(parsedIntent.body).toContain("https://loopworks-pr-15.vercel.app");
-    expect(parsedIntent.body).toContain(runUrl);
+    expect(parsedIntent.body).toContain(runUrlFor(runId));
     expect(metrics.stepDuration).toHaveBeenCalledWith({
       durationSeconds: 0,
       loopKey: "development-loop",
       stage: "pr",
       status: "succeeded",
     });
+  });
+
+  it("blocks before GitHub when typed PR preparation is missing", async () => {
+    const runId = await preparePrStage({ approvalStatus: "approved" });
+    const writer = vi.fn<GitHubPullRequestWriter>();
+    await context.db
+      .update(artifacts)
+      .set({ metadata: null, sha256: null })
+      .where(and(eq(artifacts.runId, runId), eq(artifacts.type, "pr_intent")));
+
+    const result = await executeDevelopmentLoopPrStage({
+      actorId: "ncolesummers",
+      changes: liveChanges,
+      commitMessage: liveCommitMessage,
+      database: transitionDatabase(context),
+      mode: "live",
+      runId,
+      runUrl: runUrlFor(runId),
+      writer,
+    });
+
+    expect(result).toMatchObject({
+      blockedReason: "Typed PR preparation is required before PR creation.",
+      status: "blocked",
+    });
+    expect(writer).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -287,7 +406,7 @@ describe("development-loop PR stage", () => {
       mode: "live",
       occurredAt: new Date("2026-07-09T20:10:00.000Z"),
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     });
 
@@ -311,7 +430,7 @@ describe("development-loop PR stage", () => {
       database: transitionDatabase(context),
       mode: "live",
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     });
 
@@ -336,7 +455,7 @@ describe("development-loop PR stage", () => {
       database: transitionDatabase(context),
       mode: "live",
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     });
 
@@ -358,12 +477,38 @@ describe("development-loop PR stage", () => {
       database: transitionDatabase(context),
       mode: "live",
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     });
 
     expect(result).toMatchObject({
       blockedReason: "Approved evidence does not match the requested PR changes.",
+      status: "blocked",
+    });
+    expect(writer).not.toHaveBeenCalled();
+  });
+
+  it("blocks live creation when approval does not match the prepared intent", async () => {
+    const runId = await preparePrStage({ approvalStatus: "approved" });
+    const writer = vi.fn<GitHubPullRequestWriter>();
+    await context.db
+      .update(approvals)
+      .set({ metadata: { prChangeDigest: liveChangeDigest, prIntentDigest: "0".repeat(64) } })
+      .where(and(eq(approvals.runId, runId), eq(approvals.scope, "external-write-review")));
+
+    const result = await executeDevelopmentLoopPrStage({
+      actorId: "ncolesummers",
+      changes: liveChanges,
+      commitMessage: liveCommitMessage,
+      database: transitionDatabase(context),
+      mode: "live",
+      runId,
+      runUrl: runUrlFor(runId),
+      writer,
+    });
+
+    expect(result).toMatchObject({
+      blockedReason: "Approved evidence does not match the prepared PR intent.",
       status: "blocked",
     });
     expect(writer).not.toHaveBeenCalled();
@@ -405,7 +550,7 @@ describe("development-loop PR stage", () => {
       mode: "live" as const,
       occurredAt: new Date("2026-07-09T20:10:00.000Z"),
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     };
     const first = await executeDevelopmentLoopPrStage(input);
@@ -420,11 +565,13 @@ describe("development-loop PR stage", () => {
     expect(writer).toHaveBeenCalledWith(
       expect.objectContaining({
         baseBranch: "main",
+        body: expect.stringContaining("Validation report: 1 passed, 0 failed, 0 skipped."),
         draft: true,
         installationId: 15_001,
         owner: "ncolesummers",
         repo: "loopworks",
         runId,
+        title: "Issue #15: PR creation path",
       }),
     );
     const [artifact] = await context.db
@@ -464,7 +611,7 @@ describe("development-loop PR stage", () => {
       mode: "live" as const,
       occurredAt: new Date("2026-07-09T20:10:00.000Z"),
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     };
 
@@ -532,7 +679,7 @@ describe("development-loop PR stage", () => {
       mode: "live",
       now: () => times.shift() ?? new Date("2026-07-09T20:10:02.500Z"),
       runId,
-      runUrl,
+      runUrl: runUrlFor(runId),
       writer,
     });
 

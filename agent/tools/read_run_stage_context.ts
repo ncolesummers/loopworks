@@ -7,15 +7,36 @@ import { agentPlans, approvals, artifacts, loopRuns, runSteps } from "@/db/schem
 import { createImplementationFixtureHandoff } from "../implementation-fixture";
 import { createPlanningAgentSeedPlan } from "../planning-agent";
 import { resolveImplementerFixtureMode } from "../subagents/implementer/lib/fixture-mode";
+import { resolvePrPreparerFixtureMode } from "../subagents/pr-preparer/lib/fixture-mode";
 import { resolveTestWriterFixtureMode } from "../subagents/test-writer/lib/fixture-mode";
 import { resolveValidationReviewerFixtureMode } from "../subagents/validation-reviewer/lib/fixture-mode";
 import { computeTestPlanDigest } from "../test-writing-agent";
 import { createValidationReviewFixtureContext } from "../validation-review-fixture";
+import { createPrPreparationFixtureContext } from "../pr-preparation-fixture";
 
 export default defineTool({
   description: "Read durable run, plan, approval, step, and artifact context for stage routing.",
   inputSchema: z.object({ runId: z.string().uuid() }),
   async execute({ runId }) {
+    if (resolvePrPreparerFixtureMode().enabled) {
+      const context = createPrPreparationFixtureContext();
+      return {
+        approvals: [{ id: "fixture-plan-approval", status: context.approvalStatus }],
+        artifacts: context.completedArtifacts.map((artifact) => ({
+          type: artifact.type,
+          sha256: artifact.sha256,
+          uri: artifact.uri,
+        })),
+        plans: [{ id: context.planId, plan: context.plan, status: context.planStatus }],
+        run: context.run,
+        steps: [
+          { ...context.validationStep, stage: "validation" },
+          { ...context.reviewStep, stage: "code-review" },
+          { ...context.commitStep, stage: "commit" },
+          { ...context.prStep, stage: "pr" },
+        ],
+      };
+    }
     if (resolveValidationReviewerFixtureMode().enabled) {
       const context = createValidationReviewFixtureContext();
       return {
