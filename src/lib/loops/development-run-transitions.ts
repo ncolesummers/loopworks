@@ -10,6 +10,16 @@ import {
   pinnedPlanningAgentOutputSchema,
   planningAgentOutputSchema,
 } from "@agent/planning-agent";
+import {
+  computePrPreparationDigest,
+  type PrPreparationResult,
+  prPreparationResultSchema,
+} from "@agent/pr-preparation-agent";
+import {
+  createPrPreparationResultFromContext,
+  loadPrPreparationContextWithDatabase,
+  type PrPreparationReadDatabase,
+} from "@agent/subagents/pr-preparer/lib/context";
 import { verifyImplementationExecutionReceipt } from "@agent/subagents/implementer/lib/tool-policy";
 import { verifyTestExecutionReceipt } from "@agent/subagents/test-writer/lib/tool-policy";
 import {
@@ -28,14 +38,13 @@ import {
   type ValidationReviewResult,
   validationReviewResultSchema,
 } from "@agent/validation-review-agent";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { db } from "@/db/client";
 import {
   agentPlans,
   approvals,
   approvalTransitionEvents,
   artifacts,
-  deployments,
   loopRuns,
   repositories,
   runSteps,
@@ -47,7 +56,8 @@ import type {
 } from "@/lib/github/pull-request";
 import { createGitHubPullRequest, createPullRequestChangeDigest } from "@/lib/github/pull-request";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
-import { composePrIntent, createPrIntentArtifactMetadata } from "@/lib/loops/pr-intent";
+import { createPrIntentArtifactMetadata } from "@/lib/loops/pr-intent";
+import { assertCanonicalLoopworksRunUrl } from "@/lib/loops/run-url";
 import {
   assertScreenshotEvidenceBinding,
   assertScreenshotEvidenceCoverage,
@@ -1318,6 +1328,200 @@ export type ValidationReviewTransitionResult = {
   traceId?: string;
 };
 
+export type PrPreparationTransitionResult = {
+  idempotent?: boolean;
+  intentSha256: string;
+  runId: string;
+  stage: "pr";
+  status: "prepared";
+  stepId: string;
+  traceId?: string;
+};
+
+export async function applyDevelopmentLoopPrPreparationResult(input: {
+  database: DevelopmentLoopTransitionDatabase;
+  logger?: LoopworksLogger;
+  output: PrPreparationResult;
+  runId: string;
+  runUrl: string;
+}): Promise<PrPreparationTransitionResult> {
+  const output = prPreparationResultSchema.parse(input.output);
+  const digest = computePrPreparationDigest(output);
+  const transitionStartedAt = Date.now();
+  const span = startLoopworksSpan("loopworks.pr_preparation.transition", {
+    attributes: {
+      "loopworks.agent": "pr-preparer",
+      "loopworks.artifact_count": output.intent.artifacts.length,
+      "loopworks.deployment_present": Boolean(output.intent.deployment),
+      "loopworks.run_id": input.runId,
+      "loopworks.screenshot_count": output.screenshots.length,
+      "loopworks.stage": "pr",
+    },
+  });
+  try {
+    const result = await input.database.transaction<PrPreparationTransitionResult>(async (tx) => {
+      const context = await loadPrPreparationContextWithDatabase(
+        tx as unknown as PrPreparationReadDatabase,
+        input.runId,
+        input.runUrl,
+      );
+      const [prArtifact] = await tx
+        .select()
+        .from(artifacts)
+        .where(
+          and(
+            eq(artifacts.runId, input.runId),
+            eq(artifacts.stepId, context.prStep.id),
+            eq(artifacts.type, "pr_intent"),
+          ),
+        );
+      if (!prArtifact) {
+        throw new DevelopmentLoopTransitionError("PR preparation artifact is missing.");
+      }
+      const existingDigest = (prArtifact.metadata as { prPreparationResultSha256?: unknown } | null)
+        ?.prPreparationResultSha256;
+      if (typeof existingDigest === "string") {
+        if (existingDigest !== digest) {
+          throw new DevelopmentLoopTransitionError(
+            "PR preparation replay has conflicting persisted intent.",
+          );
+        }
+        return {
+          idempotent: true,
+          intentSha256: digest,
+          runId: input.runId,
+          stage: "pr",
+          status: "prepared",
+          stepId: context.prStep.id,
+        };
+      }
+      const expected = createPrPreparationResultFromContext(context, output.narrative);
+      if (computePrPreparationDigest(expected) !== digest) {
+        throw new DevelopmentLoopTransitionError(
+          "PR preparation result does not match the exact persisted handoff.",
+        );
+      }
+      const matchingApprovals = await tx
+        .select()
+        .from(approvals)
+        .where(and(eq(approvals.runId, input.runId), eq(approvals.scope, prApprovalScope)));
+      const approval = matchingApprovals.length === 1 ? matchingApprovals[0] : undefined;
+      if (approval?.status !== "requested") {
+        throw new DevelopmentLoopTransitionError(
+          "PR preparation requires one requested external-write approval.",
+        );
+      }
+      const [claimedArtifact] = await tx
+        .update(artifacts)
+        .set({
+          metadata: {
+            ...createPrIntentArtifactMetadata(output.intent),
+            prPreparationResult: output,
+            prPreparationResultSchemaId: output.schemaId,
+            prPreparationResultSha256: digest,
+          },
+          sha256: digest,
+        })
+        .where(
+          and(
+            eq(artifacts.id, prArtifact.id),
+            isNull(artifacts.sha256),
+            sql`not coalesce(${artifacts.metadata} ? 'prPreparationResultSha256', false)`,
+          ),
+        )
+        .returning({ id: artifacts.id });
+      if (!claimedArtifact) {
+        const [persistedArtifact] = await tx
+          .select({ metadata: artifacts.metadata })
+          .from(artifacts)
+          .where(eq(artifacts.id, prArtifact.id))
+          .limit(1);
+        const persistedDigest = (
+          persistedArtifact?.metadata as { prPreparationResultSha256?: unknown } | null
+        )?.prPreparationResultSha256;
+        if (persistedDigest === digest) {
+          return {
+            idempotent: true,
+            intentSha256: digest,
+            runId: input.runId,
+            stage: "pr",
+            status: "prepared",
+            stepId: context.prStep.id,
+          };
+        }
+        throw new DevelopmentLoopTransitionError(
+          "PR preparation replay has conflicting persisted intent.",
+        );
+      }
+      const [boundApproval] = await tx
+        .update(approvals)
+        .set({
+          metadata: {
+            ...(approval.metadata ?? {}),
+            prIntentDigest: digest,
+          },
+        })
+        .where(and(eq(approvals.id, approval.id), eq(approvals.status, "requested")))
+        .returning({ id: approvals.id });
+      if (!boundApproval) {
+        throw new DevelopmentLoopTransitionError(
+          "External-write approval changed before PR intent binding completed.",
+        );
+      }
+      const [currentPrStep] = await tx
+        .select({ metadata: runSteps.metadata })
+        .from(runSteps)
+        .where(eq(runSteps.id, context.prStep.id));
+      await tx
+        .update(runSteps)
+        .set({
+          metadata: {
+            ...(currentPrStep?.metadata ?? {}),
+            ...(context.prStep.status === "running" ? { preparationStarted: true } : {}),
+            prPreparationResultSchemaId: output.schemaId,
+            prPreparationResultSha256: digest,
+          },
+        })
+        .where(eq(runSteps.id, context.prStep.id));
+      return {
+        intentSha256: digest,
+        runId: input.runId,
+        stage: "pr",
+        status: "prepared",
+        stepId: context.prStep.id,
+      };
+    });
+    span.setAttributes({
+      "loopworks.duration_ms": Math.max(0, Date.now() - transitionStartedAt),
+      "loopworks.idempotent": result.idempotent ?? false,
+      "loopworks.intent_sha256": digest,
+      "loopworks.outcome": result.status,
+    });
+    markLoopworksSpanOk(span);
+    input.logger?.info(
+      {
+        artifactCount: output.intent.artifacts.length,
+        deploymentPresent: Boolean(output.intent.deployment),
+        idempotent: result.idempotent ?? false,
+        intentSha256: digest,
+        model: output.model,
+        runId: input.runId,
+        screenshotCount: output.screenshots.length,
+        stage: "pr",
+        status: result.status,
+        stepId: result.stepId,
+      },
+      "development_loop_pr_preparation_persisted",
+    );
+    return result;
+  } catch (error) {
+    markLoopworksSpanError(span, error);
+    throw error;
+  } finally {
+    span.end();
+  }
+}
+
 type ValidationReviewHistoryEntry = {
   attempt: number;
   digest: string;
@@ -1812,14 +2016,6 @@ export async function applyDevelopmentLoopValidationReviewResult(input: {
   }
 }
 
-function issueTitleFromMetadata(
-  metadata: RunMetadata | null | undefined,
-  issueNumber: number,
-): string {
-  const title = metadata?.issueTitle;
-  return typeof title === "string" && title.trim() ? title : `Issue #${issueNumber}`;
-}
-
 function validationGateKey(value: string): string {
   return value
     .trim()
@@ -1868,6 +2064,7 @@ export async function executeDevelopmentLoopPrStage(
       );
     }
   }
+  assertCanonicalLoopworksRunUrl(input.runId, input.runUrl);
   const requestedChangeDigest =
     input.mode === "live"
       ? createPullRequestChangeDigest({
@@ -2001,56 +2198,39 @@ export async function executeDevelopmentLoopPrStage(
       };
     }
 
+    const parsedPreparation = prPreparationResultSchema.safeParse(
+      (prArtifact.metadata as { prPreparationResult?: unknown } | null)?.prPreparationResult,
+    );
+    const persistedPreparationDigest = (
+      prArtifact.metadata as { prPreparationResultSha256?: unknown } | null
+    )?.prPreparationResultSha256;
+    if (
+      !parsedPreparation.success ||
+      typeof persistedPreparationDigest !== "string" ||
+      prArtifact.sha256 !== persistedPreparationDigest ||
+      computePrPreparationDigest(parsedPreparation.data) !== persistedPreparationDigest ||
+      parsedPreparation.data.binding.runId !== input.runId ||
+      parsedPreparation.data.binding.prAttempt > prStep.attempt
+    ) {
+      return {
+        result: blockedPrStageResult({
+          artifactId: prArtifact.id,
+          blockedReason: "Typed PR preparation is required before PR creation.",
+          mode: input.mode,
+          runId: input.runId,
+          stepId: prStep.id,
+          traceId: prStep.traceId ?? run.traceId,
+        }),
+      };
+    }
+    const preparation = parsedPreparation.data;
+    const intent = preparation.intent;
+
     const matchingApprovals = await tx
       .select()
       .from(approvals)
       .where(and(eq(approvals.runId, input.runId), eq(approvals.scope, prApprovalScope)));
     const approval = matchingApprovals.length === 1 ? matchingApprovals[0] : undefined;
-
-    const [deployment] = await tx
-      .select()
-      .from(deployments)
-      .where(eq(deployments.runId, input.runId))
-      .orderBy(desc(deployments.createdAt))
-      .limit(1);
-    const intent = composePrIntent({
-      artifacts: runArtifacts
-        .filter((artifact) => artifact.id !== prArtifact.id)
-        .map((artifact) => ({
-          title: artifact.title,
-          type: artifact.type,
-          uri: artifact.uri,
-        })),
-      ...(requestedChangeDigest ? { changeDigest: requestedChangeDigest } : {}),
-      ...(deployment
-        ? {
-            deployment: {
-              ...(deployment.branch ? { branch: deployment.branch } : {}),
-              ...(deployment.commitSha ? { commitSha: deployment.commitSha } : {}),
-              environment: deployment.environment,
-              status: deployment.status,
-              url: deployment.url,
-            },
-          }
-        : {}),
-      issue: {
-        number: run.githubIssueNumber,
-        title: issueTitleFromMetadata(run.metadata, run.githubIssueNumber),
-        url: run.githubIssueUrl,
-      },
-      run: { id: input.runId, url: input.runUrl },
-      validation: {
-        artifactUri: validationArtifact.uri,
-        report: parsedValidation.data.validationReport,
-      },
-    });
-
-    await tx
-      .update(artifacts)
-      .set({
-        metadata: createPrIntentArtifactMetadata(intent),
-      })
-      .where(eq(artifacts.id, prArtifact.id));
 
     if (approval?.status !== "approved") {
       const blockedReason = "External write approval is required before PR creation.";
@@ -2099,6 +2279,30 @@ export async function executeDevelopmentLoopPrStage(
         }),
       };
     }
+    if (
+      (approval.metadata as { prIntentDigest?: unknown } | null)?.prIntentDigest !==
+      persistedPreparationDigest
+    ) {
+      const blockedReason = "Approved evidence does not match the prepared PR intent.";
+      await tx
+        .update(loopRuns)
+        .set({
+          currentStage: "pr",
+          metadata: { ...(run.metadata ?? {}), blockedReason },
+          status: "blocked",
+        })
+        .where(eq(loopRuns.id, input.runId));
+      return {
+        result: blockedPrStageResult({
+          artifactId: prArtifact.id,
+          blockedReason,
+          mode: input.mode,
+          runId: input.runId,
+          stepId: prStep.id,
+          traceId: prStep.traceId ?? run.traceId,
+        }),
+      };
+    }
 
     const [claimedStep] = await tx
       .update(runSteps)
@@ -2107,6 +2311,7 @@ export async function executeDevelopmentLoopPrStage(
         metadata: {
           ...(prStep.metadata ?? {}),
           prIntentSchemaId: intent.schemaId,
+          prPreparationResultSha256: persistedPreparationDigest,
         },
         startedAt: prStep.startedAt ?? occurredAt,
         status: "running",
@@ -2136,6 +2341,7 @@ export async function executeDevelopmentLoopPrStage(
           prWriteClaim: {
             claimedAt: occurredAt.toISOString(),
             changeDigest: requestedChangeDigest ?? null,
+            intentDigest: persistedPreparationDigest,
             runId: input.runId,
           },
         },
@@ -2151,6 +2357,8 @@ export async function executeDevelopmentLoopPrStage(
     return {
       approval,
       intent,
+      preparation,
+      preparationDigest: persistedPreparationDigest,
       loopKey: run.loopKey,
       prArtifact,
       prStep,
@@ -2227,6 +2435,9 @@ export async function executeDevelopmentLoopPrStage(
         .set({
           metadata: {
             ...createPrIntentArtifactMetadata(prepared.intent),
+            prPreparationResult: prepared.preparation,
+            prPreparationResultSchemaId: prepared.preparation.schemaId,
+            prPreparationResultSha256: prepared.preparationDigest,
             ...(pullRequest ? { githubPullRequest: pullRequest } : {}),
           },
           ...(pullRequest ? { uri: pullRequest.url } : {}),
@@ -2246,6 +2457,7 @@ export async function executeDevelopmentLoopPrStage(
           metadata: {
             ...approvalMetadataWithoutClaim(prepared.approval.metadata),
             appliedChangeDigest: requestedChangeDigest ?? null,
+            appliedIntentDigest: prepared.preparationDigest,
           },
           status: "applied",
         })

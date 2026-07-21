@@ -132,8 +132,8 @@ export const developmentLoopStages = [
     title: "Commit",
   },
   {
-    actorId: "maintainer",
-    actorType: "human",
+    actorId: "pr-preparer",
+    actorType: "agent",
     artifacts: [{ label: "PR intent", required: true, type: "pr_intent" }],
     key: "pr",
     summary: "Prepare PR metadata linking the source issue, run, and validation evidence.",
