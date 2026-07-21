@@ -116,7 +116,7 @@ describe("agent-ready development loop run skeleton", () => {
     const artifactRecords = projectDevelopmentLoopArtifacts(skeleton);
 
     expect(skeleton.stages).toHaveLength(8);
-    expect(skeleton.artifacts).toHaveLength(9);
+    expect(skeleton.artifacts).toHaveLength(10);
     expect(timeline.map((event) => event.title)).toEqual([
       "Planning",
       "Test writing",
@@ -134,6 +134,7 @@ describe("agent-ready development loop run skeleton", () => {
       "Automated test plan",
       "Patch artifact",
       "Validation report",
+      "Validation screenshots",
       "Code review notes",
       "Commit intent",
       "PR intent",
@@ -141,7 +142,7 @@ describe("agent-ready development loop run skeleton", () => {
     ]);
   });
 
-  it("creates one durable run, eight stage rows, nine artifacts, and an agent plan", async () => {
+  it("creates one durable run, eight stage rows, ten artifacts, and an agent plan", async () => {
     await insertRepository(context);
 
     const result = await withTestTrace(() =>
@@ -154,7 +155,7 @@ describe("agent-ready development loop run skeleton", () => {
     );
 
     expect(result).toMatchObject({
-      artifactCount: 9,
+      artifactCount: 10,
       mode: "created",
       stageCount: 8,
     });
@@ -186,7 +187,7 @@ describe("agent-ready development loop run skeleton", () => {
     expect(stepRows.map((step) => step.stage)).toEqual(
       developmentLoopStages.map((stage) => stage.key),
     );
-    expect(artifactRows).toHaveLength(9);
+    expect(artifactRows).toHaveLength(10);
     expect(artifactRows.every((artifact) => artifact.runId === runRows[0]?.id)).toBe(true);
     expect(
       artifactRows.find(
@@ -273,7 +274,7 @@ describe("agent-ready development loop run skeleton", () => {
     expect(second).toEqual(first);
     expect(await context.db.select().from(loopRuns)).toHaveLength(1);
     expect(await context.db.select().from(runSteps)).toHaveLength(8);
-    expect(await context.db.select().from(artifacts)).toHaveLength(9);
+    expect(await context.db.select().from(artifacts)).toHaveLength(10);
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
   });
 

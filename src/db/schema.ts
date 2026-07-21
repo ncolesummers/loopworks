@@ -62,6 +62,7 @@ export const artifactTypeEnum = pgEnum("artifact_type", [
   "deployment_summary",
   "log_summary",
   "trace",
+  "screenshot",
   "other",
 ]);
 export const idempotencyLockStatusEnum = pgEnum("idempotency_lock_status", [

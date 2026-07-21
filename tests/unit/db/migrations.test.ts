@@ -1,7 +1,13 @@
 /** @vitest-environment node */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
-import { approvalTransitionEvents, repositories } from "@/db/schema";
+import {
+  approvalTransitionEvents,
+  artifacts,
+  artifactTypeEnum,
+  loopRuns,
+  repositories,
+} from "@/db/schema";
 import { createPgliteTestDatabase } from "../../helpers/pglite";
 
 const migrationReplayTimeoutMs = 15_000;
@@ -76,6 +82,50 @@ describe("Drizzle migrations", () => {
     expect(migrationSql).toContain('"approval_transition_events"');
     expect(migrationSql).toContain("'bypassed'");
   });
+
+  it(
+    "tracks screenshot artifacts in the schema and generated migrations",
+    async () => {
+      expect(artifactTypeEnum.enumValues).toContain("screenshot");
+      const migrationSql = readMigrationSql();
+      expect(migrationSql).toContain("ADD VALUE 'screenshot'");
+      expect(migrationSql).toContain("screenshot_evidence_contract");
+      expect(migrationSql).toContain('WHERE "run_steps"."stage" = \'validation\'');
+
+      const context = await createPgliteTestDatabase();
+      try {
+        const [repository] = await context.db
+          .insert(repositories)
+          .values({
+            githubRepoId: 49_000_001,
+            owner: "ncolesummers",
+            name: "loopworks",
+            fullName: "ncolesummers/loopworks",
+          })
+          .returning();
+        if (!repository) throw new Error("Expected repository fixture.");
+        const runId = "00000000-0000-4000-8000-000000000049";
+        await context.db.insert(loopRuns).values({
+          id: runId,
+          loopKey: "development-loop",
+          repositoryId: repository.id,
+        });
+        const [artifact] = await context.db
+          .insert(artifacts)
+          .values({
+            runId: "00000000-0000-4000-8000-000000000049",
+            title: "Validation screenshots",
+            type: "screenshot",
+            uri: "artifact://screenshots/manifest",
+          })
+          .returning();
+        expect(artifact?.type).toBe("screenshot");
+      } finally {
+        await context.close();
+      }
+    },
+    migrationReplayTimeoutMs,
+  );
 
   it(
     "replays generated migrations against a clean Postgres-compatible database",

@@ -95,6 +95,13 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
           retention: "audit",
         },
         {
+          type: "screenshot",
+          required: true,
+          description:
+            "Validation-owned responsive screenshot manifest, explicit and empty for non-UI runs.",
+          retention: "audit",
+        },
+        {
           type: "test_plan",
           required: true,
           description:

@@ -81,6 +81,7 @@ export const artifactContractTypeValues = [
   "summary",
   "diff_summary",
   "trace",
+  "screenshot",
 ] as const;
 
 export const artifactRetentionValues = ["run", "pr", "audit"] as const;

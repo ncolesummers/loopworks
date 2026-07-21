@@ -1,15 +1,15 @@
 /** @vitest-environment node */
 import { readFile } from "node:fs/promises";
-
-import type { LoopDefinition } from "../../../schemas/loop-manifest";
 import {
   createValidationReportArtifactMetadata,
   runValidationGates,
+  runValidationWithScreenshotEvidence,
   type ValidationCommandExecutionInput,
   type ValidationOutputWriterInput,
   validationReportSchemaId,
   validationReportV1Schema,
 } from "@/lib/loops/validation-runner";
+import type { LoopDefinition } from "../../../schemas/loop-manifest";
 
 const fixtureGates = [
   {
@@ -223,6 +223,13 @@ describe("deterministic validation runner", () => {
         results: [report.results[0], report.results[0]],
       }),
     ).toThrow(/unique/);
+
+    expect(() =>
+      validationReportV1Schema.parse({
+        ...report,
+        results: [{ ...report.results[0], command: "false", exitCode: 1, outcome: "pass" }],
+      }),
+    ).toThrow(/exitCode/);
   });
 
   it("keeps the runner independent from persistence and lifecycle telemetry", async () => {
@@ -232,5 +239,30 @@ describe("deterministic validation runner", () => {
     expect(source).not.toContain("@/lib/observability");
     expect(source).not.toContain("loopRuns");
     expect(source).not.toContain("runSteps");
+  });
+
+  it("runs validation-owned screenshot capture only after deterministic gates pass", async () => {
+    const capture = vi.fn();
+    const result = await runValidationWithScreenshotEvidence({
+      executor: async () => ({ exitCode: 0, stderr: "", stdout: "" }),
+      gates: [fixtureGates[0]],
+      now: createSteppedClock(),
+      screenshot: {
+        binding: {
+          repositoryFullName: "ncolesummers/loopworks",
+          commitSha: "a".repeat(40),
+          testPlanSha256: "b".repeat(64),
+          productionPatchSha256: "c".repeat(64),
+        },
+        productionPaths: ["src/lib/parser.ts"],
+        tests: [],
+        capture,
+        write: vi.fn(),
+      },
+    });
+
+    expect(result.report.overallOutcome).toBe("pass");
+    expect(result.screenshotEvidence).toMatchObject({ uiAffecting: false, captures: [] });
+    expect(capture).not.toHaveBeenCalled();
   });
 });

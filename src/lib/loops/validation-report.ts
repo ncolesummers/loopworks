@@ -70,6 +70,27 @@ export const validationReportV1Schema = z
         });
       }
       seenKeys.add(result.key);
+      if (result.outcome === "pass" && result.exitCode !== 0) {
+        context.addIssue({
+          code: "custom",
+          message: "passing validation requires exitCode 0.",
+          path: ["results", index, "exitCode"],
+        });
+      }
+      if (result.outcome === "fail" && (result.exitCode === null || result.exitCode === 0)) {
+        context.addIssue({
+          code: "custom",
+          message: "failed validation requires a non-zero exitCode.",
+          path: ["results", index, "exitCode"],
+        });
+      }
+      if (result.outcome === "skipped" && (result.exitCode !== null || !result.skipReason)) {
+        context.addIssue({
+          code: "custom",
+          message: "skipped validation requires null exitCode and skipReason.",
+          path: ["results", index],
+        });
+      }
     }
 
     for (const key of ["failed", "passed", "skipped", "total"] as const) {

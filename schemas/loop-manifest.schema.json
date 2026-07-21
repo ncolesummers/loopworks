@@ -429,7 +429,8 @@
         "pr_intent",
         "summary",
         "diff_summary",
-        "trace"
+        "trace",
+        "screenshot"
       ]
     },
     "validationGate": {
