@@ -31,15 +31,28 @@ describe("validation reviewer discovery", () => {
       join(process.cwd(), "agent", "subagents", "validation-reviewer", "tools"),
     );
 
-    expect(tools).toEqual(
-      expect.arrayContaining([
-        "read_validation_review_context.ts",
+    expect([...tools].sort()).toEqual(
+      [
+        "ask_question.ts",
+        "bash.ts",
+        "emit_validation_review_result.ts",
+        "glob.ts",
+        "grep.ts",
+        "list_repository_files.ts",
+        "load_skill.ts",
+        "read_file.ts",
+        "read_repository_files.ts",
         "read_review_patch.ts",
+        "read_screenshot_evidence.ts",
         "read_test_plan_steps.ts",
         "read_validation_results.ts",
-        "read_screenshot_evidence.ts",
-        "emit_validation_review_result.ts",
-      ]),
+        "read_validation_review_context.ts",
+        "search_repository.ts",
+        "todo.ts",
+        "web_fetch.ts",
+        "web_search.ts",
+        "write_file.ts",
+      ].sort(),
     );
     for (const disabled of [
       "ask_question.ts",
@@ -52,7 +65,6 @@ describe("validation reviewer discovery", () => {
       "web_fetch.ts",
       "web_search.ts",
       "write_file.ts",
-      "write_production_files.ts",
     ]) {
       expect(tools).toContain(disabled);
       await expect(
@@ -62,5 +74,6 @@ describe("validation reviewer discovery", () => {
         ),
       ).resolves.toContain("disableTool");
     }
+    expect(tools).not.toContain("write_production_files.ts");
   });
 });
