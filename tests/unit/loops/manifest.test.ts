@@ -49,6 +49,47 @@ describe("loop manifest schema", () => {
     expect(manifest.loops.map((loop) => loop.enabled)).toEqual([true, false]);
   });
 
+  it("declares an enabled read-only research loop with distinct trigger and concurrency policy", () => {
+    const manifest = parseLoopManifest(defaultLoopManifest);
+    const researchLoop = manifest.loops.find((loop) => loop.key === "research-loop");
+
+    expect(researchLoop).toMatchObject({
+      enabled: true,
+      triggers: {
+        issueLabels: ["agent-ready", "spike"],
+      },
+      toolPolicy: {
+        allowedToolCategories: ["repo-read", "browser", "validation"],
+        externalWritesRequireApproval: true,
+      },
+      approvals: {
+        requiredFor: ["manifest_rollout"],
+      },
+      concurrency: {
+        group: "repo:{repo}:loop:research",
+      },
+      githubWriteback: {
+        enabled: false,
+        channels: [],
+      },
+    });
+    expect(researchLoop?.artifacts.map((artifact) => artifact.description)).toEqual([
+      expect.stringContaining("research plan"),
+      expect.stringContaining("findings"),
+      expect.stringContaining("research document"),
+      expect.stringContaining("completion summary"),
+    ]);
+    expect(researchLoop?.validationGates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "bun run test -- tests/unit/loops/research-run.test.ts",
+          key: "focused-research-tests",
+        }),
+        expect.objectContaining({ command: "bun run validate", key: "aggregate-validation" }),
+      ]),
+    );
+  });
+
   it("covers trigger labels, validation gates, approvals, retries, and concurrency", () => {
     const manifest = parseLoopManifest(defaultLoopManifest);
     const developmentLoop = manifest.loops[0];

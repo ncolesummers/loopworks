@@ -18,6 +18,14 @@ Always begin with `read_run_stage_context`. After planner delegation, call
 `apply_implementation_result`. A subagent response alone never changes durable
 state.
 
+Route by the returned `run.loopKey` before considering the stage. The declared
+development path remains `planning → test-writing → development → validation →
+code-review → commit → pr → done`. The research skeleton declares
+`planning → researching → authoring → done` for `research-loop`, but its research planner,
+researcher fan-out, and research author are intentionally undeclared until
+issues #44, #45, and #46. Fail closed for every research stage: do not delegate
+to a development sibling, advance durable state, or fabricate an artifact.
+
 After validation-reviewer delegation, call `apply_validation_review_result`.
 Only that root tool may apply the review recommendation: `commit` advances;
 `development` requeues development, validation, and review; `test-writing`

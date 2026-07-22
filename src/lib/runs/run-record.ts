@@ -2,6 +2,8 @@ import { asc, eq, inArray } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import { approvals, artifacts, loopRuns, repositories, runSteps } from "@/db/schema";
+import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
+import type { LoopworksLogger } from "@/lib/observability/logger";
 import { isProductionRuntime } from "@/lib/runtime";
 import type {
   ArtifactKind,
@@ -15,8 +17,6 @@ import type {
   ValidationGateRecord,
   ValidationGateSummaryRecord,
 } from "@/lib/types";
-import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
-import type { LoopworksLogger } from "@/lib/observability/logger";
 
 export type RunRecordDatabase = Pick<typeof db, "select">;
 type ArtifactRow = typeof artifacts.$inferSelect;
@@ -117,6 +117,8 @@ function timelineKindForStage(stage: string): TimelineKind {
     planning: "planning",
     "test-writing": "test",
     development: "development",
+    researching: "research",
+    authoring: "authoring",
     validation: "validation",
     review: "review",
     "code-review": "review",
@@ -128,7 +130,7 @@ function timelineKindForStage(stage: string): TimelineKind {
   return kinds[stage] ?? "state";
 }
 
-function artifactKind(type: string): ArtifactKind {
+function artifactKind(type: string, metadata?: Record<string, unknown> | null): ArtifactKind {
   if (type === "validation_report") {
     return "validation";
   }
@@ -138,6 +140,10 @@ function artifactKind(type: string): ArtifactKind {
   }
 
   if (type === "pr_intent" || type === "log_summary") {
+    return "review";
+  }
+
+  if (metadataString(metadata, "researchArtifactKind") === "research_plan") {
     return "review";
   }
 
@@ -366,7 +372,7 @@ export async function readRunRecords(input: {
       const artifactsForRun = artifactRowsForRun.map((artifact) => ({
         detail: metadataString(artifact.metadata, "detail") ?? artifact.title,
         href: artifact.uri,
-        kind: artifactKind(artifact.type),
+        kind: artifactKind(artifact.type, artifact.metadata),
         label: artifact.title,
         state: artifactState({
           stepStatus: artifact.stepId ? stepStatusById.get(artifact.stepId) : undefined,

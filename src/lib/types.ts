@@ -36,6 +36,8 @@ export type TimelineKind =
   | "planning"
   | "test"
   | "development"
+  | "research"
+  | "authoring"
   | "validation"
   | "review"
   | "commit"

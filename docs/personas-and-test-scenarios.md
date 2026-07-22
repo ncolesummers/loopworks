@@ -93,9 +93,9 @@ Risks:
 | P03 | Product Operator | A durable decision from planning links to an ADR proposal or accepted ADR. | Integration, docs review |
 | P04 | Product Operator | An operator switches between light and dark mode from the app shell; the choice persists across reloads and both themes meet contrast. | Playwright, a11y |
 | M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, Vercel project links, and search/filter controls. | Playwright, Storybook |
-| M02 | Maintainer | Turning a loop off prevents trigger execution and records a skipped reason. | Unit, Playwright |
+| M02 | Maintainer | Turning either development or research routing off prevents trigger execution and records the loop-specific skipped reason without fabricating a run. | Unit, integration, Playwright |
 | M03 | Maintainer | Missing Vercel credentials in dev returns explicit fixture fallback metadata; production does not silently return fixtures. | Unit, integration |
-| A01 | Agent Supervisor | Run detail shows planning, test-writing, development, validation, code review, commit, PR, and done stages, including separate red-evidence and automated-test-plan artifacts. | Unit, Storybook, Playwright |
+| A01 | Agent Supervisor | Run detail shows the exact loop sequence and artifacts: all development stages with separate red/test-plan evidence, or research planning, researching, authoring, and done with four placeholder contracts. | Unit, Storybook, Playwright |
 | A02 | Agent Supervisor | Approval gates show requested, approved, rejected, bypassed, and expired states with actor and evidence; test writing requires an exact approved plan review. | Unit, Storybook, Playwright |
 | A03 | Agent Supervisor | AC-mapped expected-red evidence appears before implementation, and green deterministic validation appears before LLM review or judgment. | Integration, Playwright |
 | R01 | Reviewer | A PR intent or created PR links to the source issue, run, validation artifacts, and Vercel preview. | Integration, Playwright |

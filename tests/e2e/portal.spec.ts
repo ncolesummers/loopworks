@@ -182,6 +182,68 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByText("Skipped: loop_disabled")).toBeVisible();
   });
 
+  test("Research routing records its own disabled trigger reason", async ({ page }) => {
+    await page.goto("/loops");
+
+    const researchLoop = page.getByRole("switch", { name: "Research routing" });
+    await expect(researchLoop).toBeChecked();
+    await researchLoop.click();
+
+    await expect(researchLoop).not.toBeChecked();
+    await expect(page.getByText("Skipped: loop_disabled")).toBeVisible();
+  });
+
+  test("research run shows ordered stages and accessible artifact links", async ({ page }) => {
+    await page.goto("/runs?run=fixture-run-research");
+
+    await expect(page.getByRole("button", { name: /#43 ncolesummers\/loopworks/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const stages = ["Planning", "Researching", "Authoring", "Done"];
+    let previousY = -1;
+    for (const stage of stages) {
+      const item = page.getByText(stage, { exact: true }).last();
+      await expect(item).toBeVisible();
+      const box = await item.boundingBox();
+      expect(box, stage).not.toBeNull();
+      if (box) {
+        expect(box.y, `${stage} should appear after prior stage`).toBeGreaterThan(previousY);
+        previousY = box.y;
+      }
+    }
+    for (const artifact of [
+      "Research plan",
+      "Findings artifacts",
+      "Research document",
+      "Completion summary",
+    ]) {
+      await expect(page.getByRole("link", { name: artifact })).toBeVisible();
+    }
+  });
+
+  test("research run remains usable at mobile width", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/runs?run=fixture-run-research");
+
+    await expect(page.getByText("Researching", { exact: true }).last()).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    test.describe(`research run color scheme: ${colorScheme}`, () => {
+      test.use({ colorScheme });
+
+      test("research run has no accessibility violations", async ({ page }) => {
+        await page.goto("/runs?run=fixture-run-research");
+        const results = await new AxeBuilder({ page }).analyze();
+        expect(results.violations, `${colorScheme} research run`).toEqual([]);
+      });
+    });
+  }
+
   // Persona A01/A03/R01: deterministic evidence is visible before PR/review stages.
   test("run timeline shows ordered stages and validation evidence before review", async ({
     page,

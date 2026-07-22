@@ -29,6 +29,14 @@ export const BlockedAndWaiting: Story = {
   },
 };
 
+export const ResearchLoop: Story = {
+  args: {
+    initialRunId: "fixture-run-research",
+    runs: fixtureRuns.filter((run) => run.id === "fixture-run-research"),
+    sourceLabel: "Fixture fallback",
+  },
+};
+
 export const Empty: Story = {
   args: {
     runs: [],

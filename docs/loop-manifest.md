@@ -91,6 +91,23 @@ skipped/no-op reason such as `loop_disabled` so operators can explain why an
 `agent-ready` issue did not start. Research-loop disabled evidence is tracked
 separately from the development-loop skeleton.
 
+The enabled `research-loop` is a parallel, fixture-backed generality probe. It
+requires both `spike` and `agent-ready`, uses a separate
+`repo:{repo}:loop:research` concurrency group, and permits only repository read,
+browser, and validation tool categories. GitHub writeback is disabled; only
+manifest rollout requires approval. Its deterministic sequence and persisted
+placeholder contract are:
+
+1. Planning by `research-planner`: one research plan (`plan`).
+2. Researching by `researcher`: findings (`other`), indexed
+   `one_per_subquestion` from isolated child sessions.
+3. Authoring by `research-author`: one research document (`other`).
+4. Done by `loopworks`: one completion summary (`other`).
+
+Issue #43 creates only the four steps and four placeholders. It does not create
+an agent plan or approval row, run live fan-out, or define versioned research
+payload schemas; those behaviors remain in #44-#46.
+
 The planning-to-test-writing boundary requires an `approved` `plan-review`
 record tied to the exact run, plan row, and canonical plan digest. The
 test-writing stage succeeds only when every approved-plan acceptance criterion

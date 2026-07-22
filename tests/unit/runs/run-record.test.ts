@@ -1,18 +1,19 @@
 /** @vitest-environment node */
 import { eq } from "drizzle-orm";
 
-import { artifacts, loopRuns } from "@/db/schema";
+import { artifacts, loopRuns, repositories } from "@/db/schema";
+import { createResearchLoopRun } from "@/lib/loops/research-run";
 import {
   createValidationReportArtifactMetadata,
   type ValidationReportV1,
 } from "@/lib/loops/validation-report";
+import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
 import {
   getRunRecordsForPortal,
   getRunRecordsForResult,
   readRunRecords,
 } from "@/lib/runs/run-record";
-import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
-import { demoSeedIds, seedDemoData, type SeedDatabase } from "@/lib/seed/demo-data";
+import { demoSeedIds, type SeedDatabase, seedDemoData } from "@/lib/seed/demo-data";
 
 import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
 
@@ -375,6 +376,68 @@ describe("run records (pglite integration)", () => {
         fixtureRuns,
       ),
     ).toEqual([]);
+  });
+
+  it("includes a completed issue-43 research fixture with all stage and artifact contracts", () => {
+    const researchRun = buildRunFixtureRecords().find((run) => run.id === "fixture-run-research");
+
+    expect(researchRun).toMatchObject({
+      currentStage: "done",
+      issue: "#43",
+      loopKey: "research-loop",
+      status: "succeeded",
+    });
+    expect(researchRun?.steps.map((step) => step.title)).toEqual([
+      "Planning",
+      "Researching",
+      "Authoring",
+      "Done",
+    ]);
+    expect(researchRun?.artifacts.map((artifact) => artifact.label)).toEqual([
+      "Research plan",
+      "Findings artifacts",
+      "Research document",
+      "Completion summary",
+    ]);
+  });
+
+  it("projects persisted research stages and semantic artifacts without fixture-only fallbacks", async () => {
+    await context.db.insert(repositories).values({
+      enabledLoops: ["Research routing"],
+      fullName: "ncolesummers/loopworks",
+      githubRepoId: 43_000_043,
+      name: "loopworks",
+      owner: "ncolesummers",
+      validationGates: ["Focused tests"],
+    });
+    await createResearchLoopRun({
+      database: context.db as never,
+      now: () => new Date("2026-07-21T16:00:00.000Z"),
+      trigger: {
+        deliveryId: "run-record-research-delivery",
+        issueNumber: 43,
+        repositoryFullName: "ncolesummers/loopworks",
+      },
+    });
+
+    const result = await readRunRecords({
+      database: context.db,
+      now: new Date("2026-07-21T16:10:00.000Z"),
+    });
+    expect(result.source).toBe("db");
+    const researchRun = result.runs.find((run) => run.loopKey === "research-loop");
+    expect(researchRun?.steps.map((step) => step.kind)).toEqual([
+      "planning",
+      "research",
+      "authoring",
+      "done",
+    ]);
+    expect(researchRun?.artifacts.map((artifact) => artifact.kind)).toEqual([
+      "review",
+      "log",
+      "log",
+      "log",
+    ]);
   });
 
   it("uses explicit non-production fixture mode without reading run records", async () => {

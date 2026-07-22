@@ -22,6 +22,14 @@ import {
   recordDevelopmentLoopNoop,
   simulateDevelopmentLoopRun,
 } from "@/lib/loops/development-run";
+import {
+  createResearchLoopRun,
+  type ResearchLoopNoopMetadata,
+  type ResearchLoopRunMetadata,
+  type ResearchLoopTrigger,
+  recordResearchLoopNoop,
+  simulateResearchLoopRun,
+} from "@/lib/loops/research-run";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
   type GithubWebhookOutcomeMetricInput,
@@ -48,6 +56,7 @@ type GithubWebhookPostDependencies = {
 
 type GithubWebhookDeliveryStoreMode = "drizzle" | "injected" | "memory";
 type DevelopmentRunOutcome = DevelopmentLoopRunMetadata | DevelopmentLoopNoopMetadata;
+type ResearchRunOutcome = ResearchLoopRunMetadata | ResearchLoopNoopMetadata;
 
 function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
   if (typeof payload !== "object" || payload === null) {
@@ -187,6 +196,13 @@ function getDevelopmentLoopTrigger(
   };
 }
 
+function getResearchLoopTrigger(
+  payload: GithubIssuesWebhookPayload | null,
+  deliveryId: string,
+): ResearchLoopTrigger | null {
+  return getDevelopmentLoopTrigger(payload, deliveryId);
+}
+
 async function resolveDevelopmentRunOutcome(input: {
   agentReadyTrigger: GithubAgentReadyTrigger;
   database: DevelopmentLoopRunDatabase;
@@ -238,6 +254,54 @@ async function resolveDevelopmentRunOutcome(input: {
       mode: "noop",
       reason: "loop_disabled",
     };
+  }
+
+  return undefined;
+}
+
+async function resolveResearchRunOutcome(input: {
+  agentReadyTrigger: GithubAgentReadyTrigger;
+  database: DevelopmentLoopRunDatabase;
+  issuesPayload: GithubIssuesWebhookPayload | null;
+  normalizedDeliveryId: string;
+  now: Date;
+  persist: boolean;
+  traceId?: string;
+}): Promise<ResearchRunOutcome | undefined> {
+  const trigger = getResearchLoopTrigger(input.issuesPayload, input.normalizedDeliveryId);
+
+  if (
+    input.agentReadyTrigger.shouldTrigger &&
+    input.agentReadyTrigger.workflow === "research" &&
+    trigger
+  ) {
+    if (input.persist) {
+      return createResearchLoopRun({
+        database: input.database,
+        now: () => input.now,
+        traceId: input.traceId,
+        trigger,
+      });
+    }
+    return simulateResearchLoopRun({ now: input.now, trigger });
+  }
+
+  if (
+    !input.agentReadyTrigger.shouldTrigger &&
+    input.agentReadyTrigger.skipped &&
+    input.agentReadyTrigger.reason === "loop_disabled" &&
+    input.agentReadyTrigger.workflow === "research" &&
+    trigger
+  ) {
+    if (input.persist) {
+      return recordResearchLoopNoop({
+        database: input.database,
+        now: () => input.now,
+        reason: "loop_disabled",
+        trigger,
+      });
+    }
+    return { mode: "noop", reason: "loop_disabled" };
   }
 
   return undefined;
@@ -421,11 +485,22 @@ export async function handleGithubWebhookPost(
         selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
       traceId,
     });
+    const researchRun = await resolveResearchRunOutcome({
+      agentReadyTrigger,
+      database: developmentRunDatabase,
+      issuesPayload,
+      normalizedDeliveryId: claim.deliveryId,
+      now: processedAt,
+      persist:
+        selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
+      traceId,
+    });
 
     await webhookDeliveryStore.complete(claim.key, {
       deliveryId: claim.deliveryId,
       metadata: {
         ...(developmentRun ? { developmentRun } : {}),
+        ...(researchRun ? { researchRun } : {}),
         nextAction,
         triggerReason: agentReadyTrigger.reason,
         triggerWorkflow: agentReadyTrigger.workflow ?? "none",
@@ -439,6 +514,7 @@ export async function handleGithubWebhookPost(
         idempotencyKey: claim.key,
         agentReadyTrigger,
         developmentRun,
+        researchRun,
         nextAction,
         triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
@@ -459,6 +535,7 @@ export async function handleGithubWebhookPost(
         event,
         agentReadyTrigger,
         ...(developmentRun ? { developmentRun } : {}),
+        ...(researchRun ? { researchRun } : {}),
         nextAction,
         ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
       },

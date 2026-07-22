@@ -57,7 +57,7 @@ Run cancellations are counted as `loopworks.run.completed` with `status="cancell
 
 ### Relationship to `observability_events`
 
-The `observability_events.metric_name` column keeps its snake_case event vocabulary (for example `development_loop_run_created`): those rows are durable control-plane records for audit and replay, per the "logs are not the event store" rule. OTel meters are operational telemetry. Where both exist, one instrumentation helper emits both from a single call site, and the DB event name maps to a meter plus attributes (`development_loop_run_created` → `loopworks.run.started{loop.key="development-loop"}`). Neither vocabulary may be written ad hoc outside `src/lib/observability/` helpers.
+The `observability_events.metric_name` column keeps its snake_case event vocabulary (for example `development_loop_run_created` and `research_loop_run_created`): those rows are durable control-plane records for audit and replay, per the "logs are not the event store" rule. OTel meters are operational telemetry. Where both exist, one instrumentation helper emits both from a single call site. Development creation maps to `loopworks.run.started{loop.key="development-loop", trigger.label="agent-ready"}` and research creation maps to `loopworks.run.started{loop.key="research-loop", trigger.label="spike"}`. Neither vocabulary may be written ad hoc outside `src/lib/observability/` helpers.
 
 ### Correlation alignment
 
@@ -71,7 +71,7 @@ The `observability_events.metric_name` column keeps its snake_case event vocabul
 | `repository` | `repositories` | `loopworks.repository` |
 | `traceId` | `loop_runs.trace_id`, `run_steps.trace_id`, `observability_events.trace_id` | W3C trace id from active span context |
 
-The active W3C trace id is persisted into the `trace_id` columns at run and step creation, closing the loop between spans, logs, and durable records. Artifacts carry no `trace_id` of their own: `artifacts.run_id` and `artifacts.step_id` correlate them transitively through the owning run and step.
+The active W3C trace id is persisted into the `trace_id` columns at development- and research-run creation, their steps, and their durable creation events, closing the loop between spans, logs, and durable records. Artifacts carry no `trace_id` of their own: `artifacts.run_id` and `artifacts.step_id` correlate them transitively through the owning run and step.
 
 ### Rollout
 

@@ -8,8 +8,8 @@ import {
   collectControlPlaneGaugeMeasurements,
   developmentLoopRunCreatedDurableMetricName,
   observabilityMetricNames,
-  recordDevelopmentLoopRunCompletedMetric,
   recordApprovalWaitTimeMetric,
+  recordDevelopmentLoopRunCompletedMetric,
   recordDevelopmentLoopRunCreatedObservability,
   recordDevelopmentLoopRunDurationMetric,
   recordDevelopmentLoopRunStartedMetric,
@@ -19,7 +19,9 @@ import {
   recordDevelopmentLoopValidationOutcomeMetric,
   recordGithubWebhookOutcomeMetric,
   recordLockContentionMetric,
+  recordResearchLoopRunCreatedObservability,
   registerControlPlaneGaugeMetrics,
+  researchLoopRunCreatedDurableMetricName,
   resolveDurableObservabilityEventDefinition,
   resolveObservabilityMetricDefinition,
 } from "@/lib/observability/metrics";
@@ -540,10 +542,91 @@ describe("ADR 0012 observability metric contract", () => {
       metricName: "development_loop_run_created",
       otelMetricName: "loopworks.run.started",
     });
+    expect(
+      resolveDurableObservabilityEventDefinition(researchLoopRunCreatedDurableMetricName),
+    ).toMatchObject({
+      eventType: "research_loop_run_created",
+      metricName: "research_loop_run_created",
+      otelMetricName: "loopworks.run.started",
+    });
 
     expect(() =>
       resolveDurableObservabilityEventDefinition("development_loop_run_started"),
     ).toThrow("Unsupported durable observability event metric name: development_loop_run_started");
+  });
+
+  it("emits the research-loop run-created durable event and existing OTel run-started metric", async () => {
+    const insertedRows: Record<string, unknown>[] = [];
+    const recordings: {
+      attributes: Record<string, unknown> | undefined;
+      name: string;
+      value: number;
+    }[] = [];
+    const writer = {
+      insert(table: unknown) {
+        expect(table).toBe(observabilityEvents);
+        return {
+          values(row: Record<string, unknown>) {
+            insertedRows.push(row);
+            return Promise.resolve();
+          },
+        };
+      },
+    };
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+    };
+
+    const emitMetric = await recordResearchLoopRunCreatedObservability({
+      artifactCount: 4,
+      deliveryId: "issue-43-delivery",
+      issueNumber: 43,
+      loopKey: "research-loop",
+      meter,
+      repositoryFullName: "ncolesummers/loopworks",
+      repositoryId: "64f8ca7a-1b5d-4b3f-8c5e-2e2d814a18aa",
+      runId: "9a8d379f-1d65-4fb0-bd91-4f82306a3159",
+      stageCount: 4,
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      triggerLabel: "spike",
+      writer,
+    });
+
+    expect(recordings).toEqual([]);
+    expect(insertedRows).toEqual([
+      expect.objectContaining({
+        correlationId: "issue-43-delivery",
+        eventType: "research_loop_run_created",
+        metricName: "research_loop_run_created",
+        metricValue: 4,
+        payload: {
+          artifactCount: 4,
+          issueNumber: 43,
+          loopKey: "research-loop",
+          repositoryFullName: "ncolesummers/loopworks",
+          stageCount: 4,
+        },
+        traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      }),
+    ]);
+    emitMetric();
+    expect(recordings).toEqual([
+      {
+        attributes: {
+          "loop.key": "research-loop",
+          repository: "ncolesummers/loopworks",
+          "trigger.label": "spike",
+        },
+        name: "loopworks.run.started",
+        value: 1,
+      },
+    ]);
   });
 
   it("emits the development-loop run-created durable event and OTel metric from one helper", async () => {
@@ -678,6 +761,7 @@ describe("ADR 0012 observability metric contract", () => {
     const forbiddenMetricLiterals = new Set([
       ...observabilityMetricNames,
       developmentLoopRunCreatedDurableMetricName,
+      researchLoopRunCreatedDurableMetricName,
     ]);
     const violations: string[] = [];
 

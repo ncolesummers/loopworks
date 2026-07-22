@@ -164,6 +164,113 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
         requireApprovalForLabels: true,
       },
     },
+    {
+      key: "research-loop",
+      name: "Research loop",
+      description:
+        "Routes spike and agent-ready issues through fixture-backed planning, research, authoring, and completion contracts.",
+      enabled: true,
+      repoScope: {
+        repositories: ["ncolesummers/loopworks"],
+        branchPatterns: ["main", "codex/*"],
+        includeForks: false,
+      },
+      triggers: {
+        issueLabels: ["agent-ready", "spike"],
+        blockedLabels: ["status:blocked"],
+        issueStates: ["opened", "reopened", "labeled"],
+        manual: false,
+        schedule: { enabled: false, timezone: "UTC" },
+      },
+      modelPolicy: { defaultModel: "codex-default" },
+      toolPolicy: {
+        allowedToolCategories: ["repo-read", "browser", "validation"],
+        externalWritesRequireApproval: true,
+      },
+      budgets: {
+        maxRunMinutes: 90,
+        maxModelUsd: 25,
+        maxToolCalls: 120,
+      },
+      approvals: {
+        requiredFor: ["manifest_rollout"],
+        bypassPolicy: "none",
+        gates: [
+          {
+            key: "manifest-review",
+            name: "Manifest review",
+            required: true,
+            reviewers: ["maintainer"],
+            evidence: ["plan"],
+          },
+        ],
+      },
+      artifacts: [
+        {
+          type: "plan",
+          required: true,
+          description: "Issue-backed research plan placeholder for the planning stage.",
+          retention: "audit",
+        },
+        {
+          type: "summary",
+          required: true,
+          description:
+            "Indexed findings placeholders, one per subquestion from isolated child sessions.",
+          retention: "audit",
+        },
+        {
+          type: "summary",
+          required: true,
+          description: "Reviewable research document placeholder for the authoring stage.",
+          retention: "audit",
+        },
+        {
+          type: "summary",
+          required: true,
+          description: "Durable completion summary placeholder for the terminal stage.",
+          retention: "run",
+        },
+      ],
+      validationGates: [
+        {
+          key: "focused-research-tests",
+          name: "Focused research loop tests",
+          command: "bun run test -- tests/unit/loops/research-run.test.ts",
+          required: true,
+          phase: "before_implementation",
+          produces: "validation_report",
+        },
+        {
+          key: "aggregate-validation",
+          name: "Aggregate validation",
+          command: "bun run validate",
+          required: true,
+          phase: "before_rollout",
+          produces: "validation_report",
+        },
+      ],
+      retryPolicy: {
+        maxAttempts: 2,
+        retryableStatuses: [...retryableStatusValues],
+        backoff: { strategy: "exponential", initialSeconds: 30, maxSeconds: 300 },
+      },
+      concurrency: {
+        group: "repo:{repo}:loop:research",
+        maxInFlight: 1,
+        cancelInProgress: false,
+      },
+      cancellation: {
+        onSuperseded: "mark_canceled",
+        onDisabled: "skip_new_runs",
+        requiresReason: true,
+      },
+      githubWriteback: {
+        enabled: false,
+        channels: [],
+        requireApprovalForLabels: true,
+      },
+    },
   ],
   milestones: [
     {

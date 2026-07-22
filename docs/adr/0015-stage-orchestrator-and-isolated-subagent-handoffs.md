@@ -6,7 +6,8 @@ Date: 2026-07-13
 Driving issues: [#47](https://github.com/ncolesummers/loopworks/issues/47),
 [#48](https://github.com/ncolesummers/loopworks/issues/48), and
 [#49](https://github.com/ncolesummers/loopworks/issues/49), and
-[#50](https://github.com/ncolesummers/loopworks/issues/50)
+[#50](https://github.com/ncolesummers/loopworks/issues/50), with the
+research-loop generality probe in [#43](https://github.com/ncolesummers/loopworks/issues/43)
 
 ## Context
 
@@ -30,6 +31,16 @@ The root orchestrator and planner use `openai/gpt-5.6-sol`; the test-writer,
 implementer, validation-reviewer, and PR-preparer use `openai/gpt-5.6-terra`. Each retains
 independent `xhigh` reasoning configuration so model routing can evolve per
 stage without changing the shared topology.
+
+The same neutral root routes by durable `loopKey`. Issue #43 declares the
+research sequence `planning → researching → authoring → done`, actors
+`research-planner`, `researcher`, `research-author`, and `loopworks`, and the
+artifact boundaries for a research plan, per-subquestion findings index,
+research document, and completion summary. It intentionally does not declare
+research Eve subagents, live fan-out, provider evals, or versioned research
+payload schemas. Until issues #44-#46 declare those siblings and transitions,
+the root fails closed rather than routing research stages to development actors
+or advancing durable state.
 
 Planner, test-writer, and implementer receive repository-scoped discovery, text
 search, and line-range read tools against their isolated commit-pinned
@@ -129,6 +140,9 @@ deterministic control-plane behavior rather than model judgment.
 7. PR-preparation tests cover exact evidence binding, non-UI empty manifests,
    idempotent persistence, conflicting replay, and guarded-writer approval.
 8. `bun run validate` and `bun run build` pass before review.
+9. Research-routing discovery proves `loopKey` is returned, the root fails
+   closed for undeclared research siblings, and no research subagent directories
+   or versioned research payload schemas are introduced by #43.
 
 ## Follow-Ups
 

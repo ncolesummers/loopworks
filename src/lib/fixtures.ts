@@ -1,10 +1,10 @@
-import type { FixtureState, GitHubSettingRecord, LoopRegistryItem } from "@/lib/types";
 import {
   createDevelopmentLoopRunSkeleton,
   projectDevelopmentLoopArtifacts,
   projectDevelopmentLoopTimeline,
 } from "@/lib/loops/development-run";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
+import type { FixtureState, GitHubSettingRecord, LoopRegistryItem } from "@/lib/types";
 
 const developmentLoopFixture = createDevelopmentLoopRunSkeleton({
   mode: "simulated",
@@ -201,6 +201,14 @@ export const portalFixture: FixtureState = {
       owner: "Security",
       queueDepth: 2,
       risk: "high",
+    },
+    {
+      name: "Research routing",
+      state: "Planned",
+      enabled: true,
+      owner: "Loopworks",
+      queueDepth: 1,
+      risk: "low",
     },
   ] satisfies LoopRegistryItem[],
   timeline: developmentLoopTimeline,

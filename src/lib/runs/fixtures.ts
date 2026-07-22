@@ -1,3 +1,8 @@
+import {
+  createResearchLoopRunSkeleton,
+  projectResearchLoopArtifacts,
+  projectResearchLoopTimeline,
+} from "@/lib/loops/research-run";
 import type { RunRecord, ValidationGateSummaryRecord } from "@/lib/types";
 
 const emptyValidationSummary: ValidationGateSummaryRecord = {
@@ -76,6 +81,19 @@ const invalidRawArtifactValidationSummary: ValidationGateSummaryRecord = {
 };
 
 export function buildRunFixtureRecords(): RunRecord[] {
+  const researchSkeleton = createResearchLoopRunSkeleton({
+    mode: "simulated",
+    now: new Date("2026-07-21T16:00:00.000Z"),
+    trigger: {
+      issueNumber: 43,
+      issueUrl: "https://github.com/ncolesummers/loopworks/issues/43",
+      labels: ["agent-ready", "spike", "loop:research"],
+      milestone: "M3 Durable Loop MVP",
+      repositoryFullName: "ncolesummers/loopworks",
+      title: "Research loop skeleton",
+    },
+  });
+
   return [
     {
       id: "fixture-run-waiting-approval",
@@ -318,6 +336,26 @@ export function buildRunFixtureRecords(): RunRecord[] {
           title: "Done",
         },
       ],
+    },
+    {
+      age: "Complete",
+      approvals: [],
+      artifacts: projectResearchLoopArtifacts(researchSkeleton),
+      currentStage: "done",
+      id: "fixture-run-research",
+      issue: "#43",
+      issueHref: "https://github.com/ncolesummers/loopworks/issues/43",
+      loopKey: "research-loop",
+      priorityLabel: "Succeeded",
+      queuedAt: "09:00",
+      repositoryFullName: "ncolesummers/loopworks",
+      status: "succeeded",
+      steps: projectResearchLoopTimeline(researchSkeleton).map((event, index) => ({
+        ...event,
+        id: `fixture-step-research-${researchSkeleton.stages[index]?.key ?? index}`,
+        status: "succeeded" as const,
+      })),
+      validationSummary: emptyValidationSummary,
     },
   ];
 }
