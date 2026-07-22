@@ -190,6 +190,27 @@ describe("GitHub webhook helpers", () => {
     });
   });
 
+  it("does not start research runs for issue actions outside the manifest", () => {
+    const trigger = getAgentReadyTriggerFromIssuesWebhook({
+      action: "edited",
+      repository: { full_name: "ncolesummers/loopworks" },
+      issue: {
+        body: "An ordinary edit must not create another research run.",
+        labels: [
+          { name: "agent-ready" },
+          { name: "spike" },
+          { name: "area:loops" },
+          { name: "priority:p2" },
+        ],
+        milestone: { title: "M3 Durable Loop MVP" },
+        number: 43,
+        state: "open",
+      },
+    });
+
+    expect(trigger).toEqual({ shouldTrigger: false, reason: "unsupported_action" });
+  });
+
   it("skips an agent-ready issue before queueing when the target loop is disabled", () => {
     const resolveLoop = vi.fn(() => ({ enabled: false }));
     const trigger = getLoopAwareAgentReadyTriggerFromIssuesWebhook(
@@ -350,7 +371,8 @@ describe("GitHub webhook helpers", () => {
     );
 
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toMatchObject({
+    const responseBody = await response.json();
+    expect(responseBody).toMatchObject({
       accepted: true,
       duplicate: false,
       agentReadyTrigger: {
@@ -477,7 +499,8 @@ describe("GitHub webhook helpers", () => {
     );
 
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toMatchObject({
+    const responseBody = await response.json();
+    expect(responseBody).toMatchObject({
       accepted: true,
       agentReadyTrigger: {
         shouldTrigger: true,
@@ -510,14 +533,21 @@ describe("GitHub webhook helpers", () => {
     );
 
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toMatchObject({
+    const responseBody = await response.json();
+    expect(responseBody).toMatchObject({
       accepted: true,
       agentReadyTrigger: {
         shouldTrigger: true,
         workflow: "research",
       },
       nextAction: "queue_deep_research_loop",
+      researchRun: {
+        artifactCount: 4,
+        mode: "simulated",
+        stageCount: 4,
+      },
     });
+    expect(responseBody).not.toHaveProperty("developmentRun");
   });
 
   it("records a failed outcome when accepted delivery processing throws", async () => {

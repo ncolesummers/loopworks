@@ -51,26 +51,25 @@ function createSignature(secret: string, payloadText: string): string {
 }
 
 function createPayload(kind: GithubWebhookFixtureKind): GithubWebhookFixturePayload {
-  const labels =
-    kind === "spike-agent-ready"
-      ? ["agent-ready", "spike", "area:loops", "area:agents", "loop:development", "priority:p0"]
-      : ["agent-ready", "area:loops", "area:agents", "loop:development", "priority:p0"];
+  const isResearch = kind === "spike-agent-ready";
+  const labels = isResearch
+    ? ["agent-ready", "spike", "area:loops", "area:agents", "loop:research", "priority:p2"]
+    : ["agent-ready", "area:loops", "area:agents", "loop:development", "priority:p0"];
 
   return {
     action: "labeled",
     issue: {
-      body: "Implement the first durable loop skeleton for issues labeled agent-ready.",
-      html_url: "https://github.com/ncolesummers/loopworks/issues/11",
+      body: isResearch
+        ? "Implement a durable, fixture-backed research loop skeleton."
+        : "Implement the first durable loop skeleton for issues labeled agent-ready.",
+      html_url: `https://github.com/ncolesummers/loopworks/issues/${isResearch ? 43 : 11}`,
       labels: labels.map((name) => ({ name })),
       milestone: {
         title: "M3 Durable Loop MVP",
       },
-      number: 11,
+      number: isResearch ? 43 : 11,
       state: "open",
-      title:
-        kind === "spike-agent-ready"
-          ? "Research agent-ready development loop skeleton"
-          : "Agent-ready development loop skeleton",
+      title: isResearch ? "Research loop skeleton" : "Agent-ready development loop skeleton",
     },
     repository: {
       full_name: defaultRepository,

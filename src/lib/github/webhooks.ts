@@ -1,10 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-
+import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { evaluateLoopTriggerDecision } from "@/lib/loops/trigger-decision";
 import { isProductionRuntime } from "@/lib/runtime";
 
 const githubSignaturePrefix = "sha256=";
 const triggerableIssueActions = new Set(["edited", "labeled", "milestoned", "opened", "reopened"]);
+const researchTriggerableIssueActions = new Set<string>(
+  defaultLoopManifest.loops.find((loop) => loop.key === "research-loop")?.triggers.issueStates ??
+    [],
+);
 
 export type GithubWebhookDeliveryStore = {
   claim: (
@@ -297,11 +301,16 @@ export function getAgentReadyTriggerFromIssuesWebhook(
     };
   }
 
+  const workflow = readiness.labels.includes("spike") ? "research" : "development";
+  if (workflow === "research" && !researchTriggerableIssueActions.has(action)) {
+    return { shouldTrigger: false, reason: "unsupported_action" };
+  }
+
   return {
     shouldTrigger: true,
     issueNumber: payload.issue.number,
     repositoryFullName: payload.repository?.full_name ?? undefined,
-    workflow: readiness.labels.includes("spike") ? "research" : "development",
+    workflow,
     reason: "issue_became_agent_ready",
   };
 }

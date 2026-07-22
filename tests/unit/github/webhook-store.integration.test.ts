@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { handleGithubWebhookPost } from "@/app/api/github/webhooks/route";
 import {
   agentPlans,
+  approvals,
   artifacts,
   idempotencyLocks,
   loopRuns,
@@ -373,6 +374,73 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
   });
 
+  it("persists one idempotent research-loop run for an accepted spike delivery", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "fixture-route-research-persistence-delivery",
+      kind: "spike-agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+    const makeRequest = () =>
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      });
+
+    const first = await withTestTrace(() =>
+      handleGithubWebhookPost(makeRequest(), {
+        developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+        now: () => new Date("2026-07-21T16:00:00.000Z"),
+        webhookDeliveryStore: store,
+      }),
+    );
+
+    expect(first.status).toBe(202);
+    await expect(first.json()).resolves.toMatchObject({
+      accepted: true,
+      agentReadyTrigger: { shouldTrigger: true, workflow: "research" },
+      nextAction: "queue_deep_research_loop",
+      researchRun: { artifactCount: 4, mode: "created", stageCount: 4 },
+    });
+    const runRows = await context.db.select().from(loopRuns);
+    expect(runRows).toHaveLength(1);
+    expect(runRows[0]).toMatchObject({
+      githubIssueNumber: 43,
+      loopKey: "research-loop",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+    });
+    const stepRows = await context.db.select().from(runSteps);
+    expect(stepRows.map((step) => step.stage)).toEqual([
+      "planning",
+      "researching",
+      "authoring",
+      "done",
+    ]);
+    expect(stepRows.every((step) => step.traceId === runRows[0]?.traceId)).toBe(true);
+    expect(await context.db.select().from(artifacts)).toHaveLength(4);
+    expect(await context.db.select().from(agentPlans)).toHaveLength(0);
+    expect(await context.db.select().from(approvals)).toHaveLength(0);
+    const [event] = await context.db
+      .select()
+      .from(observabilityEvents)
+      .where(eq(observabilityEvents.eventType, "research_loop_run_created"));
+    expect(event.traceId).toBe(runRows[0]?.traceId);
+
+    const replay = await handleGithubWebhookPost(makeRequest(), {
+      developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+      now: () => new Date("2026-07-21T16:01:00.000Z"),
+      webhookDeliveryStore: store,
+    });
+    await expect(replay.json()).resolves.toMatchObject({ accepted: false, duplicate: true });
+    expect(await context.db.select().from(loopRuns)).toHaveLength(1);
+    expect(await context.db.select().from(runSteps)).toHaveLength(4);
+    expect(await context.db.select().from(artifacts)).toHaveLength(4);
+  });
+
   it("persists disabled-loop no-op state at the route boundary", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
     vi.stubEnv("LOOPWORKS_DEVELOPMENT_LOOP_ENABLED", "false");
@@ -420,7 +488,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     ).toHaveLength(1);
   });
 
-  it("does not persist a development no-op for disabled research loops", async () => {
+  it("persists a research-specific no-op for disabled research loops", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
     vi.stubEnv("LOOPWORKS_RESEARCH_LOOP_ENABLED", "false");
     await insertLoopworksRepository();
@@ -454,6 +522,10 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         skipped: true,
         workflow: "research",
       },
+      researchRun: {
+        mode: "noop",
+        reason: "loop_disabled",
+      },
     });
     expect(responseBody).not.toHaveProperty("developmentRun");
     expect(await context.db.select().from(loopRuns)).toHaveLength(0);
@@ -463,5 +535,11 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         .from(observabilityEvents)
         .where(eq(observabilityEvents.eventType, "development_loop_noop")),
     ).toHaveLength(0);
+    expect(
+      await context.db
+        .select()
+        .from(observabilityEvents)
+        .where(eq(observabilityEvents.eventType, "research_loop_noop")),
+    ).toHaveLength(1);
   });
 });
