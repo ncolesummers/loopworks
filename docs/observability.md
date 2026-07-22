@@ -77,14 +77,17 @@ The internal control plane should eventually expose:
 
 ADR 0012 defines the concrete metric-name contract. The exported metric names
 live in `src/lib/observability/metrics.ts`; code should import helpers from that
-module instead of naming OTel meters ad hoc. The first wired metric maps the
-durable `development_loop_run_created` control-plane event to
-`loopworks.run.started` with `loop.key`, `repository`, and `trigger.label`
-attributes.
+module instead of naming OTel meters ad hoc. The run-creation helpers map
+durable `development_loop_run_created` and `research_loop_run_created`
+control-plane events to `loopworks.run.started` with `loop.key`, `repository`,
+and `trigger.label` attributes. Research creation uses
+`loop.key=research-loop` and `trigger.label=spike`; disabled research triggers
+persist `research_loop_noop` without fabricating a run or emitting a
+run-started metric.
 
 ## Tracing Direction
 
-The MVP logger is compatible with trace context. Development-loop run creation
+The MVP logger is compatible with trace context. Development- and research-loop run creation
 persists the active W3C trace id into `loop_runs.trace_id`,
 `run_steps.trace_id`, and `observability_events.trace_id`, allowing Axiom traces,
 stdout logs, and durable run records to be correlated.

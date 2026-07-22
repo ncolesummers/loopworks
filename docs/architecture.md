@@ -177,6 +177,8 @@ stage subagent, validates the typed result, and invokes deterministic
 control-plane transitions. Stage subagents are siblings with independent model,
 tool, and isolated sandbox contracts; they do not own GitHub writes or workflow
 state transitions.
+Routing begins with the durable `loopKey`, so development and research stage
+names cannot accidentally share actors.
 
 The planner subagent should:
 
@@ -188,7 +190,12 @@ The planner subagent should:
 
 Stage specialists use typed handoffs and independent capability boundaries:
 
-1. Research loop skeleton, research planner, researcher, and research author agents — the `spike` plus `agent-ready` research loop, run in parallel to the development loop.
+1. Research loop skeleton — issue #43 persists and projects `planning →
+   researching → authoring → done` with actor and artifact placeholders. The
+   findings contract is `one_per_subquestion` from isolated child sessions, but
+   no child sessions run yet. Research planner, fan-out, authoring agent, live
+   eval, and versioned payload work stays in #44-#46; the root fails closed until
+   those siblings exist.
 2. Test-writer subagent — test-writing stage, red test evidence plus a reusable automated test plan, explicit seed data, and a bounded test-only patch.
 3. Implementation subagent — development stage, digest-bound production patch
    plus signed focused and aggregate green evidence. It reuses the exact
