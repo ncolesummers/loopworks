@@ -165,6 +165,8 @@ export function getTimelineKindStatus(kind: TimelineKind): PortalStatusMeta {
     planning: { status: "pending", label: "Planning" },
     test: { status: "running", label: "Test" },
     development: { status: "running", label: "Development" },
+    research: { status: "running", label: "Research" },
+    authoring: { status: "running", label: "Authoring" },
     validation: { status: "succeeded", label: "Validation" },
     review: { status: "needsApproval", label: "Review" },
     commit: { status: "done", label: "Commit" },

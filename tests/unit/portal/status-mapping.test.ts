@@ -9,6 +9,7 @@ import {
   getRepoHealthStatus,
   getRunStatus,
   getRunStepStatus,
+  getTimelineKindStatus,
   getValidationResultStatus,
 } from "@/components/portal/status-mapping";
 
@@ -110,6 +111,14 @@ describe("portal status mapping", () => {
     expect(getRunStepStatus("succeeded")).toEqual({
       status: "succeeded",
       label: "Succeeded",
+    });
+    expect(getTimelineKindStatus("research")).toEqual({
+      status: "running",
+      label: "Research",
+    });
+    expect(getTimelineKindStatus("authoring")).toEqual({
+      status: "running",
+      label: "Authoring",
     });
   });
 });

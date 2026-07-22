@@ -141,6 +141,8 @@ export function resolveObservabilityMetricDefinition(
 
 export const developmentLoopRunCreatedEventType = "development_loop_run_created";
 export const developmentLoopRunCreatedDurableMetricName = developmentLoopRunCreatedEventType;
+export const researchLoopRunCreatedEventType = "research_loop_run_created";
+export const researchLoopRunCreatedDurableMetricName = researchLoopRunCreatedEventType;
 
 export type DurableObservabilityEventDefinition = {
   eventType: string;
@@ -152,6 +154,11 @@ export const durableObservabilityEventContract = [
   {
     eventType: developmentLoopRunCreatedEventType,
     metricName: developmentLoopRunCreatedDurableMetricName,
+    otelMetricName: "loopworks.run.started",
+  },
+  {
+    eventType: researchLoopRunCreatedEventType,
+    metricName: researchLoopRunCreatedDurableMetricName,
     otelMetricName: "loopworks.run.started",
   },
 ] as const satisfies readonly DurableObservabilityEventDefinition[];
@@ -778,6 +785,57 @@ export async function recordDevelopmentLoopRunCreatedObservability(input: {
     correlationId: input.deliveryId,
     eventType: event.eventType,
     message: "Agent-ready development loop run skeleton created.",
+    metricName: event.metricName,
+    metricValue: input.stageCount,
+    payload: {
+      artifactCount: input.artifactCount,
+      issueNumber: input.issueNumber,
+      loopKey: input.loopKey,
+      repositoryFullName: input.repositoryFullName,
+      stageCount: input.stageCount,
+    },
+    repositoryId: input.repositoryId,
+    runId: input.runId,
+    severity: "info",
+    traceId: input.traceId,
+  });
+
+  return () => {
+    try {
+      recordDevelopmentLoopRunStartedMetric(
+        {
+          loopKey: input.loopKey,
+          repository: input.repositoryFullName,
+          triggerLabel: input.triggerLabel,
+        },
+        input.meter,
+      );
+    } catch {
+      // Durable event persistence is the source of truth; OTel emission must not roll back runs.
+    }
+  };
+}
+
+export async function recordResearchLoopRunCreatedObservability(input: {
+  artifactCount: number;
+  deliveryId?: string;
+  issueNumber: number;
+  loopKey: string;
+  meter?: RunStartedMeter;
+  repositoryFullName: string;
+  repositoryId: string;
+  runId: string;
+  stageCount: number;
+  traceId?: string;
+  triggerLabel: string;
+  writer: ObservabilityEventsWriter;
+}): Promise<() => void> {
+  const event = resolveDurableObservabilityEventDefinition(researchLoopRunCreatedDurableMetricName);
+
+  await input.writer.insert(observabilityEvents).values({
+    correlationId: input.deliveryId,
+    eventType: event.eventType,
+    message: "Spike research loop run skeleton created.",
     metricName: event.metricName,
     metricValue: input.stageCount,
     payload: {
