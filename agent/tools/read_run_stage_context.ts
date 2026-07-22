@@ -6,13 +6,13 @@ import { db } from "@/db/client";
 import { agentPlans, approvals, artifacts, loopRuns, runSteps } from "@/db/schema";
 import { createImplementationFixtureHandoff } from "../implementation-fixture";
 import { createPlanningAgentSeedPlan } from "../planning-agent";
+import { createPrPreparationFixtureContext } from "../pr-preparation-fixture";
 import { resolveImplementerFixtureMode } from "../subagents/implementer/lib/fixture-mode";
 import { resolvePrPreparerFixtureMode } from "../subagents/pr-preparer/lib/fixture-mode";
 import { resolveTestWriterFixtureMode } from "../subagents/test-writer/lib/fixture-mode";
 import { resolveValidationReviewerFixtureMode } from "../subagents/validation-reviewer/lib/fixture-mode";
 import { computeTestPlanDigest } from "../test-writing-agent";
 import { createValidationReviewFixtureContext } from "../validation-review-fixture";
-import { createPrPreparationFixtureContext } from "../pr-preparation-fixture";
 
 export default defineTool({
   description: "Read durable run, plan, approval, step, and artifact context for stage routing.",
@@ -28,7 +28,7 @@ export default defineTool({
           uri: artifact.uri,
         })),
         plans: [{ id: context.planId, plan: context.plan, status: context.planStatus }],
-        run: context.run,
+        run: { ...context.run, loopKey: "development-loop" },
         steps: [
           { ...context.validationStep, stage: "validation" },
           { ...context.reviewStep, stage: "code-review" },
@@ -64,7 +64,7 @@ export default defineTool({
           },
         ],
         plans: [{ id: context.plan.identity.id, plan: context.plan, status: context.planStatus }],
-        run: context.run,
+        run: { ...context.run, loopKey: "development-loop" },
         steps: [context.validationStep, { ...context.reviewStep, stage: "code-review" }],
       };
     }
@@ -101,7 +101,12 @@ export default defineTool({
           },
         ],
         plans: [{ id: planId, plan, status: "approved" }],
-        run: { currentStage: "development", id: runId, status: "running" },
+        run: {
+          currentStage: "development",
+          id: runId,
+          loopKey: "development-loop",
+          status: "running",
+        },
         steps: [
           {
             id: "00000000-0000-4000-8000-000000000347",
@@ -143,7 +148,12 @@ export default defineTool({
         ],
         artifacts: [],
         plans: [{ id: planId, plan, status: "approved" }],
-        run: { currentStage: "test-writing", id: runId, status: "running" },
+        run: {
+          currentStage: "test-writing",
+          id: runId,
+          loopKey: "development-loop",
+          status: "running",
+        },
         steps: [
           {
             id: "00000000-0000-4000-8000-000000000347",
@@ -165,7 +175,12 @@ export default defineTool({
       db.select().from(artifacts).where(eq(artifacts.runId, runId)),
     ]);
     return {
-      run: { currentStage: run.currentStage, id: run.id, status: run.status },
+      run: {
+        currentStage: run.currentStage,
+        id: run.id,
+        loopKey: run.loopKey,
+        status: run.status,
+      },
       steps: steps.map(({ id, stage, status }) => ({ id, stage, status })),
       plans: plans.map(({ id, plan, status }) => ({ id, plan, status })),
       approvals: planApprovals.map(({ id, metadata, status }) => ({ id, metadata, status })),
