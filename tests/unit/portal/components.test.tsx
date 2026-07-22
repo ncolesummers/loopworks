@@ -1,20 +1,25 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-
-import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
-import { DeploymentSummary } from "@/components/portal/deployment-summary";
+import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { LoopRegistry } from "@/components/portal/dashboard-view";
+import { DeploymentSummary } from "@/components/portal/deployment-summary";
 import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
 import { RunRecordsView } from "@/components/portal/run-records-view";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
 import { ValidationResultSummary } from "@/components/portal/validation-result-summary";
+import { portalFixture } from "@/lib/fixtures";
 import {
   createDevelopmentLoopRunSkeleton,
   projectDevelopmentLoopArtifacts,
   projectDevelopmentLoopTimeline,
 } from "@/lib/loops/development-run";
+import {
+  createResearchLoopRunSkeleton,
+  projectResearchLoopArtifacts,
+  projectResearchLoopTimeline,
+} from "@/lib/loops/research-run";
 import type {
   ArtifactRecord,
   DeploymentRecord,
@@ -44,6 +49,18 @@ describe("portal reusable components", () => {
     cleanup();
     render(<ValidationResultSummary results={[]} />);
     expect(screen.getByText("No validation results yet")).toBeTruthy();
+  });
+
+  it("declares the enabled Research routing loop registry fixture", () => {
+    expect(portalFixture.loops).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          enabled: true,
+          name: "Research routing",
+          state: "Planned",
+        }),
+      ]),
+    );
   });
 
   it("does not render unsafe artifact or evidence hrefs as links", () => {
@@ -199,6 +216,44 @@ describe("portal reusable components", () => {
     }
     expect(screen.getByRole("link", { name: "Validation report" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "PR intent" })).toBeTruthy();
+  });
+
+  it("renders every research stage and artifact contract through shared portal primitives", () => {
+    const skeleton = createResearchLoopRunSkeleton({
+      mode: "simulated",
+      now: new Date("2026-07-21T16:00:00.000Z"),
+      trigger: {
+        issueNumber: 43,
+        issueUrl: "https://github.com/ncolesummers/loopworks/issues/43",
+        labels: ["agent-ready", "spike", "loop:research"],
+        milestone: "M3 Durable Loop MVP",
+        repositoryFullName: "ncolesummers/loopworks",
+        title: "Research loop skeleton",
+      },
+    });
+
+    render(
+      <div>
+        {projectResearchLoopTimeline(skeleton).map((event) => (
+          <RunTimelineItem key={`${event.kind}-${event.title}`} event={event} />
+        ))}
+        {projectResearchLoopArtifacts(skeleton).map((artifact) => (
+          <ArtifactListItem key={artifact.label} artifact={artifact} />
+        ))}
+      </div>,
+    );
+
+    for (const stage of ["Planning", "Researching", "Authoring", "Done"]) {
+      expect(screen.getAllByText(stage, { exact: true }).length).toBeGreaterThan(0);
+    }
+    for (const artifact of [
+      "Research plan",
+      "Findings artifacts",
+      "Research document",
+      "Completion summary",
+    ]) {
+      expect(screen.getByRole("link", { name: artifact })).toBeTruthy();
+    }
   });
 
   it("renders blocked and waiting-for-approval runs at a glance with detail evidence", () => {
