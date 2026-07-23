@@ -141,6 +141,8 @@ export function resolveObservabilityMetricDefinition(
 
 export const developmentLoopRunCreatedEventType = "development_loop_run_created";
 export const developmentLoopRunCreatedDurableMetricName = developmentLoopRunCreatedEventType;
+export const developmentLoopRunCompletedEventType = "development_loop_run_completed";
+export const developmentLoopRunCompletedDurableMetricName = developmentLoopRunCompletedEventType;
 export const researchLoopRunCreatedEventType = "research_loop_run_created";
 export const researchLoopRunCreatedDurableMetricName = researchLoopRunCreatedEventType;
 
@@ -160,6 +162,11 @@ export const durableObservabilityEventContract = [
     eventType: researchLoopRunCreatedEventType,
     metricName: researchLoopRunCreatedDurableMetricName,
     otelMetricName: "loopworks.run.started",
+  },
+  {
+    eventType: developmentLoopRunCompletedEventType,
+    metricName: developmentLoopRunCompletedDurableMetricName,
+    otelMetricName: "loopworks.run.completed",
   },
 ] as const satisfies readonly DurableObservabilityEventDefinition[];
 
@@ -814,6 +821,42 @@ export async function recordDevelopmentLoopRunCreatedObservability(input: {
       // Durable event persistence is the source of truth; OTel emission must not roll back runs.
     }
   };
+}
+
+export async function recordDevelopmentLoopRunCompletedObservability(input: {
+  durationSeconds: number;
+  loopKey: string;
+  repositoryFullName: string;
+  repositoryId: string;
+  runId: string;
+  status: DevelopmentLoopRunMetricStatus;
+  stepId?: string;
+  terminalReason: string;
+  traceId?: string;
+  writer: ObservabilityEventsWriter;
+}): Promise<void> {
+  const event = resolveDurableObservabilityEventDefinition(
+    developmentLoopRunCompletedDurableMetricName,
+  );
+
+  await input.writer.insert(observabilityEvents).values({
+    eventType: event.eventType,
+    message: "Development loop run reached a terminal state.",
+    metricName: event.metricName,
+    metricValue: 1,
+    payload: {
+      durationSeconds: input.durationSeconds,
+      loopKey: input.loopKey,
+      repositoryFullName: input.repositoryFullName,
+      status: normalizeRunMetricStatus(input.status),
+      terminalReason: input.terminalReason,
+    },
+    repositoryId: input.repositoryId,
+    runId: input.runId,
+    severity: input.status === "succeeded" ? "info" : "warn",
+    stepId: input.stepId,
+    traceId: input.traceId,
+  });
 }
 
 export async function recordResearchLoopRunCreatedObservability(input: {

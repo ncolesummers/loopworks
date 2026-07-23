@@ -6,10 +6,12 @@ import ts from "typescript";
 import { approvals, loopRuns, observabilityEvents, repositories } from "@/db/schema";
 import {
   collectControlPlaneGaugeMeasurements,
+  developmentLoopRunCompletedDurableMetricName,
   developmentLoopRunCreatedDurableMetricName,
   observabilityMetricNames,
   recordApprovalWaitTimeMetric,
   recordDevelopmentLoopRunCompletedMetric,
+  recordDevelopmentLoopRunCompletedObservability,
   recordDevelopmentLoopRunCreatedObservability,
   recordDevelopmentLoopRunDurationMetric,
   recordDevelopmentLoopRunStartedMetric,
@@ -549,6 +551,13 @@ describe("ADR 0012 observability metric contract", () => {
       metricName: "research_loop_run_created",
       otelMetricName: "loopworks.run.started",
     });
+    expect(
+      resolveDurableObservabilityEventDefinition(developmentLoopRunCompletedDurableMetricName),
+    ).toMatchObject({
+      eventType: "development_loop_run_completed",
+      metricName: "development_loop_run_completed",
+      otelMetricName: "loopworks.run.completed",
+    });
 
     expect(() =>
       resolveDurableObservabilityEventDefinition("development_loop_run_started"),
@@ -708,6 +717,48 @@ describe("ADR 0012 observability metric contract", () => {
     ]);
   });
 
+  it("records a correlated development-loop completion event through one helper", async () => {
+    const insertedRows: Record<string, unknown>[] = [];
+    const writer = {
+      insert(table: unknown) {
+        expect(table).toBe(observabilityEvents);
+        return {
+          values(row: Record<string, unknown>) {
+            insertedRows.push(row);
+            return Promise.resolve();
+          },
+        };
+      },
+    };
+
+    await recordDevelopmentLoopRunCompletedObservability({
+      durationSeconds: 90,
+      loopKey: "development-loop",
+      repositoryFullName: "ncolesummers/loopworks",
+      repositoryId: "64f8ca7a-1b5d-4b3f-8c5e-2e2d814a18aa",
+      runId: "9a8d379f-1d65-4fb0-bd91-4f82306a3159",
+      status: "failed",
+      stepId: "62da31c0-cb98-4fe1-bdad-25295c03cf67",
+      terminalReason: "stalled",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      writer,
+    });
+
+    expect(insertedRows).toEqual([
+      expect.objectContaining({
+        eventType: "development_loop_run_completed",
+        metricName: "development_loop_run_completed",
+        metricValue: 1,
+        payload: expect.objectContaining({
+          status: "failed",
+          terminalReason: "stalled",
+        }),
+        stepId: "62da31c0-cb98-4fe1-bdad-25295c03cf67",
+        traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      }),
+    ]);
+  });
+
   it("keeps the durable event insert authoritative when OTel metric emission fails", async () => {
     const insertedRows: Record<string, unknown>[] = [];
     const writer = {
@@ -760,6 +811,7 @@ describe("ADR 0012 observability metric contract", () => {
       /^loopworks\.(run|step|validation|webhook|deployment|approval|queue|lock|model)\./;
     const forbiddenMetricLiterals = new Set([
       ...observabilityMetricNames,
+      developmentLoopRunCompletedDurableMetricName,
       developmentLoopRunCreatedDurableMetricName,
       researchLoopRunCreatedDurableMetricName,
     ]);

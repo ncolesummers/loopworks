@@ -22,6 +22,19 @@ export function startLoopworksSpan(
   return tracer.startSpan(name, options);
 }
 
+export function startDevelopmentLoopReconciliationSpan(tracer = getLoopworksTracer()): {
+  setRunCount(count: number): void;
+  span: Span;
+} {
+  const span = startLoopworksSpan("loopworks.run.reconcile", undefined, tracer);
+  return {
+    setRunCount(count) {
+      span.setAttribute("loopworks.run.count", count);
+    },
+    span,
+  };
+}
+
 export function markLoopworksSpanOk(span: Span): void {
   span.setStatus({ code: SpanStatusCode.OK });
 }

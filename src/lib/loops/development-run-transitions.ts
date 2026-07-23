@@ -38,7 +38,7 @@ import {
   type ValidationReviewResult,
   validationReviewResultSchema,
 } from "@agent/validation-review-agent";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { db } from "@/db/client";
 import {
   agentPlans,
@@ -84,6 +84,8 @@ import {
   type DevelopmentLoopStepRetryMetricInput,
   type DevelopmentLoopValidationDurationMetricInput,
   type DevelopmentLoopValidationOutcomeMetricInput,
+  developmentLoopRunCompletedEventType,
+  recordDevelopmentLoopRunCompletedObservability,
   recordDevelopmentLoopRunCompletedMetric,
   recordDevelopmentLoopRunDurationMetric,
   recordDevelopmentLoopStepDurationMetric,
@@ -266,6 +268,12 @@ export async function recordDevelopmentLoopPlanArtifact(
 
 export type DevelopmentLoopValidationTransitionStatus = "advanced" | "blocked";
 export type DevelopmentLoopTerminalStatus = "succeeded" | "failed" | "canceled";
+export type DevelopmentLoopTerminalReason =
+  | "succeeded"
+  | "failed"
+  | "timed_out"
+  | "stalled"
+  | "canceled_by_reconciliation";
 
 export type DevelopmentLoopTransitionMetrics = {
   runCompleted?: (input: DevelopmentLoopRunCompletedMetricInput) => void;
@@ -2566,17 +2574,34 @@ export async function executeDevelopmentLoopPrStage(
   };
 }
 
-export async function completeDevelopmentLoopRun(input: {
+function terminalStatusForReason(
+  reason: DevelopmentLoopTerminalReason,
+): DevelopmentLoopTerminalStatus {
+  if (reason === "succeeded") return "succeeded";
+  if (reason === "canceled_by_reconciliation") return "canceled";
+  return "failed";
+}
+
+function terminalReasonForStatus(
+  status: DevelopmentLoopTerminalStatus,
+): DevelopmentLoopTerminalReason {
+  if (status === "succeeded") return "succeeded";
+  if (status === "canceled") return "canceled_by_reconciliation";
+  return "failed";
+}
+
+export async function finalizeDevelopmentLoopRun(input: {
   database: DevelopmentLoopTransitionDatabase;
+  expectedCurrentStage?: string;
   logger?: LoopworksLogger;
   metrics?: DevelopmentLoopTransitionMetrics;
   occurredAt?: Date;
-  reason?: string;
+  reason: DevelopmentLoopTerminalReason;
   runId: string;
-  status: DevelopmentLoopTerminalStatus;
 }): Promise<{
   durationSeconds: number;
   idempotent?: boolean;
+  reason: DevelopmentLoopTerminalReason;
   runId: string;
   status: DevelopmentLoopTerminalStatus;
   traceId?: string;
@@ -2584,7 +2609,7 @@ export async function completeDevelopmentLoopRun(input: {
   const occurredAt = input.occurredAt ?? new Date();
   let runCompletedMetric: DevelopmentLoopRunCompletedMetricInput | undefined;
   let runDurationMetric: DevelopmentLoopRunDurationMetricInput | undefined;
-  const terminalReason = normalizeReasonCode(input.reason);
+  const status = terminalStatusForReason(input.reason);
 
   const result = await input.database.transaction(async (tx) => {
     const [run] = await tx
@@ -2596,8 +2621,10 @@ export async function completeDevelopmentLoopRun(input: {
         metadata: loopRuns.metadata,
         queuedAt: loopRuns.queuedAt,
         repository: repositories.fullName,
+        repositoryId: loopRuns.repositoryId,
         startedAt: loopRuns.startedAt,
         status: loopRuns.status,
+        terminalReason: loopRuns.terminalReason,
         traceId: loopRuns.traceId,
       })
       .from(loopRuns)
@@ -2616,6 +2643,7 @@ export async function completeDevelopmentLoopRun(input: {
       return {
         durationSeconds: durationSecondsBetween(run.startedAt ?? run.queuedAt, run.completedAt),
         idempotent: true,
+        reason: run.terminalReason ?? terminalReasonForStatus(run.status),
         runId: input.runId,
         status: run.status as DevelopmentLoopTerminalStatus,
         ...(run.traceId ? { traceId: run.traceId } : {}),
@@ -2623,35 +2651,95 @@ export async function completeDevelopmentLoopRun(input: {
     }
 
     const durationSeconds = durationSecondsBetween(run.startedAt ?? run.queuedAt, occurredAt);
-    await tx
+    const [currentStep] = await tx
+      .select({ id: runSteps.id, traceId: runSteps.traceId })
+      .from(runSteps)
+      .where(and(eq(runSteps.runId, input.runId), eq(runSteps.stage, run.currentStage)))
+      .limit(1);
+    const updatePredicates = [
+      eq(loopRuns.id, input.runId),
+      notInArray(loopRuns.status, ["succeeded", "failed", "canceled"]),
+      ...(input.expectedCurrentStage
+        ? [eq(loopRuns.currentStage, input.expectedCurrentStage)]
+        : []),
+    ];
+    const [updated] = await tx
       .update(loopRuns)
       .set({
-        ...(input.status === "canceled" ? { canceledAt: occurredAt } : {}),
+        ...(status === "canceled" ? { canceledAt: occurredAt } : {}),
         completedAt: occurredAt,
-        currentStage: input.status === "succeeded" ? "done" : run.currentStage,
-        metadata: {
-          ...(run.metadata ?? {}),
-          ...(terminalReason ? { terminalReason } : {}),
-        },
-        status: input.status,
+        currentStage: status === "succeeded" ? "done" : run.currentStage,
+        status,
+        terminalReason: input.reason,
       })
-      .where(eq(loopRuns.id, input.runId));
+      .where(and(...updatePredicates))
+      .returning({ id: loopRuns.id });
+
+    if (!updated) {
+      const [terminalRun] = await tx
+        .select({
+          completedAt: loopRuns.completedAt,
+          queuedAt: loopRuns.queuedAt,
+          startedAt: loopRuns.startedAt,
+          status: loopRuns.status,
+          terminalReason: loopRuns.terminalReason,
+          traceId: loopRuns.traceId,
+        })
+        .from(loopRuns)
+        .where(eq(loopRuns.id, input.runId))
+        .limit(1);
+      if (
+        !terminalRun?.completedAt ||
+        !["succeeded", "failed", "canceled"].includes(terminalRun.status)
+      ) {
+        throw new DevelopmentLoopTransitionError(
+          `Run ${input.runId} could not be finalized because its state changed.`,
+        );
+      }
+      return {
+        durationSeconds: durationSecondsBetween(
+          terminalRun.startedAt ?? terminalRun.queuedAt,
+          terminalRun.completedAt,
+        ),
+        idempotent: true,
+        reason:
+          terminalRun.terminalReason ??
+          terminalReasonForStatus(terminalRun.status as DevelopmentLoopTerminalStatus),
+        runId: input.runId,
+        status: terminalRun.status as DevelopmentLoopTerminalStatus,
+        ...(terminalRun.traceId ? { traceId: terminalRun.traceId } : {}),
+      };
+    }
+
+    await recordDevelopmentLoopRunCompletedObservability({
+      durationSeconds,
+      loopKey: run.loopKey,
+      repositoryFullName: run.repository,
+      repositoryId: run.repositoryId,
+      runId: input.runId,
+      status,
+      stepId: currentStep?.id,
+      terminalReason: input.reason,
+      traceId: currentStep?.traceId ?? run.traceId ?? undefined,
+      writer: tx,
+    });
 
     runCompletedMetric = {
       loopKey: run.loopKey,
       repository: run.repository,
-      status: input.status,
+      status,
     };
     runDurationMetric = {
       durationSeconds,
       loopKey: run.loopKey,
-      status: input.status,
+      status,
     };
 
     return {
       durationSeconds,
+      reason: input.reason,
       runId: input.runId,
-      status: input.status,
+      status,
       ...(run.traceId ? { traceId: run.traceId } : {}),
     };
   });
@@ -2673,14 +2761,45 @@ export async function completeDevelopmentLoopRun(input: {
     {
       durationSeconds: result.durationSeconds,
       idempotent: "idempotent" in result ? result.idempotent : undefined,
+      reason: result.reason,
       runId: result.runId,
       status: result.status,
       traceId: "traceId" in result ? result.traceId : undefined,
     },
-    "development_loop_run_completed",
+    developmentLoopRunCompletedEventType,
   );
 
   return result;
+}
+
+export async function completeDevelopmentLoopRun(input: {
+  database: DevelopmentLoopTransitionDatabase;
+  logger?: LoopworksLogger;
+  metrics?: DevelopmentLoopTransitionMetrics;
+  occurredAt?: Date;
+  reason?: DevelopmentLoopTerminalReason;
+  runId: string;
+  status: DevelopmentLoopTerminalStatus;
+}): ReturnType<typeof finalizeDevelopmentLoopRun> {
+  if (input.status === "canceled" && input.reason === undefined) {
+    throw new DevelopmentLoopTransitionError(
+      "Canceled runs require an explicit typed terminal reason.",
+    );
+  }
+  const reason = input.reason ?? terminalReasonForStatus(input.status);
+  if (terminalStatusForReason(reason) !== input.status) {
+    throw new DevelopmentLoopTransitionError(
+      `Terminal reason ${reason} does not match status ${input.status}.`,
+    );
+  }
+  return finalizeDevelopmentLoopRun({
+    database: input.database,
+    logger: input.logger,
+    metrics: input.metrics,
+    occurredAt: input.occurredAt,
+    reason,
+    runId: input.runId,
+  });
 }
 
 export async function retryDevelopmentLoopStep(input: {
