@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { and, eq } from "drizzle-orm";
 
-import { artifacts, loopRuns, repositories, runSteps } from "@/db/schema";
+import { artifacts, loopRuns, observabilityEvents, repositories, runSteps } from "@/db/schema";
 import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
@@ -10,6 +10,7 @@ import {
   applyDevelopmentLoopValidationReport,
   completeDevelopmentLoopRun,
   type DevelopmentLoopTransitionDatabase,
+  finalizeDevelopmentLoopRun,
   retryDevelopmentLoopStep,
 } from "@/lib/loops/development-run-transitions";
 import {
@@ -605,6 +606,7 @@ describe("development-loop run transitions", () => {
       database: transitionDatabase(context),
       metrics,
       occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+      ...(status === "canceled" ? { reason: "canceled_by_reconciliation" as const } : {}),
       runId,
       status,
     });
@@ -612,6 +614,7 @@ describe("development-loop run transitions", () => {
       database: transitionDatabase(context),
       metrics,
       occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+      ...(status === "canceled" ? { reason: "canceled_by_reconciliation" as const } : {}),
       runId,
       status,
     });
@@ -638,6 +641,110 @@ describe("development-loop run transitions", () => {
     expect(metrics.runCompleted).toHaveBeenCalledTimes(1);
     expect(metrics.runDuration).toHaveBeenCalledTimes(1);
     expect(expectedMetricStatus).toBe(status === "canceled" ? "cancelled" : status);
+  });
+
+  it("persists a typed terminal reason and emits completion observability once", async () => {
+    const runId = await createRun(context);
+    const metrics = createMetricRecorder();
+    await context.db
+      .update(loopRuns)
+      .set({
+        currentStage: "development",
+        startedAt: new Date("2026-07-08T16:00:00.000Z"),
+        status: "running",
+      })
+      .where(eq(loopRuns.id, runId));
+
+    const first = await finalizeDevelopmentLoopRun({
+      database: transitionDatabase(context),
+      metrics,
+      occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+      reason: "stalled",
+      runId,
+    });
+    const replay = await finalizeDevelopmentLoopRun({
+      database: transitionDatabase(context),
+      metrics,
+      occurredAt: new Date("2026-07-08T16:11:00.000Z"),
+      reason: "timed_out",
+      runId,
+    });
+
+    const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, runId));
+    const events = await context.db
+      .select()
+      .from(observabilityEvents)
+      .where(eq(observabilityEvents.runId, runId));
+
+    expect(first).toMatchObject({ reason: "stalled", status: "failed" });
+    expect(replay).toMatchObject({ idempotent: true, reason: "stalled", status: "failed" });
+    expect(run).toMatchObject({
+      completedAt: new Date("2026-07-08T16:10:00.000Z"),
+      status: "failed",
+      terminalReason: "stalled",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+    });
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({
+      eventType: "development_loop_run_completed",
+      metricName: "development_loop_run_completed",
+      metricValue: 1,
+      payload: expect.objectContaining({ terminalReason: "stalled" }),
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+    });
+    expect(metrics.runCompleted).toHaveBeenCalledTimes(1);
+    expect(metrics.runDuration).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows exactly one concurrent finalizer to own completion observability", async () => {
+    const runId = await createRun(context);
+    const metrics = createMetricRecorder();
+    await context.db
+      .update(loopRuns)
+      .set({ startedAt: new Date("2026-07-08T16:00:00.000Z"), status: "running" })
+      .where(eq(loopRuns.id, runId));
+
+    const results = await Promise.all([
+      finalizeDevelopmentLoopRun({
+        database: transitionDatabase(context),
+        metrics,
+        occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+        reason: "stalled",
+        runId,
+      }),
+      finalizeDevelopmentLoopRun({
+        database: transitionDatabase(context),
+        metrics,
+        occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+        reason: "timed_out",
+        runId,
+      }),
+    ]);
+    const completionEvents = await context.db
+      .select()
+      .from(observabilityEvents)
+      .where(eq(observabilityEvents.eventType, "development_loop_run_completed"));
+
+    expect(results.filter((result) => result.idempotent)).toHaveLength(1);
+    expect(completionEvents).toHaveLength(1);
+    expect(metrics.runCompleted).toHaveBeenCalledTimes(1);
+    expect(metrics.runDuration).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a typed compatibility-wrapper reason", async () => {
+    const runId = await createRun(context);
+    await context.db.update(loopRuns).set({ status: "running" }).where(eq(loopRuns.id, runId));
+
+    await completeDevelopmentLoopRun({
+      database: transitionDatabase(context),
+      occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+      reason: "stalled",
+      runId,
+      status: "failed",
+    });
+
+    const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, runId));
+    expect(run).toMatchObject({ status: "failed", terminalReason: "stalled" });
   });
 
   it("queues a retry for an implemented transition branch and records retry telemetry", async () => {

@@ -46,6 +46,13 @@ export const runStatusEnum = pgEnum("run_status", [
   "succeeded",
   "canceled",
 ]);
+export const runTerminalReasonEnum = pgEnum("run_terminal_reason", [
+  "succeeded",
+  "failed",
+  "timed_out",
+  "stalled",
+  "canceled_by_reconciliation",
+]);
 export const runStepStatusEnum = pgEnum("run_step_status", [
   "queued",
   "running",
@@ -216,6 +223,7 @@ export const loopRuns = pgTable(
     githubIssueNumber: integer("github_issue_number"),
     githubIssueUrl: text("github_issue_url"),
     status: runStatusEnum("status").default("queued").notNull(),
+    terminalReason: runTerminalReasonEnum("terminal_reason"),
     currentStage: text("current_stage").default("planning").notNull(),
     traceId: text("trace_id"),
     costCents: integer("cost_cents").default(0).notNull(),

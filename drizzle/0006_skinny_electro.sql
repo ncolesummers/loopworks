@@ -1,0 +1,2 @@
+CREATE TYPE "public"."run_terminal_reason" AS ENUM('succeeded', 'failed', 'timed_out', 'stalled', 'canceled_by_reconciliation');--> statement-breakpoint
+ALTER TABLE "loop_runs" ADD COLUMN "terminal_reason" "run_terminal_reason";

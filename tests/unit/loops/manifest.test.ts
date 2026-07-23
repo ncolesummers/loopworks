@@ -4,7 +4,7 @@ import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
 
 type JsonSchemaObject = {
   required?: string[];
-  properties?: Record<string, unknown>;
+  properties?: Record<string, JsonSchemaObject>;
   $defs?: Record<string, JsonSchemaObject>;
 };
 
@@ -138,6 +138,51 @@ describe("loop manifest schema", () => {
       group: "repo:{repo}:loop:development",
       maxInFlight: 1,
     });
+    expect(developmentLoop.reconciliation).toEqual({
+      silenceThresholdSeconds: 300,
+    });
+  });
+
+  it("requires a positive reconciliation silence threshold for every loop", () => {
+    const developmentLoop = defaultLoopManifest.loops[0];
+    const withoutReconciliation = { ...developmentLoop } as Record<string, unknown>;
+    delete withoutReconciliation.reconciliation;
+
+    const missing = validateLoopManifest({
+      ...defaultLoopManifest,
+      loops: [withoutReconciliation],
+    });
+    const zero = validateLoopManifest({
+      ...defaultLoopManifest,
+      loops: [
+        {
+          ...developmentLoop,
+          reconciliation: { silenceThresholdSeconds: 0 },
+        },
+      ],
+    });
+    const fractional = validateLoopManifest({
+      ...defaultLoopManifest,
+      loops: [
+        {
+          ...developmentLoop,
+          reconciliation: { silenceThresholdSeconds: 0.5 },
+        },
+      ],
+    });
+
+    for (const result of [missing, zero, fractional]) {
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error("Expected reconciliation validation to fail.");
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: expect.stringContaining("reconciliation"),
+            hint: expect.stringContaining("silence threshold"),
+          }),
+        ]),
+      );
+    }
   });
 
   it("returns actionable validation errors with paths and hints", () => {
@@ -227,6 +272,8 @@ describe("loop manifest schema", () => {
     expect(definitions.modelPolicy?.required).toEqual(["defaultModel"]);
     expect(definitions.toolPolicy?.properties).not.toHaveProperty("forbiddenToolCategories");
     expect(definitions.approvalGate?.properties?.required).toEqual({ const: true });
+    expect(definitions.loopDefinition?.required).toContain("reconciliation");
+    expect(definitions.reconciliation?.required).toEqual(["silenceThresholdSeconds"]);
   });
 
   it("maps each MVP milestone and issue to persona-derived acceptance ids", () => {

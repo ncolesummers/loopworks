@@ -67,8 +67,12 @@ Each loop definition includes:
 9. `retryPolicy` with bounded attempts and backoff.
 10. `concurrency` with the group key, max in-flight runs, and cancellation
     behavior for overlapping work.
-11. `cancellation` for disabled or superseded work.
-12. `githubWriteback` for approved comments, labels, or status checks.
+11. `reconciliation` with a required positive integer
+    `silenceThresholdSeconds` value. A positively active execution is stalled
+    only when its latest persisted step activity is strictly older than this
+    threshold; activity exactly at the threshold remains healthy.
+12. `cancellation` for disabled or superseded work.
+13. `githubWriteback` for approved comments, labels, or status checks.
 
 The sample `development-loop` covers the `agent-ready` trigger and the first
 durable issue-backed implementation skeleton. The stage sequence is stable:
@@ -90,6 +94,15 @@ development-loop triggers must not create a run; they record a durable
 skipped/no-op reason such as `loop_disabled` so operators can explain why an
 `agent-ready` issue did not start. Research-loop disabled evidence is tracked
 separately from the development-loop skeleton.
+
+Active development runs are reconciled against this manifest contract without
+mutating GitHub. Closed issues and issues that lose required trigger labels use
+`cancellation.onSuperseded`; disabled loops use `cancellation.onDisabled`.
+Policies that continue existing work leave the run active. Reconcile-authored
+terminal reasons are persisted separately from status: `stalled` and
+`timed_out` map to `failed`, while `canceled_by_reconciliation` maps to
+`canceled`. Execution liveness is supplied by the runtime boundary and an
+unknown signal fails open rather than terminating a potentially healthy run.
 
 The enabled `research-loop` is a parallel, fixture-backed generality probe. It
 requires both `spike` and `agent-ready`, uses a separate

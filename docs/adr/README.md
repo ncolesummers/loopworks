@@ -36,6 +36,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0013](0013-planning-agent-contract.md) | Proposed | Define the planning agent as a planning-only runtime with guarded CLI inspection, explicit fixtures, eval coverage, and ADR 0012-aligned telemetry boundaries. |
 | [0014](0014-guarded-github-pr-write-reconciliation.md) | Proposed | Guard GitHub PR writes with digest-bound approval, deterministic branches, and two-phase reconciliation. |
 | [0015](0015-stage-orchestrator-and-isolated-subagent-handoffs.md) | Proposed | Use a neutral root orchestrator, independent sibling subagents, and typed artifact handoffs between isolated sandboxes. |
+| [0016](0016-run-reconciliation-and-terminal-reasons.md) | Proposed | Reconcile active runs with typed terminal reasons, read-only tracker refresh, and injected execution liveness. |
 
 ## Template
 
