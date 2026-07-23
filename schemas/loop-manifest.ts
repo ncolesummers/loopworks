@@ -271,6 +271,12 @@ const concurrencySchema = z
   })
   .strict();
 
+const reconciliationSchema = z
+  .object({
+    silenceThresholdSeconds: z.number().int().positive(),
+  })
+  .strict();
+
 const cancellationSchema = z
   .object({
     onSuperseded: z.enum(cancellationOnSupersededValues),
@@ -303,6 +309,7 @@ const loopDefinitionSchema = z
     validationGates: z.array(validationGateSchema).min(1),
     retryPolicy: retryPolicySchema,
     concurrency: concurrencySchema,
+    reconciliation: reconciliationSchema,
     cancellation: cancellationSchema,
     githubWriteback: githubWritebackSchema,
   })

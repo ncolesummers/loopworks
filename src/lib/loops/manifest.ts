@@ -153,6 +153,9 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
         maxInFlight: 1,
         cancelInProgress: false,
       },
+      reconciliation: {
+        silenceThresholdSeconds: 300,
+      },
       cancellation: {
         onSuperseded: "mark_canceled",
         onDisabled: "skip_new_runs",
@@ -259,6 +262,9 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
         group: "repo:{repo}:loop:research",
         maxInFlight: 1,
         cancelInProgress: false,
+      },
+      reconciliation: {
+        silenceThresholdSeconds: 300,
       },
       cancellation: {
         onSuperseded: "mark_canceled",
@@ -510,6 +516,10 @@ function getManifestValidationHint(path: string): string {
 
     if (path.includes("concurrency")) {
       return "Set a concurrency group and maxInFlight of at least 1.";
+    }
+
+    if (path.includes("reconciliation")) {
+      return "Set a positive integer silence threshold in seconds for run reconciliation.";
     }
 
     if (path.includes("cancellation")) {

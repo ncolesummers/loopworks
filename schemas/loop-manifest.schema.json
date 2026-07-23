@@ -116,6 +116,7 @@
         "validationGates",
         "retryPolicy",
         "concurrency",
+        "reconciliation",
         "cancellation",
         "githubWriteback"
       ],
@@ -172,6 +173,9 @@
         },
         "concurrency": {
           "$ref": "#/$defs/concurrency"
+        },
+        "reconciliation": {
+          "$ref": "#/$defs/reconciliation"
         },
         "cancellation": {
           "$ref": "#/$defs/cancellation"
@@ -518,6 +522,17 @@
         "cancelInProgress": {
           "type": "boolean",
           "default": false
+        }
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["silenceThresholdSeconds"],
+      "properties": {
+        "silenceThresholdSeconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0
         }
       }
     },
