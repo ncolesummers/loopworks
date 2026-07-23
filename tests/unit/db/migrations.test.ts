@@ -7,6 +7,7 @@ import {
   artifactTypeEnum,
   loopRuns,
   repositories,
+  runTerminalReasonEnum,
 } from "@/db/schema";
 import { createPgliteTestDatabase } from "../../helpers/pglite";
 
@@ -81,6 +82,21 @@ describe("Drizzle migrations", () => {
     const migrationSql = readMigrationSql();
     expect(migrationSql).toContain('"approval_transition_events"');
     expect(migrationSql).toContain("'bypassed'");
+  });
+
+  it("tracks typed run terminal reasons in schema and migrations", () => {
+    expect(runTerminalReasonEnum.enumValues).toEqual([
+      "succeeded",
+      "failed",
+      "timed_out",
+      "stalled",
+      "canceled_by_reconciliation",
+    ]);
+    expect(Object.keys(loopRuns)).toContain("terminalReason");
+
+    const migrationSql = readMigrationSql();
+    expect(migrationSql).toContain('CREATE TYPE "public"."run_terminal_reason"');
+    expect(migrationSql).toContain('"terminal_reason" "run_terminal_reason"');
   });
 
   it(
