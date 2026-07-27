@@ -5,6 +5,7 @@ import {
   approvalTransitionEvents,
   artifacts,
   artifactTypeEnum,
+  idempotencyLocks,
   loopRuns,
   repositories,
   runTerminalReasonEnum,
@@ -97,6 +98,17 @@ describe("Drizzle migrations", () => {
     const migrationSql = readMigrationSql();
     expect(migrationSql).toContain('CREATE TYPE "public"."run_terminal_reason"');
     expect(migrationSql).toContain('"terminal_reason" "run_terminal_reason"');
+  });
+
+  it("tracks dispatch lease correlation and active issue uniqueness", () => {
+    expect(Object.keys(idempotencyLocks)).toEqual(expect.arrayContaining(["runId", "traceId"]));
+
+    const migrationSql = readMigrationSql();
+    expect(migrationSql).toContain('ALTER TABLE "idempotency_locks" ADD COLUMN "run_id" uuid');
+    expect(migrationSql).toContain('ALTER TABLE "idempotency_locks" ADD COLUMN "trace_id" text');
+    expect(migrationSql).toContain("loop_runs_active_repository_issue_idx");
+    expect(migrationSql).toContain("'waiting_for_approval', 'blocked'");
+    expect(migrationSql).toContain('"loop_runs"."completed_at" IS NULL');
   });
 
   it(
