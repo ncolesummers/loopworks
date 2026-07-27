@@ -66,7 +66,9 @@ The initial schema should support these tables:
 7. Artifacts: run id, step id, type, title, URI, metadata, checksum where relevant.
 8. Approvals: run id, gate key, status, approver identity, rationale, evidence URI, timestamps.
 9. GitHub events: delivery id, event name, action, installation id, payload summary, processed status, error summary.
-10. Idempotency locks: key, scope, acquired/expired timestamps, owner, status.
+10. Idempotency locks: key, scope, run and trace correlation, acquired/expired
+    timestamps, owner, and status. Released group-guard rows serialize admission;
+    acquired run leases are the execution-liveness authority.
 11. Observability events or projections: correlation ids, metric counters, trace links, log summary links, and alert state.
 
 ## Observability
@@ -92,10 +94,22 @@ Logs are not the event store. The control plane must still persist durable run, 
 5. Acquire a short-lived lock for repo plus issue plus trigger type.
 6. Normalize the event into Loopworks event tables.
 7. Evaluate loop triggers from the active manifest snapshot.
-8. Create a run or append a skipped/no-op decision with a durable reason.
-9. Write a summary or durable link back to GitHub only when useful to humans.
+8. Resolve the manifest concurrency group, lock its persistent guard row plus
+   the cross-loop repository/issue guard, and persist the run. Acquire a run
+   lease when capacity exists; otherwise retain the run as queued without a
+   lease. Stage transitions require that exact acquired lease.
+9. On terminal completion, release the exact owner/run lease and drain due work
+   for that repository group by oldest queue time then issue number. Retryable
+   failures keep their evidence and use manifest-computed future eligibility
+   rather than process sleeps.
+10. Write a summary or durable link back to GitHub only when useful to humans.
 
 Webhook processing must be repeat-safe. Re-delivery should not create duplicate runs, duplicate comments, or conflicting approval gates.
+
+One repository issue may have only one nonterminal run across loop types.
+Sequential runs are allowed after terminal completion. Expired but unreconciled
+leases continue consuming capacity so work cannot overlap before ownership is
+resolved.
 
 ## Loop Manifest
 
