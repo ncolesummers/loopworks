@@ -43,7 +43,7 @@ describe("plan-review approval synchronization", () => {
         title: "Test-writing subagent",
       },
     });
-    if (run.mode !== "created") throw new Error("Expected created run.");
+    if (run.mode !== "dispatched") throw new Error("Expected dispatched run.");
 
     const [approval] = await context.db
       .select()
@@ -80,7 +80,7 @@ describe("plan-review approval synchronization", () => {
         title: "Test-writing subagent",
       },
     });
-    if (run.mode !== "created") throw new Error("Expected created run.");
+    if (run.mode !== "dispatched") throw new Error("Expected dispatched run.");
     const [approval] = await context.db
       .select()
       .from(approvals)
@@ -114,7 +114,7 @@ describe("plan-review approval synchronization", () => {
         title: "Test-writing subagent",
       },
     });
-    if (run.mode !== "created") throw new Error("Expected created run.");
+    if (run.mode !== "dispatched") throw new Error("Expected dispatched run.");
     const [approval] = await context.db
       .select()
       .from(approvals)
@@ -158,7 +158,7 @@ describe("plan-review approval synchronization", () => {
         title: "Test-writing subagent",
       },
     });
-    if (run.mode !== "created") throw new Error("Expected created run.");
+    if (run.mode !== "dispatched") throw new Error("Expected dispatched run.");
 
     const plan = createPlanningAgentSeedPlan({
       body: "## Acceptance Criteria\n- Planner output is pinned before review.",
@@ -199,7 +199,7 @@ describe("plan-review approval synchronization", () => {
         title: "Test-writing subagent",
       },
     });
-    if (run.mode !== "created") throw new Error("Expected created run.");
+    if (run.mode !== "dispatched") throw new Error("Expected dispatched run.");
     const startedAt = new Date("2026-07-11T15:30:00.000Z");
     await context.db
       .update(loopRuns)

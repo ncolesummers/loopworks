@@ -141,6 +141,13 @@ export type ResearchLoopRunDatabase = Pick<typeof db, "transaction">;
 
 export type ResearchLoopRunMetadata =
   | { artifactCount: number; mode: "created"; runId: string; stageCount: number }
+  | {
+      artifactCount: number;
+      mode: "lease_contention";
+      reason: "issue_active";
+      runId: string;
+      stageCount: number;
+    }
   | { artifactCount: number; mode: "simulated"; stageCount: number };
 
 export type ResearchLoopNoopMetadata = { mode: "noop"; reason: "loop_disabled" };
@@ -322,6 +329,55 @@ export async function createResearchLoopRun(input: {
       throw new Error(
         `Cannot create research loop run for unknown repository: ${input.trigger.repositoryFullName}`,
       );
+    }
+
+    const issueGuardKey = `loop:dispatch:issue-guard:${repository.id}:${input.trigger.issueNumber}`;
+    await tx
+      .insert(idempotencyLocks)
+      .values({
+        acquiredAt: createdAt,
+        expiresAt: createdAt,
+        key: issueGuardKey,
+        owner: "loopworks:dispatch-admission",
+        releasedAt: createdAt,
+        scope: "loop:dispatch:issue-guard",
+        status: "released",
+      })
+      .onConflictDoNothing({ target: idempotencyLocks.key });
+    const [issueGuard] = await tx
+      .select({ id: idempotencyLocks.id })
+      .from(idempotencyLocks)
+      .where(eq(idempotencyLocks.key, issueGuardKey))
+      .for("update");
+    if (!issueGuard) {
+      throw new Error(`Dispatch issue guard ${issueGuardKey} could not be locked.`);
+    }
+
+    const [activeRun] = await tx
+      .select({ id: loopRuns.id })
+      .from(loopRuns)
+      .where(
+        and(
+          eq(loopRuns.repositoryId, repository.id),
+          eq(loopRuns.githubIssueNumber, input.trigger.issueNumber),
+          sql`(${loopRuns.status} in ('queued', 'running', 'waiting_for_approval', 'blocked') or (${loopRuns.status} = 'failed' and ${loopRuns.completedAt} is null))`,
+        ),
+      )
+      .limit(1);
+    if (activeRun) {
+      const [existingArtifacts, existingSteps] = await Promise.all([
+        tx.select({ id: artifacts.id }).from(artifacts).where(eq(artifacts.runId, activeRun.id)),
+        tx.select({ id: runSteps.id }).from(runSteps).where(eq(runSteps.runId, activeRun.id)),
+      ]);
+      return {
+        metadata: {
+          artifactCount: existingArtifacts.length,
+          mode: "lease_contention" as const,
+          reason: "issue_active" as const,
+          runId: activeRun.id,
+          stageCount: existingSteps.length,
+        },
+      };
     }
 
     const runId = randomUUID();

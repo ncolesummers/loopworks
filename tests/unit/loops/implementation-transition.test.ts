@@ -58,7 +58,7 @@ describe("implementation stage transition", () => {
         title: "Implementation subagent",
       },
     });
-    if (created.mode !== "created") throw new Error("Expected created run.");
+    if (created.mode !== "dispatched") throw new Error("Expected dispatched run.");
     const [approval] = await context.db
       .select()
       .from(approvals)

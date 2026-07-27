@@ -11,14 +11,15 @@ import {
 import { approvals, artifacts, deployments, loopRuns, repositories, runSteps } from "@/db/schema";
 import {
   createDevelopmentLoopRun,
+  runDevelopmentLoopRetrySupervisorTick,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import {
   applyDevelopmentLoopValidationReport,
   executeDevelopmentLoopPrStage,
   type DevelopmentLoopTransitionDatabase,
-  retryDevelopmentLoopStep,
 } from "@/lib/loops/development-run-transitions";
+import { defaultLoopManifest } from "@/lib/loops/manifest";
 import {
   composePrIntent,
   createPrIntentArtifactMetadata,
@@ -169,7 +170,7 @@ describe("development-loop PR stage", () => {
         title: "PR creation path",
       },
     });
-    if (created.mode !== "created") {
+    if (created.mode !== "dispatched") {
       throw new Error("Expected a persisted development-loop run.");
     }
 
@@ -632,13 +633,10 @@ describe("development-loop PR stage", () => {
       status: "failed",
     });
 
-    await retryDevelopmentLoopStep({
-      database: transitionDatabase(context),
-      metrics,
-      occurredAt: new Date("2026-07-09T20:11:00.000Z"),
-      reason: "github_pr_creation_failed",
-      runId,
-      stage: "pr",
+    await runDevelopmentLoopRetrySupervisorTick({
+      clock: () => new Date("2026-07-09T20:10:30.000Z"),
+      database: context.db as unknown as DevelopmentLoopRunDatabase,
+      manifest: defaultLoopManifest,
     });
     await expect(
       executeDevelopmentLoopPrStage({

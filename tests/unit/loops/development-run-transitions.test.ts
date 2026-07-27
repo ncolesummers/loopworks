@@ -1,7 +1,14 @@
 /** @vitest-environment node */
 import { and, eq } from "drizzle-orm";
 
-import { artifacts, loopRuns, observabilityEvents, repositories, runSteps } from "@/db/schema";
+import {
+  artifacts,
+  idempotencyLocks,
+  loopRuns,
+  observabilityEvents,
+  repositories,
+  runSteps,
+} from "@/db/schema";
 import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
@@ -62,7 +69,7 @@ async function createRun(context: PgliteTestDatabase) {
     trigger: issueTrigger,
   });
 
-  if (run.mode !== "created") {
+  if (run.mode !== "dispatched") {
     throw new Error("Expected test run creation.");
   }
 
@@ -620,6 +627,10 @@ describe("development-loop run transitions", () => {
     });
 
     const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, runId));
+    const [lease] = await context.db
+      .select()
+      .from(idempotencyLocks)
+      .where(eq(idempotencyLocks.runId, runId));
 
     expect(run).toMatchObject({
       status,
@@ -628,6 +639,11 @@ describe("development-loop run transitions", () => {
     if (status === "canceled") {
       expect(run.canceledAt).toEqual(new Date("2026-07-08T16:10:00.000Z"));
     }
+    expect(lease).toMatchObject({
+      owner: runId,
+      releasedAt: new Date("2026-07-08T16:10:00.000Z"),
+      status: "released",
+    });
     expect(metrics.runCompleted).toHaveBeenCalledWith({
       loopKey: "development-loop",
       repository: "ncolesummers/loopworks",
