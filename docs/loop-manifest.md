@@ -103,6 +103,28 @@ terminal reasons are persisted separately from status: `stalled` and
 `timed_out` map to `failed`, while `canceled_by_reconciliation` maps to
 `canceled`. Execution liveness is supplied by the runtime boundary and an
 unknown signal fails open rather than terminating a potentially healthy run.
+For persistent development runs, the exact acquired run lease is the default
+liveness authority. Released or expired evidence is inactive; a missing lease
+is unknown and therefore fails open. Queued runs are reconciled only when they
+own an acquired lease, so deferred work is not mistaken for dead execution.
+
+Development-loop admission resolves `{repo}` in `concurrency.group` to the
+canonical repository full name and rejects any other unresolved placeholder.
+The group cap counts every acquired lease, including an expired lease whose
+owner has not yet been finalized. Over-cap triggers still create durable queued
+runs without leases, and stage transitions reject lease-less mutation. The
+persistent creation entry point reports `dispatched`, `deferred`, or
+`lease_contention` without flattening admission state. A terminal finalizer
+releases the matching run/owner lease and best-effort drains due work for the
+released repository group in `queuedAt`, then issue-number order.
+
+`retryPolicy.maxAttempts` is a total-attempt budget: attempt one is the initial
+execution. Fixed and exponential backoff are calculated from the completed
+attempt and capped by `maxSeconds`. Retryable stage failures remain inspectable
+until their due retry is leased, at which point the step attempt increments.
+`stalled` and `timed_out` create a new trace-linked run from planning when budget
+remains; `canceled_by_reconciliation`, success, and untyped terminal failure do
+not. The supervisor accepts an injected clock and defines no hosted cadence.
 
 The enabled `research-loop` is a parallel, fixture-backed generality probe. It
 requires both `spike` and `agent-ready`, uses a separate

@@ -1,7 +1,13 @@
 /** @vitest-environment node */
 import { and, eq } from "drizzle-orm";
 
-import { loopRuns, observabilityEvents, repositories, runSteps } from "@/db/schema";
+import {
+  idempotencyLocks,
+  loopRuns,
+  observabilityEvents,
+  repositories,
+  runSteps,
+} from "@/db/schema";
 import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
@@ -56,7 +62,7 @@ describe("development-loop reconciliation store", () => {
       traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
       trigger,
     });
-    if (created.mode !== "created") throw new Error("Expected a created run.");
+    if (created.mode !== "dispatched") throw new Error("Expected a dispatched run.");
     await context.db
       .update(loopRuns)
       .set({ status: "running" })
@@ -137,7 +143,7 @@ describe("development-loop reconciliation store", () => {
         repositoryFullName: "ncolesummers/loopworks-race",
       },
     });
-    if (created.mode !== "created") throw new Error("Expected a created run.");
+    if (created.mode !== "dispatched") throw new Error("Expected a dispatched run.");
     await context.db
       .update(loopRuns)
       .set({ status: "running" })
@@ -167,5 +173,74 @@ describe("development-loop reconciliation store", () => {
     ).resolves.toEqual({ finalized: false, reason: "state_changed", runId: created.runId });
     const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, created.runId));
     expect(run).toMatchObject({ status: "running", terminalReason: null });
+  });
+
+  it("uses the durable run lease as the default execution-liveness authority", async () => {
+    await context.db.insert(repositories).values({
+      githubRepoId: 95_000_003,
+      installationId: 95_003,
+      owner: "ncolesummers",
+      name: "loopworks",
+      fullName: "ncolesummers/loopworks",
+    });
+    const created = await createDevelopmentLoopRun({
+      database: runDatabase(context),
+      now: () => new Date("2026-07-22T16:00:00.000Z"),
+      trigger: { ...trigger, deliveryId: "lease-liveness" },
+    });
+    if (created.mode !== "dispatched") throw new Error("Expected a dispatched run.");
+    await context.db
+      .update(loopRuns)
+      .set({ status: "running" })
+      .where(eq(loopRuns.id, created.runId));
+    const activeStore = createDevelopmentLoopRunStore({
+      clock: () => new Date("2026-07-22T16:01:00.000Z"),
+      database: context.db as unknown as DevelopmentLoopReconciliationDatabase,
+    });
+    const [run] = await activeStore.listActiveRuns();
+    if (!run) throw new Error("Expected active run.");
+    await expect(activeStore.getExecutionLiveness(run)).resolves.toBe("active");
+
+    const expiredStore = createDevelopmentLoopRunStore({
+      clock: () => new Date("2026-07-22T17:31:00.000Z"),
+      database: context.db as unknown as DevelopmentLoopReconciliationDatabase,
+    });
+    await expect(expiredStore.getExecutionLiveness(run)).resolves.toBe("inactive");
+    await context.db
+      .update(idempotencyLocks)
+      .set({ status: "released" })
+      .where(eq(idempotencyLocks.runId, created.runId));
+    await expect(activeStore.getExecutionLiveness(run)).resolves.toBe("inactive");
+
+    await context.db.delete(idempotencyLocks).where(eq(idempotencyLocks.runId, created.runId));
+    await expect(activeStore.getExecutionLiveness(run)).resolves.toBe("unknown");
+  });
+
+  it("includes an expired queued lease owner for reconciliation but excludes deferred queued work", async () => {
+    await context.db.insert(repositories).values({
+      githubRepoId: 95_000_004,
+      installationId: 95_004,
+      owner: "ncolesummers",
+      name: "loopworks",
+      fullName: "ncolesummers/loopworks",
+    });
+    const leased = await createDevelopmentLoopRun({
+      database: runDatabase(context),
+      now: () => new Date("2026-07-22T16:00:00.000Z"),
+      trigger: { ...trigger, deliveryId: "queued-lease-owner" },
+    });
+    const deferred = await createDevelopmentLoopRun({
+      database: runDatabase(context),
+      now: () => new Date("2026-07-22T16:00:01.000Z"),
+      trigger: { ...trigger, deliveryId: "queued-deferred", issueNumber: 96 },
+    });
+    expect(leased.mode).toBe("dispatched");
+    expect(deferred.mode).toBe("deferred");
+
+    const store = createDevelopmentLoopRunStore({
+      clock: () => new Date("2026-07-22T17:31:00.000Z"),
+      database: context.db as unknown as DevelopmentLoopReconciliationDatabase,
+    });
+    expect((await store.listActiveRuns()).map(({ runId }) => runId)).toEqual([leased.runId]);
   });
 });

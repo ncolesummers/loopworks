@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 
+import { createHmac } from "node:crypto";
 import { context as otelContext, type Span, TraceFlags, trace } from "@opentelemetry/api";
 import { eq } from "drizzle-orm";
 
@@ -309,7 +310,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       agentReadyTrigger: { shouldTrigger: true, workflow: "development" },
       developmentRun: {
         artifactCount: 10,
-        mode: "created",
+        mode: "dispatched",
         stageCount: 8,
       },
       nextAction: "queue_planning_agent",
@@ -367,11 +368,66 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       duplicate: true,
     });
     expect(await context.db.select().from(webhookDeliveries)).toHaveLength(1);
-    expect(await context.db.select().from(idempotencyLocks)).toHaveLength(1);
+    const replayLocks = await context.db.select().from(idempotencyLocks);
+    expect(replayLocks).toHaveLength(4);
+    expect(replayLocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ scope: "loop:dispatch:group-guard", status: "released" }),
+        expect.objectContaining({ scope: "loop:dispatch:issue-guard", status: "released" }),
+        expect.objectContaining({
+          owner: runRows[0]?.id,
+          runId: runRows[0]?.id,
+          status: "acquired",
+          traceId: runRows[0]?.traceId,
+        }),
+      ]),
+    );
     expect(await context.db.select().from(loopRuns)).toHaveLength(1);
     expect(await context.db.select().from(runSteps)).toHaveLength(8);
     expect(await context.db.select().from(artifacts)).toHaveLength(10);
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
+  });
+
+  it("reports deferred admission instead of telling a worker to start planning", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const send = async (deliveryId: string, issueNumber: number) => {
+      const fixture = createGithubWebhookFixture({
+        deliveryId,
+        kind: "agent-ready",
+        secret: "dev-webhook-secret",
+        url: "https://loopworks.local/api/github/webhooks",
+      });
+      const payloadText = JSON.stringify({
+        ...fixture.payload,
+        issue: {
+          ...fixture.payload.issue,
+          html_url: `https://github.com/ncolesummers/loopworks/issues/${issueNumber}`,
+          number: issueNumber,
+        },
+      });
+      const signature = `sha256=${createHmac("sha256", "dev-webhook-secret").update(payloadText).digest("hex")}`;
+      return handleGithubWebhookPost(
+        new Request(fixture.url, {
+          body: payloadText,
+          headers: { ...fixture.headers, "x-hub-signature-256": signature },
+          method: "POST",
+        }),
+        {
+          developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+          now: () => new Date("2026-06-28T02:00:00.000Z"),
+          webhookDeliveryStore: store,
+        },
+      );
+    };
+
+    await send("dispatch-first", 11);
+    const deferred = await send("dispatch-deferred", 12);
+    await expect(deferred.json()).resolves.toMatchObject({
+      developmentRun: { mode: "deferred", reason: "max_in_flight" },
+      nextAction: "await_dispatch_capacity",
+    });
   });
 
   it("persists one idempotent research-loop run for an accepted spike delivery", async () => {

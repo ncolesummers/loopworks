@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 import type { db } from "@/db/client";
-import { loopRuns, repositories, runSteps } from "@/db/schema";
+import { idempotencyLocks, loopRuns, repositories, runSteps } from "@/db/schema";
 import {
   finalizeDevelopmentLoopRun,
   DevelopmentLoopTransitionError,
@@ -15,6 +15,7 @@ import type {
   DevelopmentLoopRunStore,
 } from "@/lib/loops/development-run-reconciliation";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import type { LoopManifest } from "../../../schemas/loop-manifest";
 
 export type DevelopmentLoopReconciliationDatabase = Pick<typeof db, "select" | "transaction">;
 
@@ -34,9 +35,11 @@ function latestActivity(
 }
 
 export function createDevelopmentLoopRunStore(input: {
+  clock?: () => Date;
   database: DevelopmentLoopReconciliationDatabase;
-  executionLiveness: (run: DevelopmentLoopActiveRun) => Promise<DevelopmentLoopExecutionLiveness>;
+  executionLiveness?: (run: DevelopmentLoopActiveRun) => Promise<DevelopmentLoopExecutionLiveness>;
   logger?: LoopworksLogger;
+  manifest?: LoopManifest;
   metrics?: DevelopmentLoopTransitionMetrics;
 }): DevelopmentLoopRunStore {
   return {
@@ -51,14 +54,34 @@ export function createDevelopmentLoopRunStore(input: {
           repositoryName: repositories.name,
           repositoryOwner: repositories.owner,
           runId: loopRuns.id,
+          status: loopRuns.status,
           traceId: loopRuns.traceId,
         })
         .from(loopRuns)
         .innerJoin(repositories, eq(loopRuns.repositoryId, repositories.id))
-        .where(and(eq(loopRuns.status, "running"), eq(loopRuns.loopKey, "development-loop")));
+        .where(
+          and(
+            or(eq(loopRuns.status, "running"), eq(loopRuns.status, "queued")),
+            eq(loopRuns.loopKey, "development-loop"),
+          ),
+        );
 
-      return Promise.all(
+      const activeRuns = await Promise.all(
         rows.map(async (row) => {
+          if (row.status === "queued") {
+            const [lease] = await input.database
+              .select({ id: idempotencyLocks.id })
+              .from(idempotencyLocks)
+              .where(
+                and(
+                  eq(idempotencyLocks.runId, row.runId),
+                  eq(idempotencyLocks.owner, row.runId),
+                  eq(idempotencyLocks.status, "acquired"),
+                ),
+              )
+              .limit(1);
+            if (!lease) return null;
+          }
           const steps = await input.database
             .select()
             .from(runSteps)
@@ -80,9 +103,28 @@ export function createDevelopmentLoopRunStore(input: {
           } satisfies DevelopmentLoopActiveRun;
         }),
       );
+      return activeRuns.filter((run): run is DevelopmentLoopActiveRun => run !== null);
     },
-    getExecutionLiveness(run) {
-      return input.executionLiveness(run);
+    async getExecutionLiveness(run) {
+      if (input.executionLiveness) return input.executionLiveness(run);
+      try {
+        const [lease] = await input.database
+          .select({
+            expiresAt: idempotencyLocks.expiresAt,
+            owner: idempotencyLocks.owner,
+            status: idempotencyLocks.status,
+          })
+          .from(idempotencyLocks)
+          .where(and(eq(idempotencyLocks.runId, run.runId), eq(idempotencyLocks.owner, run.runId)))
+          .limit(1);
+        if (!lease) return "unknown";
+        if (lease.status !== "acquired" || lease.owner !== run.runId) return "inactive";
+        return lease.expiresAt.getTime() > (input.clock?.() ?? new Date()).getTime()
+          ? "active"
+          : "inactive";
+      } catch {
+        return "unknown";
+      }
     },
     async finalizeRun(finalizeInput) {
       if (finalizeInput.expected) {
@@ -120,6 +162,7 @@ export function createDevelopmentLoopRunStore(input: {
             ? { expectedCurrentStage: finalizeInput.expected.currentStage }
             : {}),
           logger: input.logger,
+          manifest: input.manifest,
           metrics: input.metrics,
           occurredAt: finalizeInput.occurredAt,
           reason: finalizeInput.reason,

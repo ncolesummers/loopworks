@@ -38,13 +38,14 @@ import {
   type ValidationReviewResult,
   validationReviewResultSchema,
 } from "@agent/validation-review-agent";
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { db } from "@/db/client";
 import {
   agentPlans,
   approvals,
   approvalTransitionEvents,
   artifacts,
+  idempotencyLocks,
   loopRuns,
   repositories,
   runSteps,
@@ -55,6 +56,13 @@ import type {
   GitHubPullRequestWriter,
 } from "@/lib/github/pull-request";
 import { createGitHubPullRequest, createPullRequestChangeDigest } from "@/lib/github/pull-request";
+import {
+  calculateDevelopmentLoopRetryDelaySeconds,
+  developmentLoopKey,
+  drainDevelopmentLoopDispatchQueue,
+  insertLinkedDevelopmentLoopRetryInTransaction,
+  type DevelopmentLoopRunDatabase,
+} from "@/lib/loops/development-run";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { createPrIntentArtifactMetadata } from "@/lib/loops/pr-intent";
 import { assertCanonicalLoopworksRunUrl } from "@/lib/loops/run-url";
@@ -76,7 +84,7 @@ import {
   validationReportArtifactMetadataSchema,
   validationReportV1Schema,
 } from "@/lib/loops/validation-report";
-import type { LoopworksLogger } from "@/lib/observability/logger";
+import { logger as defaultLogger, type LoopworksLogger } from "@/lib/observability/logger";
 import {
   type DevelopmentLoopRunCompletedMetricInput,
   type DevelopmentLoopRunDurationMetricInput,
@@ -96,8 +104,10 @@ import {
 import {
   markLoopworksSpanError,
   markLoopworksSpanOk,
+  startDevelopmentLoopRetrySpan,
   startLoopworksSpan,
 } from "@/lib/observability/trace-context";
+import type { LoopManifest } from "../../../schemas/loop-manifest";
 
 export type DevelopmentLoopTransitionDatabase = Pick<typeof db, "transaction">;
 
@@ -156,6 +166,7 @@ export async function recordDevelopmentLoopPlanArtifact(
   const occurredAt = input.occurredAt ?? new Date();
 
   return input.database.transaction(async (tx) => {
+    await assertDevelopmentLoopExecutionLease(tx, input.runId, "planning");
     const [run] = await tx
       .select({
         currentStage: loopRuns.currentStage,
@@ -328,6 +339,7 @@ type PrStageTransitionResult = {
 type PrStageTransitionBaseInput = {
   database: DevelopmentLoopTransitionDatabase;
   logger?: LoopworksLogger;
+  manifest?: LoopManifest;
   metrics?: DevelopmentLoopTransitionMetrics;
   now?: () => Date;
   occurredAt?: Date;
@@ -354,6 +366,36 @@ export class DevelopmentLoopTransitionError extends Error {
   }
 }
 
+async function assertDevelopmentLoopExecutionLease(
+  tx: Parameters<Parameters<DevelopmentLoopTransitionDatabase["transaction"]>[0]>[0],
+  runId: string,
+  stage?: string,
+): Promise<void> {
+  const [lease] = await tx
+    .select({ id: idempotencyLocks.id })
+    .from(idempotencyLocks)
+    .where(
+      and(
+        eq(idempotencyLocks.runId, runId),
+        eq(idempotencyLocks.owner, runId),
+        eq(idempotencyLocks.status, "acquired"),
+      ),
+    )
+    .limit(1);
+  if (lease) return;
+  const [completedStep] = stage
+    ? await tx
+        .select({ completedAt: runSteps.completedAt, status: runSteps.status })
+        .from(runSteps)
+        .where(and(eq(runSteps.runId, runId), eq(runSteps.stage, stage)))
+        .limit(1)
+    : [];
+  if (completedStep?.status === "succeeded" && completedStep.completedAt) return;
+  throw new DevelopmentLoopTransitionError(
+    `Run ${runId} does not own an acquired execution lease.`,
+  );
+}
+
 export async function applyDevelopmentLoopTestWritingResult(
   input: ApplyDevelopmentLoopTestWritingResultInput,
 ): Promise<TestWritingTransitionResult> {
@@ -372,6 +414,7 @@ export async function applyDevelopmentLoopTestWritingResult(
 
   try {
     const result = await input.database.transaction<TestWritingTransitionResult>(async (tx) => {
+      await assertDevelopmentLoopExecutionLease(tx, input.runId, "test-writing");
       const [run] = await tx.select().from(loopRuns).where(eq(loopRuns.id, input.runId)).limit(1);
       if (!run) throw new DevelopmentLoopTransitionError(`Run ${input.runId} was not found.`);
 
@@ -622,6 +665,7 @@ export async function applyDevelopmentLoopImplementationResult(
 
   try {
     const result = await input.database.transaction<ImplementationTransitionResult>(async (tx) => {
+      await assertDevelopmentLoopExecutionLease(tx, input.runId, "development");
       const [run] = await tx.select().from(loopRuns).where(eq(loopRuns.id, input.runId)).limit(1);
       if (!run) throw new DevelopmentLoopTransitionError(`Run ${input.runId} was not found.`);
 
@@ -1109,6 +1153,7 @@ export async function applyDevelopmentLoopValidationReport(input: {
   let metricInputs: ValidationTransitionMetricInputs | undefined;
 
   const result = await input.database.transaction(async (tx) => {
+    await assertDevelopmentLoopExecutionLease(tx, input.runId, "validation");
     const [run] = await tx
       .select({
         currentStage: loopRuns.currentStage,
@@ -1368,6 +1413,7 @@ export async function applyDevelopmentLoopPrPreparationResult(input: {
   });
   try {
     const result = await input.database.transaction<PrPreparationTransitionResult>(async (tx) => {
+      await assertDevelopmentLoopExecutionLease(tx, input.runId, "pr");
       const context = await loadPrPreparationContextWithDatabase(
         tx as unknown as PrPreparationReadDatabase,
         input.runId,
@@ -1598,6 +1644,7 @@ export async function applyDevelopmentLoopValidationReviewResult(input: {
   try {
     const result = await input.database.transaction<ValidationReviewTransitionResult>(
       async (tx) => {
+        await assertDevelopmentLoopExecutionLease(tx, input.runId, "code-review");
         const [run] = await tx
           .select({
             currentStage: loopRuns.currentStage,
@@ -2082,6 +2129,7 @@ export async function executeDevelopmentLoopPrStage(
       : undefined;
 
   const prepared = await input.database.transaction(async (tx) => {
+    await assertDevelopmentLoopExecutionLease(tx, input.runId, "pr");
     const [run] = await tx
       .select({
         currentStage: loopRuns.currentStage,
@@ -2498,6 +2546,7 @@ export async function executeDevelopmentLoopPrStage(
           completedAt: failedAt,
           metadata: {
             ...(prepared.prStep.metadata ?? {}),
+            failure: { code: "github_pr_creation_failed", retryable: true },
             failureCode: "github_pr_creation_failed",
             retryable: true,
           },
@@ -2537,6 +2586,16 @@ export async function executeDevelopmentLoopPrStage(
       },
       "development_loop_pr_transition_failed",
     );
+    await scheduleDevelopmentLoopStageRetry({
+      database: input.database,
+      failure: { code: "github_pr_creation_failed", retryable: true },
+      logger: input.logger,
+      manifest: input.manifest ?? defaultLoopManifest,
+      occurredAt: failedAt,
+      runId: input.runId,
+      stage: "pr",
+      traceId: prepared.prStep.traceId ?? prepared.repository.traceId ?? undefined,
+    });
     throw new DevelopmentLoopTransitionError(
       "PR creation failed; the step is ready for inspection and retry.",
     );
@@ -2594,6 +2653,7 @@ export async function finalizeDevelopmentLoopRun(input: {
   database: DevelopmentLoopTransitionDatabase;
   expectedCurrentStage?: string;
   logger?: LoopworksLogger;
+  manifest?: LoopManifest;
   metrics?: DevelopmentLoopTransitionMetrics;
   occurredAt?: Date;
   reason: DevelopmentLoopTerminalReason;
@@ -2609,6 +2669,9 @@ export async function finalizeDevelopmentLoopRun(input: {
   const occurredAt = input.occurredAt ?? new Date();
   let runCompletedMetric: DevelopmentLoopRunCompletedMetricInput | undefined;
   let runDurationMetric: DevelopmentLoopRunDurationMetricInput | undefined;
+  let linkedRetry: { eligibleAt: Date; emitObservability: () => void; runId: string } | undefined;
+  let drainRepositoryFullName: string | undefined;
+  let repairedTerminalLease = false;
   const status = terminalStatusForReason(input.reason);
 
   const result = await input.database.transaction(async (tx) => {
@@ -2635,11 +2698,24 @@ export async function finalizeDevelopmentLoopRun(input: {
     if (!run) {
       throw new DevelopmentLoopTransitionError(`Run ${input.runId} was not found.`);
     }
+    drainRepositoryFullName = run.repository;
 
     if (
       run.completedAt &&
       (run.status === "succeeded" || run.status === "failed" || run.status === "canceled")
     ) {
+      const repairedLeases = await tx
+        .update(idempotencyLocks)
+        .set({ releasedAt: run.completedAt, status: "released" })
+        .where(
+          and(
+            eq(idempotencyLocks.runId, input.runId),
+            eq(idempotencyLocks.owner, input.runId),
+            eq(idempotencyLocks.status, "acquired"),
+          ),
+        )
+        .returning({ id: idempotencyLocks.id });
+      repairedTerminalLease = repairedLeases.length > 0;
       return {
         durationSeconds: durationSecondsBetween(run.startedAt ?? run.queuedAt, run.completedAt),
         idempotent: true,
@@ -2658,7 +2734,7 @@ export async function finalizeDevelopmentLoopRun(input: {
       .limit(1);
     const updatePredicates = [
       eq(loopRuns.id, input.runId),
-      notInArray(loopRuns.status, ["succeeded", "failed", "canceled"]),
+      isNull(loopRuns.completedAt),
       ...(input.expectedCurrentStage
         ? [eq(loopRuns.currentStage, input.expectedCurrentStage)]
         : []),
@@ -2696,6 +2772,18 @@ export async function finalizeDevelopmentLoopRun(input: {
           `Run ${input.runId} could not be finalized because its state changed.`,
         );
       }
+      const repairedLeases = await tx
+        .update(idempotencyLocks)
+        .set({ releasedAt: terminalRun.completedAt, status: "released" })
+        .where(
+          and(
+            eq(idempotencyLocks.runId, input.runId),
+            eq(idempotencyLocks.owner, input.runId),
+            eq(idempotencyLocks.status, "acquired"),
+          ),
+        )
+        .returning({ id: idempotencyLocks.id });
+      repairedTerminalLease = repairedLeases.length > 0;
       return {
         durationSeconds: durationSecondsBetween(
           terminalRun.startedAt ?? terminalRun.queuedAt,
@@ -2709,6 +2797,33 @@ export async function finalizeDevelopmentLoopRun(input: {
         status: terminalRun.status as DevelopmentLoopTerminalStatus,
         ...(terminalRun.traceId ? { traceId: terminalRun.traceId } : {}),
       };
+    }
+
+    await tx
+      .update(idempotencyLocks)
+      .set({
+        releasedAt: occurredAt,
+        status: "released",
+      })
+      .where(
+        and(
+          eq(idempotencyLocks.runId, input.runId),
+          eq(idempotencyLocks.owner, input.runId),
+          eq(idempotencyLocks.status, "acquired"),
+        ),
+      );
+
+    if (input.reason === "stalled" || input.reason === "timed_out") {
+      linkedRetry = await insertLinkedDevelopmentLoopRetryInTransaction({
+        manifest: input.manifest ?? defaultLoopManifest,
+        occurredAt,
+        reason: input.reason,
+        repository: { fullName: run.repository, id: run.repositoryId },
+        sourceMetadata: run.metadata,
+        sourceRunId: input.runId,
+        traceId: run.traceId ?? undefined,
+        writer: tx,
+      });
     }
 
     await recordDevelopmentLoopRunCompletedObservability({
@@ -2756,6 +2871,22 @@ export async function finalizeDevelopmentLoopRun(input: {
       runDurationMetric,
     );
   }
+  try {
+    linkedRetry?.emitObservability();
+  } catch {
+    // Terminal evidence and linked retry creation already committed.
+  }
+  if (linkedRetry) {
+    (input.logger ?? defaultLogger).info(
+      {
+        eligibleAt: linkedRetry.eligibleAt.toISOString(),
+        loopKey: developmentLoopKey,
+        reason: input.reason,
+        runId: linkedRetry.runId,
+      },
+      "development_loop_retry_scheduled",
+    );
+  }
 
   input.logger?.info(
     {
@@ -2769,12 +2900,33 @@ export async function finalizeDevelopmentLoopRun(input: {
     developmentLoopRunCompletedEventType,
   );
 
+  if (!("idempotent" in result && result.idempotent) || repairedTerminalLease) {
+    try {
+      await drainDevelopmentLoopDispatchQueue({
+        clock: () => occurredAt,
+        database: input.database as DevelopmentLoopRunDatabase,
+        manifest: input.manifest ?? defaultLoopManifest,
+        repositoryFullName: drainRepositoryFullName,
+      });
+    } catch (error) {
+      (input.logger ?? defaultLogger).error(
+        {
+          error: error instanceof Error ? error.message : "unknown",
+          loopKey: developmentLoopKey,
+          runId: input.runId,
+        },
+        "development_loop_dispatch_drain_failed",
+      );
+    }
+  }
+
   return result;
 }
 
 export async function completeDevelopmentLoopRun(input: {
   database: DevelopmentLoopTransitionDatabase;
   logger?: LoopworksLogger;
+  manifest?: LoopManifest;
   metrics?: DevelopmentLoopTransitionMetrics;
   occurredAt?: Date;
   reason?: DevelopmentLoopTerminalReason;
@@ -2795,11 +2947,179 @@ export async function completeDevelopmentLoopRun(input: {
   return finalizeDevelopmentLoopRun({
     database: input.database,
     logger: input.logger,
+    manifest: input.manifest,
     metrics: input.metrics,
     occurredAt: input.occurredAt,
     reason,
     runId: input.runId,
   });
+}
+
+export async function scheduleDevelopmentLoopStageRetry(input: {
+  database: DevelopmentLoopTransitionDatabase;
+  failure: { code: string; retryable: boolean };
+  logger?: LoopworksLogger;
+  manifest: LoopManifest;
+  occurredAt?: Date;
+  runId: string;
+  stage: string;
+  traceId?: string;
+}): Promise<{
+  attempt: number;
+  eligibleAt?: Date;
+  runId: string;
+  stage: string;
+  status: "exhausted" | "ineligible" | "scheduled";
+}> {
+  const occurredAt = input.occurredAt ?? new Date();
+  const loopManifest = input.manifest.loops.find(({ key }) => key === developmentLoopKey);
+  if (!loopManifest) {
+    throw new DevelopmentLoopTransitionError(`Manifest does not define ${developmentLoopKey}.`);
+  }
+  const retrySpan = startDevelopmentLoopRetrySpan({ traceId: input.traceId });
+  const reason = normalizeReasonCode(input.failure.code) ?? "unspecified";
+
+  const decision = await input.database
+    .transaction(async (tx) => {
+      const [run] = await tx
+        .select({
+          completedAt: loopRuns.completedAt,
+          metadata: loopRuns.metadata,
+          status: loopRuns.status,
+        })
+        .from(loopRuns)
+        .where(eq(loopRuns.id, input.runId))
+        .for("update")
+        .limit(1);
+      const [step] = await tx
+        .select()
+        .from(runSteps)
+        .where(and(eq(runSteps.runId, input.runId), eq(runSteps.stage, input.stage)))
+        .limit(1);
+      if (!run || !step) {
+        throw new DevelopmentLoopTransitionError(
+          `Run ${input.runId} does not have a ${input.stage} step.`,
+        );
+      }
+      const runMetadata = (run.metadata ?? {}) as Record<string, unknown>;
+      const completedAttempt =
+        typeof runMetadata.dispatchAttempt === "number" ? runMetadata.dispatchAttempt : 1;
+      const existingSchedule =
+        runMetadata.scheduledRetry && typeof runMetadata.scheduledRetry === "object"
+          ? (runMetadata.scheduledRetry as Record<string, unknown>)
+          : undefined;
+      if (
+        run.status === "queued" &&
+        existingSchedule?.stage === input.stage &&
+        existingSchedule.completedAttempt === completedAttempt &&
+        existingSchedule.stepAttempt === step.attempt &&
+        typeof existingSchedule.eligibleAt === "string"
+      ) {
+        return {
+          attempt: completedAttempt,
+          eligibleAt: new Date(existingSchedule.eligibleAt),
+          status: "scheduled" as const,
+        };
+      }
+      const storedFailure =
+        step.metadata && typeof step.metadata === "object"
+          ? (step.metadata as Record<string, unknown>).failure
+          : undefined;
+      const hasBoundedRetryMarker =
+        storedFailure !== null &&
+        typeof storedFailure === "object" &&
+        (storedFailure as Record<string, unknown>).retryable === true &&
+        typeof (storedFailure as Record<string, unknown>).code === "string";
+      const authorized =
+        step.status === "failed" &&
+        run.completedAt === null &&
+        run.status === "failed" &&
+        input.failure.retryable &&
+        hasBoundedRetryMarker &&
+        loopManifest.retryPolicy.retryableStatuses.includes("failed");
+      if (!authorized || completedAttempt >= loopManifest.retryPolicy.maxAttempts) {
+        return {
+          attempt: completedAttempt,
+          status: (authorized ? "exhausted" : "ineligible") as "exhausted" | "ineligible",
+        };
+      }
+
+      const delaySeconds = calculateDevelopmentLoopRetryDelaySeconds({
+        backoff: loopManifest.retryPolicy.backoff,
+        completedAttempt,
+      });
+      const eligibleAt = new Date(occurredAt.getTime() + delaySeconds * 1_000);
+      await tx
+        .update(loopRuns)
+        .set({
+          currentStage: input.stage,
+          metadata: {
+            ...runMetadata,
+            scheduledRetry: {
+              completedAttempt,
+              eligibleAt: eligibleAt.toISOString(),
+              reason,
+              stage: input.stage,
+              stepAttempt: step.attempt,
+            },
+          },
+          queuedAt: eligibleAt,
+          status: "queued",
+        })
+        .where(
+          and(
+            eq(loopRuns.id, input.runId),
+            eq(loopRuns.status, "failed"),
+            isNull(loopRuns.completedAt),
+          ),
+        );
+      await tx
+        .update(idempotencyLocks)
+        .set({ releasedAt: occurredAt, status: "released" })
+        .where(
+          and(
+            eq(idempotencyLocks.runId, input.runId),
+            eq(idempotencyLocks.owner, input.runId),
+            eq(idempotencyLocks.status, "acquired"),
+          ),
+        );
+      return { attempt: completedAttempt, eligibleAt, status: "scheduled" as const };
+    })
+    .catch((error) => {
+      markLoopworksSpanError(retrySpan.span, error);
+      retrySpan.span.end();
+      throw error;
+    });
+
+  try {
+    if (decision.status === "exhausted") {
+      await finalizeDevelopmentLoopRun({
+        database: input.database,
+        logger: input.logger,
+        manifest: input.manifest,
+        occurredAt,
+        reason: "failed",
+        runId: input.runId,
+      });
+      (input.logger ?? defaultLogger).info(
+        { attempt: decision.attempt, loopKey: developmentLoopKey, reason, runId: input.runId },
+        "development_loop_retry_exhausted",
+      );
+    } else if (decision.status === "scheduled") {
+      (input.logger ?? defaultLogger).info(
+        { attempt: decision.attempt, loopKey: developmentLoopKey, reason, runId: input.runId },
+        "development_loop_retry_scheduled",
+      );
+    }
+    retrySpan.setOutcome(decision.status);
+    markLoopworksSpanOk(retrySpan.span);
+    retrySpan.span.end();
+    return { ...decision, runId: input.runId, stage: input.stage };
+  } catch (error) {
+    markLoopworksSpanError(retrySpan.span, error);
+    retrySpan.span.end();
+    throw error;
+  }
 }
 
 export async function retryDevelopmentLoopStep(input: {
@@ -2825,6 +3145,7 @@ export async function retryDevelopmentLoopStep(input: {
   const result = await input.database.transaction(async (tx) => {
     const [run] = await tx
       .select({
+        completedAt: loopRuns.completedAt,
         id: loopRuns.id,
         loopKey: loopRuns.loopKey,
         metadata: loopRuns.metadata,
@@ -2836,6 +3157,9 @@ export async function retryDevelopmentLoopStep(input: {
 
     if (!run) {
       throw new DevelopmentLoopTransitionError(`Run ${input.runId} was not found.`);
+    }
+    if (run.completedAt) {
+      throw new DevelopmentLoopTransitionError(`Cannot retry terminal run ${input.runId}.`);
     }
 
     const [step] = await tx
@@ -2861,6 +3185,21 @@ export async function retryDevelopmentLoopStep(input: {
         ...(traceId ? { traceId } : {}),
       };
     }
+
+    const runMetadata = (run.metadata ?? {}) as Record<string, unknown>;
+    if (runMetadata.scheduledRetry && typeof runMetadata.scheduledRetry === "object") {
+      const traceId = step.traceId ?? run.traceId ?? undefined;
+      return {
+        attempt: step.attempt,
+        idempotent: true,
+        runId: input.runId,
+        stage: input.stage,
+        stepId: step.id,
+        ...(traceId ? { traceId } : {}),
+      };
+    }
+
+    await assertDevelopmentLoopExecutionLease(tx, input.runId);
 
     const attempt = step.attempt + 1;
     await tx

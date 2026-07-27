@@ -156,7 +156,7 @@ describe("agent-ready development loop run skeleton", () => {
 
     expect(result).toMatchObject({
       artifactCount: 10,
-      mode: "created",
+      mode: "dispatched",
       stageCount: 8,
     });
 
@@ -271,7 +271,14 @@ describe("agent-ready development loop run skeleton", () => {
       trigger: issueTrigger,
     });
 
-    expect(second).toEqual(first);
+    expect(first.mode).toBe("dispatched");
+    expect(second).toMatchObject({
+      artifactCount: first.artifactCount,
+      mode: "lease_contention",
+      reason: "delivery_replay",
+      runId: first.runId,
+      stageCount: first.stageCount,
+    });
     expect(await context.db.select().from(loopRuns)).toHaveLength(1);
     expect(await context.db.select().from(runSteps)).toHaveLength(8);
     expect(await context.db.select().from(artifacts)).toHaveLength(10);

@@ -128,7 +128,15 @@ const resolveAgentReadyLoopState: GithubAgentReadyLoopResolver = (trigger) => ({
   ),
 });
 
-function getNextAction(agentReadyTrigger: GithubAgentReadyTrigger): string {
+function getNextAction(
+  agentReadyTrigger: GithubAgentReadyTrigger,
+  developmentRun?: DevelopmentRunOutcome,
+  researchRun?: ResearchRunOutcome,
+): string {
+  if (developmentRun?.mode === "deferred") return "await_dispatch_capacity";
+  if (developmentRun?.mode === "lease_contention" || researchRun?.mode === "lease_contention") {
+    return "observe_existing_run";
+  }
   if (agentReadyTrigger.shouldTrigger === true && agentReadyTrigger.workflow === "research") {
     return "queue_deep_research_loop";
   }
@@ -472,7 +480,6 @@ export async function handleGithubWebhookPost(
       event === "issues" && issuesPayload
         ? getAgentReadyTrigger(issuesPayload, resolveAgentReadyLoopState)
         : { shouldTrigger: false, reason: "unsupported_event" };
-    const nextAction = getNextAction(agentReadyTrigger);
     const deliveryStatus = agentReadyTrigger.shouldTrigger ? "processed" : "ignored";
     const processedAt = now();
     const developmentRun = await resolveDevelopmentRunOutcome({
@@ -495,6 +502,7 @@ export async function handleGithubWebhookPost(
         selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
       traceId,
     });
+    const nextAction = getNextAction(agentReadyTrigger, developmentRun, researchRun);
 
     await webhookDeliveryStore.complete(claim.key, {
       deliveryId: claim.deliveryId,

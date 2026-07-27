@@ -77,7 +77,7 @@ describe("PR preparation transition", () => {
         title: "PR preparation subagent for PR intent content",
       },
     });
-    if (created.mode !== "created") throw new Error("Expected a persisted run.");
+    if (created.mode !== "dispatched") throw new Error("Expected a persisted run.");
     const runId = created.runId;
     const [planRow] = await context.db.select().from(agentPlans).where(eq(agentPlans.runId, runId));
     if (!planRow) throw new Error("Expected a plan row.");

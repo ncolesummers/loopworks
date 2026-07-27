@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { approvalStatusValues } from "@/lib/approvals";
 
 import { loopStateValues } from "../../schemas/loop-manifest";
@@ -234,6 +235,11 @@ export const loopRuns = pgTable(
     canceledAt: timestamp("canceled_at", { withTimezone: true }),
   },
   (table) => ({
+    activeRepositoryIssueIndex: uniqueIndex("loop_runs_active_repository_issue_idx")
+      .on(table.repositoryId, table.githubIssueNumber)
+      .where(
+        sql`${table.githubIssueNumber} IS NOT NULL AND (${table.status} IN ('queued', 'running', 'waiting_for_approval', 'blocked') OR (${table.status} = 'failed' AND ${table.completedAt} IS NULL))`,
+      ),
     repositoryStatusIndex: index("loop_runs_repository_status_idx").on(
       table.repositoryId,
       table.status,
@@ -328,11 +334,14 @@ export const idempotencyLocks = pgTable(
     acquiredAt: timestamp("acquired_at", { withTimezone: true }).defaultNow().notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     releasedAt: timestamp("released_at", { withTimezone: true }),
+    runId: uuid("run_id").references(() => loopRuns.id, { onDelete: "set null" }),
+    traceId: text("trace_id"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   },
   (table) => ({
     scopeStatusIndex: index("idempotency_locks_scope_status_idx").on(table.scope, table.status),
     expiresAtIndex: index("idempotency_locks_expires_at_idx").on(table.expiresAt),
+    runStatusIndex: index("idempotency_locks_run_status_idx").on(table.runId, table.status),
   }),
 );
 

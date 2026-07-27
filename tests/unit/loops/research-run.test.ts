@@ -211,13 +211,19 @@ describe("spike agent-ready research loop run skeleton", () => {
     expect(await context.db.select().from(loopRuns)).toHaveLength(1);
     expect(await context.db.select().from(runSteps)).toHaveLength(4);
     expect(await context.db.select().from(artifacts)).toHaveLength(4);
-    expect(await context.db.select().from(idempotencyLocks)).toEqual([
-      expect.objectContaining({
-        key: "research-loop:run:issue-43-delivery",
-        scope: "research-loop",
-        status: "released",
-      }),
-    ]);
+    expect(await context.db.select().from(idempotencyLocks)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "research-loop:run:issue-43-delivery",
+          scope: "research-loop",
+          status: "released",
+        }),
+        expect.objectContaining({
+          scope: "loop:dispatch:issue-guard",
+          status: "released",
+        }),
+      ]),
+    );
 
     await expect(
       createResearchLoopRun({
