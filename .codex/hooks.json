@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/user-prompt-submit.ts\"",
+            "command": "bun \"$(env -i PATH=\"$PATH\" HOME=\"$HOME\" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git rev-parse --show-toplevel)/.codex/hooks/user-prompt-submit.ts\"",
             "timeout": 10,
             "statusMessage": "Checking LoopWorks workflow context"
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.ts\"",
+            "command": "bun \"$(env -i PATH=\"$PATH\" HOME=\"$HOME\" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.ts\"",
             "timeout": 10,
             "statusMessage": "Checking LoopWorks edit guardrails"
           }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/stop.ts\"",
+            "command": "bun \"$(env -i PATH=\"$PATH\" HOME=\"$HOME\" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git rev-parse --show-toplevel)/.codex/hooks/stop.ts\"",
             "timeout": 20,
             "statusMessage": "Reviewing LoopWorks completion checklist"
           }
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent-start.ts\"",
+            "command": "bun \"$(env -i PATH=\"$PATH\" HOME=\"$HOME\" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git rev-parse --show-toplevel)/.codex/hooks/subagent-start.ts\"",
             "timeout": 5,
             "statusMessage": "Checking LoopWorks subagent scope"
           }

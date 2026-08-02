@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { sanitizeGitEnvironment } from "../../scripts/git-environment";
+
 export type HookInput = Record<string, unknown>;
 
 export type HookReport = {
@@ -370,6 +372,7 @@ export const getGitRoot = (cwd = process.cwd()) => {
   const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     cwd,
     encoding: "utf8",
+    env: sanitizeGitEnvironment(),
   });
 
   if (result.status !== 0) {
@@ -383,6 +386,7 @@ export const listChangedFilesFromGit = (root = getGitRoot()): ChangedFile[] => {
   const result = spawnSync("git", ["status", "--short", "--untracked-files=all"], {
     cwd: root,
     encoding: "utf8",
+    env: sanitizeGitEnvironment(),
   });
 
   if (result.status !== 0) {

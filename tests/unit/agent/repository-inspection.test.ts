@@ -19,8 +19,19 @@ import {
   readRepositoryFiles,
   searchRepository,
 } from "@agent/lib/repository-inspection-runtime";
+import { sanitizeGitEnvironment } from "../../../scripts/git-environment";
 
 const commitSha = "a".repeat(40);
+
+const runFixtureGit = (args: string[], cwd: string, ceilingDirectory: string) =>
+  execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...sanitizeGitEnvironment(),
+      GIT_CEILING_DIRECTORIES: ceilingDirectory,
+    },
+  });
 
 describe("repository inspection policy", () => {
   it("rejects escape, secret, generated, glob-obfuscation, and shell surfaces", () => {
@@ -85,13 +96,38 @@ describe("repository inspection policy", () => {
       truncated: true,
     });
   });
+
+  it("removes inherited Git routing while preserving ordinary environment values", () => {
+    expect(
+      sanitizeGitEnvironment({
+        GIT_COMMON_DIR: "/victim/.git",
+        GIT_CONFIG_COUNT: "1",
+        GIT_DIR: "/victim/.git",
+        GIT_INDEX_FILE: "/victim/.git/index",
+        GIT_OBJECT_DIRECTORY: "/victim/.git/objects",
+        GIT_WORK_TREE: "/fixture",
+        PATH: "/usr/bin",
+      }),
+    ).toEqual({ PATH: "/usr/bin" });
+  });
 });
 
 describe("repository inspection runtime", () => {
   it("reads immutable commit objects, omits symlinks, and reports exact provenance", async () => {
     const root = await mkdtemp(join(tmpdir(), "loopworks-repository-inspection-"));
     const repo = join(root, "repo");
+    const victim = join(root, "victim");
     try {
+      await mkdir(victim);
+      await writeFile(join(victim, "baseline.txt"), "developer state\n");
+      runFixtureGit(["init"], victim, root);
+      runFixtureGit(["config", "user.email", "victim@example.com"], victim, root);
+      runFixtureGit(["config", "user.name", "Victim"], victim, root);
+      runFixtureGit(["add", "."], victim, root);
+      runFixtureGit(["commit", "-m", "baseline"], victim, root);
+      const victimConfig = await readFile(join(victim, ".git", "config"));
+      const victimIndex = await readFile(join(victim, ".git", "index"));
+
       await mkdir(join(repo, "src"), { recursive: true });
       await mkdir(join(root, ".loopworks"), { recursive: true });
       await writeFile(
@@ -100,15 +136,25 @@ describe("repository inspection runtime", () => {
       );
       await writeFile(join(repo, ".npmrc"), "token=SUPERSECRET\n");
       await symlink("safe.ts", join(repo, "src", "link.ts"));
-      execFileSync("git", ["init"], { cwd: repo });
-      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
-      execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
-      execFileSync("git", ["add", "."], { cwd: repo });
-      execFileSync("git", ["commit", "-m", "fixture"], { cwd: repo });
-      const pinned = execFileSync("git", ["rev-parse", "HEAD"], {
-        cwd: repo,
-        encoding: "utf8",
-      }).trim();
+      vi.stubEnv("GIT_DIR", join(victim, ".git"));
+      vi.stubEnv("GIT_WORK_TREE", repo);
+      vi.stubEnv("GIT_INDEX_FILE", join(victim, ".git", "index"));
+      vi.stubEnv("GIT_OBJECT_DIRECTORY", join(victim, ".git", "objects"));
+      vi.stubEnv("GIT_COMMON_DIR", join(victim, ".git"));
+      const bashEnvironment = join(root, "bash-environment");
+      await writeFile(
+        bashEnvironment,
+        "export GIT_DIR=/reintroduced-by-bash-env\nexport GIT_WORK_TREE=/reintroduced-by-bash-env\n",
+      );
+      vi.stubEnv("BASH_ENV", bashEnvironment);
+      runFixtureGit(["init"], repo, root);
+      runFixtureGit(["config", "user.email", "test@example.com"], repo, root);
+      runFixtureGit(["config", "user.name", "Test"], repo, root);
+      runFixtureGit(["add", "."], repo, root);
+      runFixtureGit(["commit", "-m", "fixture"], repo, root);
+      const pinned = runFixtureGit(["rev-parse", "HEAD"], repo, root).trim();
+      expect(await readFile(join(victim, ".git", "config"))).toEqual(victimConfig);
+      expect(await readFile(join(victim, ".git", "index"))).toEqual(victimIndex);
       await writeFile(join(root, ".loopworks", "repository-commit"), pinned);
       await writeFile(join(repo, "src", "safe.ts"), "export const value = 'dirty';\n");
 
@@ -121,10 +167,27 @@ describe("repository inspection runtime", () => {
           }
         },
         run: async ({ command }) => {
-          const result = spawnSync("bash", ["-lc", command], { cwd: root, encoding: "utf8" });
+          const environment = sanitizeGitEnvironment();
+          delete environment.BASH_ENV;
+          delete environment.ENV;
+          const result = spawnSync("bash", ["--noprofile", "--norc", "-c", command], {
+            cwd: root,
+            encoding: "utf8",
+            env: {
+              ...environment,
+              GIT_CEILING_DIRECTORIES: root,
+            },
+          });
           return { exitCode: result.status ?? 1, stdout: result.stdout };
         },
       };
+
+      await expect(
+        sandbox.run({
+          command:
+            "if env | grep -Eq '^(GIT_DIR|GIT_WORK_TREE|GIT_INDEX_FILE|GIT_OBJECT_DIRECTORY|GIT_COMMON_DIR)='; then exit 1; fi; printf sanitized",
+        }),
+      ).resolves.toEqual({ exitCode: 0, stdout: "sanitized" });
 
       const listed = await listRepositoryFiles(sandbox, ["src/**/*.ts"]);
       expect(listed.paths).toEqual(["src/safe.ts"]);
@@ -150,6 +213,7 @@ describe("repository inspection runtime", () => {
         readRepositoryFiles(sandbox, [{ path: "src/safe.ts", startLine: 1, endLine: 401 }]),
       ).rejects.toThrow("too large");
     } finally {
+      vi.unstubAllEnvs();
       await rm(root, { recursive: true, force: true });
     }
   }, 30_000);
