@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,11 +9,17 @@ import {
   buildStopReport,
   buildSubagentStartReport,
   extractTouchedPaths,
+  getGitRoot,
   isGeneratedPath,
   listChangedFilesFromGit,
   parseHookInput,
   type ChangedFile,
 } from "../../../.codex/hooks/lib";
+import { sanitizeGitEnvironment } from "../../../scripts/git-environment";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("codex hook guardrails", () => {
   it("parses hook stdin defensively", () => {
@@ -113,12 +119,22 @@ describe("codex hook guardrails", () => {
   });
 
   it("lists untracked files inside new directories without reading directories as files", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "loopworks-codex-hooks-"));
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "loopworks-codex-hooks-"));
+    const root = path.join(fixtureRoot, "repo");
+    const victim = path.join(fixtureRoot, "victim");
 
     try {
-      spawnSync("git", ["init"], { cwd: root, stdio: "ignore" });
+      await mkdir(root);
+      await mkdir(victim);
+      const gitEnvironment = sanitizeGitEnvironment();
+      spawnSync("git", ["init"], { cwd: root, env: gitEnvironment, stdio: "ignore" });
+      spawnSync("git", ["init"], { cwd: victim, env: gitEnvironment, stdio: "ignore" });
       await mkdir(path.join(root, ".codex/hooks"), { recursive: true });
       await writeFile(path.join(root, ".codex/hooks/lib.ts"), "export {};\n");
+      vi.stubEnv("GIT_DIR", path.join(victim, ".git"));
+      vi.stubEnv("GIT_WORK_TREE", victim);
+
+      expect(getGitRoot(root)).toBe(await realpath(root));
 
       expect(listChangedFilesFromGit(root)).toEqual([
         {
@@ -128,7 +144,40 @@ describe("codex hook guardrails", () => {
         },
       ]);
     } finally {
-      await rm(root, { force: true, recursive: true });
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("launches project hooks from this repository when Git routing is poisoned", async () => {
+    const victim = await mkdtemp(path.join(tmpdir(), "loopworks-codex-hook-victim-"));
+
+    try {
+      const gitEnvironment = sanitizeGitEnvironment();
+      spawnSync("git", ["init"], { cwd: victim, env: gitEnvironment, stdio: "ignore" });
+      const config = JSON.parse(await readFile(".codex/hooks.json", "utf8")) as {
+        hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+      };
+      const commands = Object.values(config.hooks).flatMap((groups) =>
+        groups.flatMap((group) => group.hooks.map((hook) => hook.command)),
+      );
+      const poisonedEnvironment = {
+        ...gitEnvironment,
+        GIT_DIR: path.join(victim, ".git"),
+        GIT_WORK_TREE: victim,
+      };
+
+      expect(commands).toHaveLength(4);
+      for (const command of commands) {
+        const result = spawnSync("bash", ["--noprofile", "--norc", "-c", command], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+          env: poisonedEnvironment,
+          input: "{}\n",
+        });
+        expect(result.status, `${command}\n${result.stderr}`).toBe(0);
+      }
+    } finally {
+      await rm(victim, { force: true, recursive: true });
     }
   });
 });
