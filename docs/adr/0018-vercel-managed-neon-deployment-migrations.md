@@ -69,7 +69,8 @@ credentials or branch orchestration.
    local fallback, and the migration-before-build script order.
 2. `tests/unit/scripts/migrate-database.test.ts` proves the advisory lock wraps
    migrations and is released, with the connection closed, on success and
-   failure.
+   failure. `tests/integration/postgres/migrate-database.native.test.ts` proves
+   two independent PostgreSQL sessions serialize on that exact advisory lock.
 3. Existing seed CLI tests prove Production, malformed, missing, and
    non-loopback targets are rejected before a database call.
 4. `bun run markdownlint`, `bun run typecheck`, `bun run build`, and

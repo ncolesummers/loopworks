@@ -113,6 +113,12 @@ export function resolveMigrationDatabaseUrl(environment: MigrationEnvironment): 
     const runtimeNeonTarget = neonDatabaseTarget(runtimeUrl);
     const migrationNeonTarget = neonDatabaseTarget(directUrl);
 
+    if (hostedEnvironment && (!runtimeNeonTarget || !migrationNeonTarget)) {
+      throw new Error(
+        "Hosted database migrations require DATABASE_URL and DATABASE_URL_UNPOOLED to use Neon endpoints.",
+      );
+    }
+
     if (runtimeNeonTarget && !isPooledNeonHost(runtimeUrl.hostname)) {
       throw new Error("DATABASE_URL must use the pooled Neon endpoint in hosted deployments.");
     }

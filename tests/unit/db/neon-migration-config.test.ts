@@ -89,6 +89,19 @@ describe("Neon migration configuration", () => {
     ).rejects.toThrow("same Neon branch and database");
   });
 
+  it.each([
+    "production",
+    "preview",
+  ])("rejects non-Neon database URLs in Vercel %s", async (vercelEnvironment) => {
+    await expect(
+      loadMigrationUrl({
+        DATABASE_URL: "postgres://user:runtime-secret@runtime.example.com/loopworks",
+        DATABASE_URL_UNPOOLED: "postgres://user:migration-secret@migrations.example.com/loopworks",
+        VERCEL_ENV: vercelEnvironment,
+      }),
+    ).rejects.toThrow("Neon");
+  });
+
   it("fails closed when a hosted migration has no pooled runtime URL", async () => {
     await expect(
       loadMigrationUrl({

@@ -16,7 +16,7 @@ export type MigrationRunnerDependencies = {
   migrateDatabase: (client: MigrationClient) => Promise<void>;
 };
 
-const migrationLockId = 70_018;
+export const MIGRATION_ADVISORY_LOCK_ID = 70_018;
 
 const defaultDependencies: MigrationRunnerDependencies = {
   createClient: (databaseUrl) =>
@@ -38,13 +38,13 @@ export async function runMigrations(
   let lockAcquired = false;
 
   try {
-    await client.unsafe("select pg_advisory_lock($1)", [migrationLockId]);
+    await client.unsafe("select pg_advisory_lock($1)", [MIGRATION_ADVISORY_LOCK_ID]);
     lockAcquired = true;
     await dependencies.migrateDatabase(client);
   } finally {
     try {
       if (lockAcquired) {
-        await client.unsafe("select pg_advisory_unlock($1)", [migrationLockId]);
+        await client.unsafe("select pg_advisory_unlock($1)", [MIGRATION_ADVISORY_LOCK_ID]);
       }
     } finally {
       await client.end({ timeout: 5 });

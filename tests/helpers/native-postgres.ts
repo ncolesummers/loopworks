@@ -195,6 +195,97 @@ export type RowLockWait = {
   blockedQuery: string | null;
 };
 
+export type AdvisoryLockWait = {
+  blockedPid: number;
+  blockingPids: number[];
+  waitEvent: string | null;
+  /** The statement the blocked backend is parked on, for diagnostics. */
+  blockedQuery: string | null;
+};
+
+/**
+ * Resolves once PostgreSQL reports one backend waiting on the exact session-level
+ * bigint advisory lock held by another backend.
+ *
+ * The waiter and holder rows must match on every advisory lock identity field,
+ * and the encoded class/object fields must match `lockId`. This prevents an
+ * unrelated advisory lock from satisfying the assertion. Polling only observes
+ * PostgreSQL's lock views; elapsed time is never used as proof of serialization.
+ */
+export async function waitForAdvisoryLockWait(
+  observer: NativePostgresTestDatabase,
+  input: { blockedPid: number; expectedBlockerPid: number; lockId: number },
+  options: { timeoutMs?: number; pollIntervalMs?: number } = {},
+): Promise<AdvisoryLockWait> {
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 25;
+  const deadline = Date.now() + timeoutMs;
+  const lockId = BigInt(input.lockId);
+  const classId = Number(BigInt.asUintN(32, lockId >> 32n));
+  const objectId = Number(BigInt.asUintN(32, lockId));
+
+  while (Date.now() < deadline) {
+    const [waiting] = await observer.client<
+      { wait_event: string | null; blocking_pids: number[]; query: string | null }[]
+    >`
+      SELECT activity.wait_event, activity.query, pg_blocking_pids(activity.pid) AS blocking_pids
+      FROM pg_stat_activity AS activity
+      WHERE activity.pid = ${input.blockedPid}
+        AND activity.state = 'active'
+        AND activity.wait_event_type = 'Lock'
+        AND activity.wait_event = 'advisory'
+        AND pg_blocking_pids(activity.pid) @> ARRAY[${input.expectedBlockerPid}]::int[]
+        AND EXISTS (
+          SELECT 1
+          FROM pg_locks AS waited
+          JOIN pg_locks AS held
+            ON held.locktype = waited.locktype
+           AND held.database IS NOT DISTINCT FROM waited.database
+           AND held.classid IS NOT DISTINCT FROM waited.classid
+           AND held.objid IS NOT DISTINCT FROM waited.objid
+           AND held.objsubid IS NOT DISTINCT FROM waited.objsubid
+          WHERE waited.pid = activity.pid
+            AND waited.locktype = 'advisory'
+            AND NOT waited.granted
+            AND waited.classid = ${classId}::oid
+            AND waited.objid = ${objectId}::oid
+            AND waited.objsubid = 1
+            AND held.pid = ${input.expectedBlockerPid}
+            AND held.granted
+        )
+    `;
+    if (waiting) {
+      return {
+        blockedPid: input.blockedPid,
+        blockingPids: waiting.blocking_pids,
+        waitEvent: waiting.wait_event,
+        blockedQuery: waiting.query,
+      };
+    }
+
+    const [alive] = await observer.client<{ pid: number }[]>`
+      SELECT pid FROM pg_stat_activity WHERE pid = ${input.blockedPid}
+    `;
+    if (!alive) {
+      throw new Error(
+        `Backend ${input.blockedPid} is no longer connected, so its advisory lock wait cannot be observed. ` +
+          "The session likely reconnected or was closed before the wait was measured.",
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  const [lastSeen] = await observer.client<{ wait_event: string | null; query: string | null }[]>`
+    SELECT wait_event, query FROM pg_stat_activity WHERE pid = ${input.blockedPid}
+  `;
+  throw new Error(
+    `Backend ${input.blockedPid} never waited on advisory lock ${input.lockId} held by backend ` +
+      `${input.expectedBlockerPid} within ${timeoutMs}ms. Last observed ` +
+      `wait_event=${lastSeen?.wait_event ?? "none"} query=${lastSeen?.query ?? "none"}`,
+  );
+}
+
 /**
  * Resolves once PostgreSQL reports `blockedPid` waiting on a lock held by
  * `expectedBlockerPid`, while `blockedPid` also holds a row lock on `relation`.
