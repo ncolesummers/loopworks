@@ -207,18 +207,49 @@ Exit criteria:
 4. The planning agent can create and update an executable plan artifact.
 5. Persona test IDs M02, A01, A02, A03, and R01 are referenced by the milestone and seeded issues.
 
-### M4 Validation + PR Path + MVP Security Review
+### M4 Operator Onboarding
 
-Add deterministic validation hooks, PR creation path, and the final MVP security review.
+Deliver first-run activation: GitHub App installation, repository selection, first loop registration, and actionable empty states. Also lands the validated configuration registry that the installation path depends on, and coverage instrumentation so the new code is measured as it lands.
+
+This milestone is MVP-blocking. Without it an operator can sign in but cannot reach a first run, so it precedes the M5 closing gates.
+
+Exit criteria:
+
+1. An operator with an empty database can reach a registered loop without editing environment variables by hand.
+2. First-run state is distinguishable from an unavailable data source.
+3. No empty state names a next step it cannot route to.
+4. Configuration and secrets for the GitHub App are read through the validated registry, not `process.env` directly.
+5. Persona test IDs for the day-zero operator journey are added and referenced by the milestone and seeded issues.
+
+### M5 MVP Close: Security, Design, and Coverage Gates
+
+Close the MVP with the security review, the UI/design audit, and coverage enforcement.
+
+The deterministic validation hooks and PR creation path closed under this milestone earlier, when it was numbered M4. The remaining contents are the MVP-closing gates and run after M4 Operator Onboarding, so that the security review covers the GitHub App installation boundary and the design audit covers the onboarding surfaces.
 
 Exit criteria:
 
 1. Validation gates run before LLM judgment and before PR creation.
 2. PR creation path records branch, commit, PR, checks, and review state.
-3. MVP security review issue is completed or follow-ups are created.
-4. Persona test IDs A03, R01, R02, S01, S02, S03, and S04 are referenced by the milestone and seeded issues.
+3. MVP security review issue is completed or follow-ups are created, with the M4 installation and callback path in scope.
+4. The UI/design audit covers the onboarding surfaces and extends the design review checklist.
+5. Coverage requirements are documented and enforced in CI against the full MVP surface.
+6. Persona test IDs A03, R01, R02, S01, S02, S03, and S04 are referenced by the milestone and seeded issues.
 
-### M5 Agent Governance + Evals
+### M6 Observability + Alerting
+
+Instrument the implemented control-plane paths, ship logs to Axiom, build the first operator dashboards, and define alert monitors.
+
+Sequenced here rather than later because the OTel/Axiom foundation and the central observability helpers already shipped, and because closing this milestone moves ADR 0012 from Proposed to Accepted and resolves PRD open question 6.
+
+Exit criteria:
+
+1. Webhook, run-start, approval, queue-depth, and lock-contention telemetry is emitted through the central helpers.
+2. Structured logs reach Axiom with redaction guarantees and trace correlation preserved.
+3. Operator dashboards and alert monitors exist for run health, approval latency, validation failures, and webhook outcomes.
+4. ADR 0012 is Accepted after preview telemetry validates end to end.
+
+### M7 Agent Governance + Evals
 
 Add governance for loop changes, proposed diffs, schema validation, evals, and model/prompt/tool/workflow change checks.
 
@@ -228,6 +259,26 @@ Exit criteria:
 2. Agent prompt/model/tool changes have eval scenarios.
 3. Governance policy is visible in the portal and in PR checks.
 4. Persona test IDs P03, A02, A03, R02, and S04 are referenced by the milestone and seeded issues.
+
+## Post-MVP Milestones
+
+These milestones exist in the GitHub backlog and are recorded here so the map stays complete. They are sequenced but not yet specified to the depth of M0-M7.
+
+### M8 Agent Extensibility (Tools, MCP, Skills)
+
+Operator-facing agent customization: custom tools, MCP servers, and agent skills.
+
+### M9 Post-MVP Loop Extensions
+
+Additional loop stages and subagents, including the research loop and release notes.
+
+### M10 Multi-Platform Chat Integration
+
+Chat SDK adapters for GitHub, Slack, and Teams as notification and approval surfaces. Sequenced well after M6 so alert monitors exist before they are wired into chat channels.
+
+### M11 Docs Site
+
+Public documentation website, portal relocation to `/app`, and generated reference pages.
 
 ## Success Metrics
 

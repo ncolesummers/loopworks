@@ -114,8 +114,14 @@ Risks:
 | M1 Design System Direction + App Shell | P01, P04, M01, A02, R02 |
 | M2 GitHub + Vercel Source Systems | P02, M01, M03, R01, S01, S02, S03, S05 |
 | M3 Durable Loop MVP | M02, A01, A02, A03, R01 |
-| M4 Validation + PR Path + MVP Security Review | A03, R01, R02, S01, S02, S03, S04 |
-| M5 Agent Governance + Evals | P03, A02, A03, R02, S04 |
+| M4 Operator Onboarding | Day-zero operator journey; IDs added by #128 |
+| M5 MVP Close: Security, Design, and Coverage Gates | A03, R01, R02, S01, S02, S03, S04 |
+| M6 Observability + Alerting | Not yet assigned |
+| M7 Agent Governance + Evals | P03, A02, A03, R02, S04 |
+
+Post-MVP milestones (M8 Agent Extensibility, M9 Post-MVP Loop Extensions, M10 Multi-Platform Chat Integration, M11 Docs Site) are tracked in the GitHub backlog and do not yet have persona test coverage assigned.
+
+All five personas above are described mid-workflow, with repos, loops, and runs already present. The day-zero journey for M4 is the gap this leaves; #128 adds it.
 
 ## How To Use This Matrix
 
