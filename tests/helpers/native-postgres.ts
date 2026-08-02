@@ -247,21 +247,31 @@ export type RowLockWait = {
   blockedPid: number;
   blockingPids: number[];
   waitEvent: string | null;
+  /** The statement the blocked backend is parked on, for diagnostics. */
+  blockedQuery: string | null;
 };
 
 /**
  * Resolves once PostgreSQL reports `blockedPid` waiting on a lock held by
  * `expectedBlockerPid`, while `blockedPid` also holds a row lock on `relation`.
  *
- * Verifying the blocker's identity matters: a bare "is waiting on some lock"
- * check would accept a wait caused by anything at all. The waiter's own row-lock
- * footprint on `relation` ties the wait to the guarded table rather than to some
- * unrelated contention elsewhere in the transaction.
+ * Two things are verified, and both matter:
  *
- * What this cannot tell apart on its own is a `SELECT ... FOR UPDATE` wait from
- * a wait on a speculative `ON CONFLICT` insert — both block on the holder's
- * transaction id. Callers must therefore assert that the guard row is already
- * committed before contending, which makes the insert-conflict path impossible.
+ * 1. The blocker's identity, via `pg_blocking_pids`. A bare "is waiting on some
+ *    lock" check would accept a wait caused by anything at all.
+ * 2. A *granted `tuple` lock* on `relation` held by the waiter. That is the
+ *    signature of row contention on that specific table: a backend blocking on
+ *    `SELECT ... FOR UPDATE` takes the tuple lock first, then waits on the
+ *    holder's transaction id. Merely checking that the waiter holds some lock on
+ *    `relation` is not enough — a transaction that touched the table earlier
+ *    keeps relation-level locks for the rest of its life, so a wait on an
+ *    entirely different table's unique index would pass that weaker check.
+ *
+ * What this still cannot tell apart is a `SELECT ... FOR UPDATE` wait from a
+ * wait on a speculative `ON CONFLICT` insert against the same row — both block
+ * on the holder's transaction id. Callers must therefore assert that the guard
+ * row is already committed before contending, which makes the insert-conflict
+ * path impossible.
  *
  * This observes real transaction overlap through the lock views; it is not a
  * wall-clock stand-in for the assertion. It fails closed if the wait never
@@ -278,9 +288,9 @@ export async function waitForRowLockWait(
 
   while (Date.now() < deadline) {
     const [waiting] = await observer.client<
-      { wait_event: string | null; blocking_pids: number[] }[]
+      { wait_event: string | null; blocking_pids: number[]; query: string | null }[]
     >`
-      SELECT activity.wait_event, pg_blocking_pids(activity.pid) AS blocking_pids
+      SELECT activity.wait_event, activity.query, pg_blocking_pids(activity.pid) AS blocking_pids
       FROM pg_stat_activity AS activity
       WHERE activity.pid = ${input.blockedPid}
         AND activity.state = 'active'
@@ -294,9 +304,11 @@ export async function waitForRowLockWait(
         )
         AND EXISTS (
           SELECT 1
-          FROM pg_locks AS touched
-          WHERE touched.pid = activity.pid
-            AND touched.relation = ${input.relation}::regclass
+          FROM pg_locks AS rowLock
+          WHERE rowLock.pid = activity.pid
+            AND rowLock.granted
+            AND rowLock.locktype = 'tuple'
+            AND rowLock.relation = ${input.relation}::regclass
         )
     `;
     if (waiting) {
@@ -304,6 +316,7 @@ export async function waitForRowLockWait(
         blockedPid: input.blockedPid,
         blockingPids: waiting.blocking_pids,
         waitEvent: waiting.wait_event,
+        blockedQuery: waiting.query,
       };
     }
 
@@ -320,10 +333,14 @@ export async function waitForRowLockWait(
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
+  const [lastSeen] = await observer.client<{ wait_event: string | null; query: string | null }[]>`
+    SELECT wait_event, query FROM pg_stat_activity WHERE pid = ${input.blockedPid}
+  `;
   throw new Error(
-    `Backend ${input.blockedPid} never waited on a row lock in ${input.relation} held by ` +
-      `backend ${input.expectedBlockerPid} within ${timeoutMs}ms. Expected the competing ` +
-      "admission transaction to block on the guard row selected FOR UPDATE.",
+    `Backend ${input.blockedPid} never held a granted tuple lock on ${input.relation} while ` +
+      `waiting on backend ${input.expectedBlockerPid} within ${timeoutMs}ms. Expected the ` +
+      "competing admission transaction to block on the guard row selected FOR UPDATE. " +
+      `Last observed wait_event=${lastSeen?.wait_event ?? "none"} query=${lastSeen?.query ?? "none"}`,
   );
 }
 

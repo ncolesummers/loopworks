@@ -40,6 +40,11 @@ test helpers under `tests/`.
     are indistinguishable in the lock views, so commit any guard row before
     contending on it and assert it is committed; otherwise the test can pass for
     the wrong reason.
+11. Identify a row-lock wait by a granted `tuple` lock on the target relation,
+    never by "the waiter holds some lock on that relation". A transaction keeps
+    relation-level locks on every table it has touched, so the weaker check also
+    matches a wait on an unrelated table — for example blocking on the
+    `loop_runs` uniqueness index long after touching `idempotency_locks`.
 
 ## Validation
 
