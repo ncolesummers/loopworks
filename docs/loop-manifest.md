@@ -321,12 +321,16 @@ Persona test IDs: M02, A01, A02, A03, R01.
 ### M4 Operator Onboarding
 
 Make the machine reachable: first-run activation from installation to a first registered loop.
-Persona test IDs: day-zero operator journey, added by #128.
+Persona test IDs: P05, M04, M05.
 
 ### M5 MVP Close: Security, Design, and Coverage Gates
 
 Add release confidence, review visibility, and security signoff. Runs after M4.
 Persona test IDs: A03, R01, R02, S01, S02, S03, S04.
+
+## Post-MVP Milestone Contract
+
+The MVP closes at M5. The milestones below are sequenced but sit outside it.
 
 ### M6 Observability + Alerting
 
@@ -338,6 +342,6 @@ Persona test IDs: not yet assigned.
 Add guardrails and scenario coverage for agent behavior.
 Persona test IDs: P03, A02, A03, R02, S04.
 
-### M8-M11 Post-MVP
+### M8-M11
 
 M8 Agent Extensibility (Tools, MCP, Skills), M9 Post-MVP Loop Extensions, M10 Multi-Platform Chat Integration, and M11 Docs Site are sequenced in the GitHub backlog and are not yet specified here.
