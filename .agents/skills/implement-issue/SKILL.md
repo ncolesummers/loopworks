@@ -58,8 +58,9 @@ then resolve findings and re-run focused checks.
 
 ### 5. Validate and pause
 
-Focused checks while working; `bun run validate` before handing back. Then stop
-and report — do not commit.
+Validate at the level `AGENTS.md` requires for the change you actually made —
+focused checks while working, escalating only as its Validation section says.
+Then stop and report — do not commit.
 
 ## Browser validation
 
@@ -94,8 +95,8 @@ Brief, verbatim:
 > severity, failing scenario or repro. No fixes, no praise. An empty list must
 > state what you attacked and why it held.
 
-Dedupe both lists. Fix or defer each finding with a stated reason. Re-run
-focused checks, then `bun run validate`.
+Dedupe both lists. Fix or defer each finding with a stated reason, then re-run
+the checks step 5 calls for.
 
 ## Acceptance evidence
 

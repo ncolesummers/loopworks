@@ -11,7 +11,8 @@ test-results
 .eve
 .workflow-data
 .output
-.claude
+.claude/*
+!.claude/skills/
 .env
 .env.local
 .env.*.local
