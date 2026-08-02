@@ -1,3 +1,7 @@
+/** @vitest-environment node */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
 import { loopManifestSchema, retryableStatusValues } from "../../../schemas/loop-manifest";
 import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
@@ -288,6 +292,42 @@ describe("loop manifest schema", () => {
         expect(issue.personaTestIds, `${milestone.name} / ${issue.title}`).toEqual(
           expect.arrayContaining([expect.stringMatching(/^[PMARS]\d{2}$/)]),
         );
+      }
+    }
+  });
+
+  it("keeps manifest milestone names in sync with the PRD roadmap", () => {
+    // The manifest is served verbatim by GET /api/loops/manifest, so a stale
+    // milestone name here hands operators and generated issues a roadmap that
+    // disagrees with docs/prd.md. Pin the two together.
+    const prd = readFileSync(resolve(__dirname, "../../../docs/prd.md"), "utf8");
+    const headings = new Map(
+      Array.from(prd.matchAll(/^### (M(\d+)) (.+)$/gm)).map(([, key, , title]) => [
+        key,
+        `${key} ${title}`.trim(),
+      ]),
+    );
+
+    const manifest = parseLoopManifest(defaultLoopManifest);
+    expect(manifest.milestones.length).toBeGreaterThan(0);
+
+    for (const milestone of manifest.milestones) {
+      expect(headings.get(milestone.key), `${milestone.key} missing from docs/prd.md`).toBeDefined();
+      expect(milestone.name, `${milestone.key} name drifted from docs/prd.md`).toBe(
+        headings.get(milestone.key),
+      );
+    }
+  });
+
+  it("keeps milestone issue labels aligned with their milestone key", () => {
+    const manifest = parseLoopManifest(defaultLoopManifest);
+
+    for (const milestone of manifest.milestones) {
+      for (const issue of milestone.issues) {
+        const milestoneLabels = issue.labels.filter((label) => label.startsWith("milestone:"));
+        expect(milestoneLabels, `${milestone.key} / ${issue.title}`).toEqual([
+          `milestone:${milestone.key}`,
+        ]);
       }
     }
   });

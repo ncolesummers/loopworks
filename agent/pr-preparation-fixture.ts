@@ -31,7 +31,7 @@ export function createPrPreparationFixtureContext(input?: {
     issueNumber: 50,
     issueUrl: "https://github.com/ncolesummers/loopworks/issues/50",
     labels: ["area:agents", "loop:development"],
-    milestone: "M4 Validation + PR Path + MVP Security Review",
+    milestone: "M5 MVP Close: Security, Design, and Coverage Gates",
     repositoryFullName: "ncolesummers/loopworks",
     repositoryRevision: { ref: "main", commitSha },
     title: "PR preparation subagent for PR intent content",
