@@ -71,6 +71,7 @@ The first usable Loopworks slice includes:
 11. PR creation path or dev-mode PR intent artifact after validations and approvals pass.
 12. MVP security review issue before declaring the MVP complete.
 13. Pino structured logging for API and integration boundaries with redaction and correlation fields.
+14. First-run operator activation: connecting a GitHub App installation, selecting repositories into the catalog, and registering a first loop, so a new operator can reach a first run without hand-editing configuration.
 
 ## User Experience Requirements
 
@@ -82,6 +83,7 @@ The first usable Loopworks slice includes:
 6. Approval gates must show who approved, what changed, what validation evidence exists, and what operation will happen next.
 7. Vercel previews should be inspectable without leaving the work context.
 8. UI components should have Storybook coverage before becoming broad reusable primitives.
+9. Requirement 1 describes the returning operator. For an operator with no installation, no repos, or no loops, the first screen must show the next activation step rather than an empty operational dashboard. An empty state must never name an action it cannot route to, and first-run emptiness must render distinctly from an unavailable data source.
 
 ## Design System Direction
 
