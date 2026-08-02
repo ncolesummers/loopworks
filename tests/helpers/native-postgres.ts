@@ -1,21 +1,14 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import { applyPostgresMigrations } from "@/db/migrations";
 import * as schema from "@/db/schema";
 import { getLocalDatabaseSafetyError } from "../../scripts/local-database-safety";
 
 const REQUIRED_DATABASE_NAME = "loopworks_e2e";
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, "../../drizzle");
-
-/**
- * Serializes schema application across every connection in this process and,
- * via a Postgres advisory lock, across parallel Vitest workers.
- */
-const SCHEMA_ADVISORY_LOCK_KEY = 101_2026;
 
 export type NativePostgresTestDatabase = {
   client: postgres.Sql;
@@ -47,67 +40,10 @@ function requireSafeDatabaseUrl(env: Partial<NodeJS.ProcessEnv> = process.env): 
   return env.DATABASE_URL as string;
 }
 
-type JournalEntry = { idx: number; tag: string; when: number };
-
-/**
- * Applies pending migrations one file per transaction and records each in
- * drizzle's own `__drizzle_migrations` bookkeeping, so `drizzle-kit migrate`
- * later in the same job treats them as applied.
- *
- * The programmatic drizzle migrator is deliberately not used here: it wraps
- * every pending migration in a single transaction, which native PostgreSQL
- * rejects because migration 0005 uses an enum value added by migration 0004
- * ("unsafe use of new value of enum type"). Applying one file per transaction
- * matches how drizzle-kit applies them in CI.
- */
-async function applyPendingMigrations(client: postgres.Sql): Promise<void> {
-  await client`CREATE SCHEMA IF NOT EXISTS drizzle`;
-  await client`
-    CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
-      id SERIAL PRIMARY KEY,
-      hash text NOT NULL,
-      created_at bigint
-    )
-  `;
-
-  const applied = await client<{ hash: string }[]>`SELECT hash FROM drizzle.__drizzle_migrations`;
-  const appliedHashes = new Set(applied.map(({ hash }) => hash));
-
-  const journal = JSON.parse(
-    await readFile(path.join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
-  ) as { entries: JournalEntry[] };
-
-  for (const entry of [...journal.entries].sort((left, right) => left.idx - right.idx)) {
-    const sql = await readFile(path.join(MIGRATIONS_FOLDER, `${entry.tag}.sql`), "utf8");
-    const hash = createHash("sha256").update(sql).digest("hex");
-    if (appliedHashes.has(hash)) continue;
-
-    // One transaction per file, so a failing statement rolls the whole file back
-    // instead of leaving a half-applied migration that can never be retried.
-    await client.begin(async (tx) => {
-      for (const statement of sql.split("--> statement-breakpoint")) {
-        if (statement.trim().length === 0) continue;
-        await tx.unsafe(statement);
-      }
-      await tx`
-        INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
-        VALUES (${hash}, ${entry.when})
-      `;
-    });
-  }
-}
-
-/**
- * Serializes migration application across parallel Vitest workers with a
- * session-level advisory lock, so concurrent handles cannot half-apply the schema.
- */
 async function ensureSchema(client: postgres.Sql): Promise<void> {
-  await client`SELECT pg_advisory_lock(${SCHEMA_ADVISORY_LOCK_KEY})`;
-  try {
-    await applyPendingMigrations(client);
-  } finally {
-    await client`SELECT pg_advisory_unlock(${SCHEMA_ADVISORY_LOCK_KEY})`;
-  }
+  await applyPostgresMigrations(drizzle(client), {
+    migrationsFolder: MIGRATIONS_FOLDER,
+  });
 }
 
 /**
