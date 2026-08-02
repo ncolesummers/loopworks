@@ -80,11 +80,19 @@ transitions and enforcement require a separate M9 story.
    preflight and partial unique index.
 3. Static observability tests keep dispatch and retry spans and metrics behind
    central helpers with bounded attributes.
+4. A native PostgreSQL lane (`bun run test:integration:postgres`) overlaps two
+   independent backends against one migrated database and proves the group
+   guard serializes admission: the losing session is observed waiting on a lock
+   in `pg_stat_activity` while the winner holds its pre-commit transaction, and
+   only one lease is acquired under `maxInFlight: 1`. The same overlap proves
+   cross-loop issue exclusivity yields typed contention rather than a raw
+   uniqueness error. The lane fails closed when no safe local database is
+   configured; it never skips and never falls back to PGlite.
 
 ## Follow-Ups
 
 - Draft an M9 story titled “Research-loop durable transitions, reconciliation,
   lease lifecycle, and retry enforcement.” Do not create it without maintainer
   authorization.
-- Add a real-Postgres multi-session admission lane if production lock-wait
-  behavior needs evidence stronger than embedded PGlite transactions.
+- Done (issue #101): the real-Postgres multi-session admission lane described in
+  Validation now covers production lock-wait behavior.

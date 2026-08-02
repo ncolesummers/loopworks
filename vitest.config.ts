@@ -7,7 +7,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["tests/e2e/**"],
+    // The native Postgres lane needs a live database; it runs via
+    // `bun run test:integration:postgres`, not the default PGlite-backed suite.
+    exclude: ["tests/e2e/**", "tests/integration/postgres/**"],
   },
   resolve: {
     alias: {
