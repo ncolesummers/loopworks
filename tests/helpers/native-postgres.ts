@@ -1,14 +1,17 @@
 import path from "node:path";
 
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-import { applyPostgresMigrations } from "@/db/migrations";
 import * as schema from "@/db/schema";
 import { getLocalDatabaseSafetyError } from "../../scripts/local-database-safety";
 
 const REQUIRED_DATABASE_NAME = "loopworks_e2e";
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, "../../drizzle");
+
+/** Serializes schema setup across independent test sessions and workers. */
+const SCHEMA_ADVISORY_LOCK_KEY = 101_2026;
 
 export type NativePostgresTestDatabase = {
   client: postgres.Sql;
@@ -41,9 +44,14 @@ function requireSafeDatabaseUrl(env: Partial<NodeJS.ProcessEnv> = process.env): 
 }
 
 async function ensureSchema(client: postgres.Sql): Promise<void> {
-  await applyPostgresMigrations(drizzle(client), {
-    migrationsFolder: MIGRATIONS_FOLDER,
-  });
+  await client`SELECT pg_advisory_lock(${SCHEMA_ADVISORY_LOCK_KEY})`;
+  try {
+    await migrate(drizzle(client), {
+      migrationsFolder: MIGRATIONS_FOLDER,
+    });
+  } finally {
+    await client`SELECT pg_advisory_unlock(${SCHEMA_ADVISORY_LOCK_KEY})`;
+  }
 }
 
 /**

@@ -5,57 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782606250364,
-      "tag": "0000_real_glorian",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1782790076833,
-      "tag": "0001_spotty_flatman",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1783028394100,
-      "tag": "0002_absurd_proteus",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1783795849940,
-      "tag": "0003_dusty_nico_minoru",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1784008795731,
-      "tag": "0004_mushy_corsair",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1784010988181,
-      "tag": "0005_backfill_validation_screenshot_artifacts",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1784778985115,
-      "tag": "0006_skinny_electro",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1784956021096,
-      "tag": "0007_remarkable_legion",
+      "when": 1785706134690,
+      "tag": "0000_baseline",
       "breakpoints": true
     }
   ]

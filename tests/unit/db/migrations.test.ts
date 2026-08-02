@@ -104,21 +104,25 @@ describe("Drizzle migrations", () => {
     expect(Object.keys(idempotencyLocks)).toEqual(expect.arrayContaining(["runId", "traceId"]));
 
     const migrationSql = readMigrationSql();
-    expect(migrationSql).toContain('ALTER TABLE "idempotency_locks" ADD COLUMN "run_id" uuid');
-    expect(migrationSql).toContain('ALTER TABLE "idempotency_locks" ADD COLUMN "trace_id" text');
+    expect(migrationSql).toContain('"run_id" uuid');
+    expect(migrationSql).toContain('"trace_id" text');
     expect(migrationSql).toContain("loop_runs_active_repository_issue_idx");
     expect(migrationSql).toContain("'waiting_for_approval', 'blocked'");
     expect(migrationSql).toContain('"loop_runs"."completed_at" IS NULL');
   });
 
   it(
-    "tracks screenshot artifacts in the schema and generated migrations",
+    "creates screenshot artifacts in the fresh migration baseline",
     async () => {
       expect(artifactTypeEnum.enumValues).toContain("screenshot");
+      const migrationFiles = readdirSync("drizzle").filter((entry) => entry.endsWith(".sql"));
+      expect(migrationFiles).toHaveLength(1);
+
       const migrationSql = readMigrationSql();
-      expect(migrationSql).toContain("ADD VALUE 'screenshot'");
-      expect(migrationSql).toContain("screenshot_evidence_contract");
-      expect(migrationSql).toContain('WHERE "run_steps"."stage" = \'validation\'');
+      expect(migrationSql).toContain(
+        "CREATE TYPE \"public\".\"artifact_type\" AS ENUM('plan', 'validation_report', 'test_plan', 'patch', 'pr_intent', 'deployment_summary', 'log_summary', 'trace', 'screenshot', 'other')",
+      );
+      expect(migrationSql).not.toContain('ALTER TYPE "public"."artifact_type" ADD VALUE');
 
       const context = await createPgliteTestDatabase();
       try {
