@@ -81,6 +81,13 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
+      # Proves the dispatch group guard serializes competing sessions on real
+      # PostgreSQL. Runs before the seeded stage, whose reset clears its rows.
+      - name: Native Postgres dispatch admission
+        run: bun run test:integration:postgres
+        env:
+          DATABASE_URL: postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e
+
       - name: Seeded Postgres Playwright
         run: bun run test:e2e:seeded
         env:
