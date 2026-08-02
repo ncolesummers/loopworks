@@ -122,12 +122,13 @@ DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
   bun run test:integration:postgres
 ```
 
-It applies any pending migrations itself and enforces the same local-database
-guard. Without a safe `DATABASE_URL` it fails with a non-zero exit rather than
-skipping or falling back to PGlite, so a missing database can never be mistaken
-for passing concurrency evidence. Each test truncates every table in the
-`public` schema of `loopworks_e2e`, so run the seeded lane afterwards if you
-need the demo rows back.
+It applies pending migrations through the same programmatic per-file migrator
+as `bun run db:migrate` and enforces the same local-database guard. Without a
+safe `DATABASE_URL` it fails with a non-zero exit rather than skipping or
+falling back to PGlite, so a missing database can never be mistaken for passing
+concurrency evidence. Each test truncates every table in the `public` schema of
+`loopworks_e2e`, so run the seeded lane afterwards if you need the demo rows
+back.
 
 The aggregate command is:
 
@@ -170,6 +171,19 @@ local Postgres database:
 ```bash
 bun run db:seed
 ```
+
+`bun run db:migrate` uses the repository's programmatic PostgreSQL migrator.
+It preserves Drizzle's migration journal and bookkeeping while committing one
+migration file at a time, so a later file can safely use an enum label added by
+an earlier file. It serializes concurrent callers with a PostgreSQL advisory
+lock and supports Drizzle's config override syntax:
+
+```bash
+bun run db:migrate -- --config drizzle.staging.config.ts
+```
+
+Failures report the journal timestamp, migration hash prefix, and PostgreSQL
+error code when available without printing database credentials.
 
 Seeding is idempotent (upsert by fixed id), so running it again does not duplicate rows. To clear the fixed-id demo rows and reseed from scratch:
 
