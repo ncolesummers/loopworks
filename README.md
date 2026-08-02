@@ -106,6 +106,23 @@ DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
   bun run test:e2e:seeded
 ```
 
+### Pre-production migration resets
+
+Loopworks may squash its migration history before the first production
+release. A database created from an older journal cannot apply a replacement
+baseline in place; recreate it before running migrations.
+[Issue #113](https://github.com/ncolesummers/loopworks/issues/113) replaced the
+original `0000`-`0007` journal, so existing local and preview databases must be
+reset. To recreate the explicitly local test database:
+
+```bash
+dropdb --host 127.0.0.1 --username loopworks loopworks_e2e
+createdb --host 127.0.0.1 --username loopworks loopworks_e2e
+```
+
+Recreate any other non-production database through its provider rather than
+pointing these local commands at a remote host.
+
 The seeded command refuses production runtimes, non-Postgres URLs,
 non-loopback hosts, and database names other than `loopworks_e2e` before it
 runs migrations. It then runs migrations, resets only the fixed-id demo rows,
