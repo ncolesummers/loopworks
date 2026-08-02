@@ -22,6 +22,7 @@
     "test:e2e": "playwright test",
     "test:e2e:validation-evidence": "playwright test --config=playwright.validation-evidence.config.ts",
     "test:e2e:seeded": "bun run scripts/test-seeded-postgres.ts",
+    "test:integration:postgres": "bun run scripts/test-native-postgres.ts",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
     "review:ui": "bun run scripts/review-ui.mjs",

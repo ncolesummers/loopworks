@@ -1,0 +1,357 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+
+import * as schema from "@/db/schema";
+import { getLocalDatabaseSafetyError } from "../../scripts/local-database-safety";
+
+const REQUIRED_DATABASE_NAME = "loopworks_e2e";
+const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, "../../drizzle");
+
+/**
+ * Serializes schema application across every connection in this process and,
+ * via a Postgres advisory lock, across parallel Vitest workers.
+ */
+const SCHEMA_ADVISORY_LOCK_KEY = 101_2026;
+
+export type NativePostgresTestDatabase = {
+  client: postgres.Sql;
+  db: PostgresJsDatabase<typeof schema>;
+  /** The URL this handle actually connected to, re-validated before any cleanup. */
+  url: string;
+  /** The server-side backend PID, proving this handle is its own session. */
+  backendPid: number;
+  close: () => Promise<void>;
+};
+
+/**
+ * Returns the database URL only when it is provably safe to mutate, per ADR 0007.
+ * The lane fails closed: it never skips, and never falls back to PGlite, because
+ * a silently-skipped concurrency lane would assert nothing about production locking.
+ */
+function requireSafeDatabaseUrl(env: Partial<NodeJS.ProcessEnv> = process.env): string {
+  const safetyError = getLocalDatabaseSafetyError(env, {
+    requiredDatabaseName: REQUIRED_DATABASE_NAME,
+    requireExplicitUrl: true,
+  });
+  if (safetyError) {
+    throw new Error(
+      `${safetyError} The native PostgreSQL admission lane requires a live local ` +
+        `${REQUIRED_DATABASE_NAME} database; run it with 'bun run test:integration:postgres'.`,
+    );
+  }
+  // The guard above rejects a missing URL when requireExplicitUrl is set.
+  return env.DATABASE_URL as string;
+}
+
+type JournalEntry = { idx: number; tag: string; when: number };
+
+/**
+ * Applies pending migrations one file per transaction and records each in
+ * drizzle's own `__drizzle_migrations` bookkeeping, so `drizzle-kit migrate`
+ * later in the same job treats them as applied.
+ *
+ * The programmatic drizzle migrator is deliberately not used here: it wraps
+ * every pending migration in a single transaction, which native PostgreSQL
+ * rejects because migration 0005 uses an enum value added by migration 0004
+ * ("unsafe use of new value of enum type"). Applying one file per transaction
+ * matches how drizzle-kit applies them in CI.
+ */
+async function applyPendingMigrations(client: postgres.Sql): Promise<void> {
+  await client`CREATE SCHEMA IF NOT EXISTS drizzle`;
+  await client`
+    CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at bigint
+    )
+  `;
+
+  const applied = await client<{ hash: string }[]>`SELECT hash FROM drizzle.__drizzle_migrations`;
+  const appliedHashes = new Set(applied.map(({ hash }) => hash));
+
+  const journal = JSON.parse(
+    await readFile(path.join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
+  ) as { entries: JournalEntry[] };
+
+  for (const entry of [...journal.entries].sort((left, right) => left.idx - right.idx)) {
+    const sql = await readFile(path.join(MIGRATIONS_FOLDER, `${entry.tag}.sql`), "utf8");
+    const hash = createHash("sha256").update(sql).digest("hex");
+    if (appliedHashes.has(hash)) continue;
+
+    // One transaction per file, so a failing statement rolls the whole file back
+    // instead of leaving a half-applied migration that can never be retried.
+    await client.begin(async (tx) => {
+      for (const statement of sql.split("--> statement-breakpoint")) {
+        if (statement.trim().length === 0) continue;
+        await tx.unsafe(statement);
+      }
+      await tx`
+        INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+        VALUES (${hash}, ${entry.when})
+      `;
+    });
+  }
+}
+
+/**
+ * Serializes migration application across parallel Vitest workers with a
+ * session-level advisory lock, so concurrent handles cannot half-apply the schema.
+ */
+async function ensureSchema(client: postgres.Sql): Promise<void> {
+  await client`SELECT pg_advisory_lock(${SCHEMA_ADVISORY_LOCK_KEY})`;
+  try {
+    await applyPendingMigrations(client);
+  } finally {
+    await client`SELECT pg_advisory_unlock(${SCHEMA_ADVISORY_LOCK_KEY})`;
+  }
+}
+
+/**
+ * Opens one independent PostgreSQL session against the shared migrated test
+ * database. `max: 1` pins the handle to a single backend so that two handles are
+ * genuinely two sessions rather than two wrappers over one connection.
+ */
+export async function createNativePostgresTestDatabase(): Promise<NativePostgresTestDatabase> {
+  const url = requireSafeDatabaseUrl();
+  const client = postgres(url, {
+    max: 1,
+    prepare: false,
+    onnotice: () => {},
+  });
+
+  try {
+    await ensureSchema(client);
+    const [{ pid }] = await client<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+
+    return {
+      client,
+      db: drizzle(client, { schema }),
+      url,
+      backendPid: Number(pid),
+      close: async () => {
+        await client.end();
+      },
+    };
+  } catch (error) {
+    await client.end();
+    throw error;
+  }
+}
+
+/**
+ * Truncates every table in the `public` schema of the test database — not just
+ * the dispatch tables — so each test starts from a known-empty state.
+ *
+ * The safety guard is re-applied to the URL this handle actually connected to,
+ * rather than to the ambient environment, so cleanup can never reach a database
+ * other than the local one this handle opened.
+ */
+export async function resetDatabaseState(handle: NativePostgresTestDatabase): Promise<void> {
+  requireSafeDatabaseUrl({ ...process.env, DATABASE_URL: handle.url });
+  const tables = await handle.client<{ name: string }[]>`
+    SELECT quote_ident(tablename) AS name
+    FROM pg_tables
+    WHERE schemaname = 'public'
+  `;
+  if (tables.length === 0) return;
+  await handle.client.unsafe(
+    `TRUNCATE TABLE ${tables.map(({ name }) => name).join(", ")} RESTART IDENTITY CASCADE`,
+  );
+}
+
+export type PreCommitBarrier = {
+  /** Resolves once a gated transaction body has finished and is parked pre-commit. */
+  readonly parked: Promise<void>;
+  release: () => void;
+  /** Called by {@link gatePreCommit} from inside the transaction; parks until released. */
+  hold: () => Promise<void>;
+};
+
+/**
+ * A one-shot barrier used to hold a transaction open after it has taken its
+ * locks and done its work, but before it commits.
+ */
+export function createPreCommitBarrier(): PreCommitBarrier {
+  let markParked!: () => void;
+  let markReleased!: () => void;
+  const parked = new Promise<void>((resolve) => {
+    markParked = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    markReleased = resolve;
+  });
+
+  return {
+    parked,
+    release: () => markReleased(),
+    hold: () => {
+      markParked();
+      return released;
+    },
+  };
+}
+
+/**
+ * Wraps a database handle so its *first* transaction parks after the callback
+ * resolves and before the commit lands, keeping every row lock it acquired held.
+ * Later transactions on the same handle pass straight through, because the
+ * barrier is one-shot.
+ *
+ * A Proxy is used rather than an object spread: a drizzle database keeps
+ * `select`/`insert`/`update` on its prototype, so spreading would silently drop
+ * every method except the own enumerable ones and break any caller that reads
+ * outside the transaction.
+ *
+ * This is a test-only seam: no production code participates in it.
+ */
+export function gatePreCommit<TDatabase extends object>(
+  database: TDatabase,
+  barrier: PreCommitBarrier,
+): TDatabase {
+  let gated = false;
+
+  return new Proxy(database, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "transaction" || typeof value !== "function") return value;
+
+      return (callback: (tx: unknown) => Promise<unknown>, ...rest: unknown[]) => {
+        if (gated) return value.call(target, callback, ...rest);
+        gated = true;
+
+        return value.call(
+          target,
+          async (tx: unknown) => {
+            const result = await callback(tx);
+            await barrier.hold();
+            return result;
+          },
+          ...rest,
+        );
+      };
+    },
+  });
+}
+
+/** Returns the backend PID the handle is connected through right now. */
+export async function currentBackendPid(handle: NativePostgresTestDatabase): Promise<number> {
+  const [{ pid }] = await handle.client<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+  return Number(pid);
+}
+
+export type RowLockWait = {
+  blockedPid: number;
+  blockingPids: number[];
+  waitEvent: string | null;
+};
+
+/**
+ * Resolves once PostgreSQL reports `blockedPid` waiting on a lock held by
+ * `expectedBlockerPid`, while `blockedPid` also holds a row lock on `relation`.
+ *
+ * Verifying the blocker's identity matters: a bare "is waiting on some lock"
+ * check would accept a wait caused by anything at all. The waiter's own row-lock
+ * footprint on `relation` ties the wait to the guarded table rather than to some
+ * unrelated contention elsewhere in the transaction.
+ *
+ * What this cannot tell apart on its own is a `SELECT ... FOR UPDATE` wait from
+ * a wait on a speculative `ON CONFLICT` insert — both block on the holder's
+ * transaction id. Callers must therefore assert that the guard row is already
+ * committed before contending, which makes the insert-conflict path impossible.
+ *
+ * This observes real transaction overlap through the lock views; it is not a
+ * wall-clock stand-in for the assertion. It fails closed if the wait never
+ * appears, and fails fast if the blocked backend disappears entirely.
+ */
+export async function waitForRowLockWait(
+  observer: NativePostgresTestDatabase,
+  input: { blockedPid: number; expectedBlockerPid: number; relation: string },
+  options: { timeoutMs?: number; pollIntervalMs?: number } = {},
+): Promise<RowLockWait> {
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 25;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const [waiting] = await observer.client<
+      { wait_event: string | null; blocking_pids: number[] }[]
+    >`
+      SELECT activity.wait_event, pg_blocking_pids(activity.pid) AS blocking_pids
+      FROM pg_stat_activity AS activity
+      WHERE activity.pid = ${input.blockedPid}
+        AND activity.state = 'active'
+        AND activity.wait_event_type = 'Lock'
+        AND pg_blocking_pids(activity.pid) @> ARRAY[${input.expectedBlockerPid}]::int[]
+        AND EXISTS (
+          SELECT 1
+          FROM pg_locks AS waited
+          WHERE waited.pid = activity.pid
+            AND NOT waited.granted
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM pg_locks AS touched
+          WHERE touched.pid = activity.pid
+            AND touched.relation = ${input.relation}::regclass
+        )
+    `;
+    if (waiting) {
+      return {
+        blockedPid: input.blockedPid,
+        blockingPids: waiting.blocking_pids,
+        waitEvent: waiting.wait_event,
+      };
+    }
+
+    const [alive] = await observer.client<{ pid: number }[]>`
+      SELECT pid FROM pg_stat_activity WHERE pid = ${input.blockedPid}
+    `;
+    if (!alive) {
+      throw new Error(
+        `Backend ${input.blockedPid} is no longer connected, so its lock wait cannot be observed. ` +
+          "The session likely reconnected or was closed before the wait was measured.",
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error(
+    `Backend ${input.blockedPid} never waited on a row lock in ${input.relation} held by ` +
+      `backend ${input.expectedBlockerPid} within ${timeoutMs}ms. Expected the competing ` +
+      "admission transaction to block on the guard row selected FOR UPDATE.",
+  );
+}
+
+/**
+ * Awaits a barrier reaching its pre-commit park, but fails fast if the gated
+ * work rejects first. Without this, any error thrown before the barrier is
+ * reached would hang until the Vitest timeout and surface as an unhandled
+ * rejection instead of the real cause.
+ */
+export async function awaitParked(
+  barrier: PreCommitBarrier,
+  gatedWork: Promise<unknown>,
+): Promise<void> {
+  await Promise.race([
+    barrier.parked,
+    gatedWork.then(
+      () => {
+        throw new Error(
+          "The gated transaction completed without parking at the pre-commit barrier.",
+        );
+      },
+      (error: unknown) => {
+        throw new Error(
+          `The gated transaction failed before reaching the pre-commit barrier: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      },
+    ),
+  ]);
+}
