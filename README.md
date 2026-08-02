@@ -113,6 +113,22 @@ and requires `Live database` browser evidence. Migration or seed failures name
 the failed stage; confirm Postgres is running and that the local role and
 database exist.
 
+The native Postgres admission lane uses the same database. It proves that
+competing dispatch transactions on two independent sessions serialize on the
+durable group guard, which the embedded PGlite suite cannot demonstrate:
+
+```bash
+DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
+  bun run test:integration:postgres
+```
+
+It applies any pending migrations itself and enforces the same local-database
+guard. Without a safe `DATABASE_URL` it fails with a non-zero exit rather than
+skipping or falling back to PGlite, so a missing database can never be mistaken
+for passing concurrency evidence. Each test truncates every table in the
+`public` schema of `loopworks_e2e`, so run the seeded lane afterwards if you
+need the demo rows back.
+
 The aggregate command is:
 
 ```bash

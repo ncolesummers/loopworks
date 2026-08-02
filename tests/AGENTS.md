@@ -25,6 +25,21 @@ test helpers under `tests/`.
    targets, `where` predicates, transaction rollback), add pglite-backed
    integration tests via `createPgliteTestDatabase` (`tests/helpers/pglite.ts`)
    instead of relying on hand-rolled in-memory fakes.
+9. PGlite runs one embedded backend and does not populate `pg_stat_activity`, so
+   it cannot demonstrate lock waiting between concurrent sessions; see
+   `tests/unit/loops/pglite-single-backend-limitation.test.ts`. For behavior
+   that depends on cross-session lock scheduling (`SELECT ... FOR UPDATE`
+   contention, admission serialization), add a test under
+   `tests/integration/postgres/` using `createNativePostgresTestDatabase`
+   (`tests/helpers/native-postgres.ts`) and run it with
+   `bun run test:integration:postgres`. Observe the wait through the lock views
+   via `waitForRowLockWait`, which verifies the blocking backend's identity;
+   never substitute sleeps, retry loops, or repeated stress runs.
+10. A lock-wait observation only proves what its preconditions allow. Waiting on
+    `SELECT ... FOR UPDATE` and waiting on an `ON CONFLICT` speculative insert
+    are indistinguishable in the lock views, so commit any guard row before
+    contending on it and assert it is committed; otherwise the test can pass for
+    the wrong reason.
 
 ## Validation
 
