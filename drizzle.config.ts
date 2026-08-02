@@ -1,10 +1,12 @@
 import { defineConfig } from "drizzle-kit";
 
+import { resolveMigrationDatabaseUrl } from "./src/db/neon-migration-config";
+
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks",
+    url: resolveMigrationDatabaseUrl(process.env),
   },
 });

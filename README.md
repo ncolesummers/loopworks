@@ -57,6 +57,7 @@ Copy `.env.example` to `.env.local` for local development. The fixture server on
 - `LOOPWORKS_EVE_IMPLEMENTER_FIXTURE_MODE`
 - `LOG_LEVEL`
 - `DATABASE_URL`
+- `DATABASE_URL_UNPOOLED`
 - `OTEL_EXPORTER_OTLP_PROTOCOL`
 - `OTEL_EXPORTER_OTLP_ENDPOINT`
 - `OTEL_EXPORTER_OTLP_TRACES_HEADERS`
@@ -69,6 +70,41 @@ Copy `.env.example` to `.env.local` for local development. The fixture server on
 - `VERCEL_ACCESS_TOKEN`
 - `VERCEL_TEAM_ID`
 - `VERCEL_TEAM_SLUG`
+
+### Hosted Neon deployment
+
+The Vercel-managed Neon resource owns hosted Postgres for Production and
+Preview only. Runtime queries use the pooled `DATABASE_URL`; Drizzle migrations
+use the direct `DATABASE_URL_UNPOOLED`. `src/db/client.ts` keeps prepared
+statements disabled for compatibility with the pooled runtime connection.
+
+Vercel runs `bun run vercel-build`, which applies migrations before the Next.js
+build. The ordinary `bun run build` command remains migration-free for local
+development. Hosted builds fail before connecting if
+either database URL is missing, if either URL is malformed, if their Neon
+branch or database differs, or if their pooled/direct roles are reversed.
+`bun run db:migrate` holds a Postgres advisory lock while Drizzle applies
+pending migrations, serializing overlapping builds that target the same
+database.
+
+The required Neon deployment actions create an isolated branch for each
+Preview before the build and clean it up with the Preview lifecycle. Neon and
+Vercel own branch creation, connection injection, and cleanup; the application
+does not create or select hosted branches itself.
+
+After provisioning or changing project environment variables, refresh the
+untracked local file with:
+
+```bash
+vercel env pull .env.local --yes
+```
+
+The command overwrites `.env.local`, so preserve any local-only values before
+running it and review the result afterward. Development is intentionally not
+connected to the hosted Neon resource, so a Development pull does not select a
+Production or Preview database. Continue to use local Postgres for development.
+Never run `bun run db:seed` or `bun run db:seed:reset` against a hosted Neon
+database.
 
 OpenTelemetry is registered through `@vercel/otel`. Local development is safe
 by default: leave the OTLP exporter variables blank unless you intentionally want

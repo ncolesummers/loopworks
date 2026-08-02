@@ -38,6 +38,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0015](0015-stage-orchestrator-and-isolated-subagent-handoffs.md) | Proposed | Use a neutral root orchestrator, independent sibling subagents, and typed artifact handoffs between isolated sandboxes. |
 | [0016](0016-run-reconciliation-and-terminal-reasons.md) | Proposed | Reconcile active runs with typed terminal reasons, read-only tracker refresh, and injected execution liveness. |
 | [0017](0017-durable-dispatch-leases-and-retry-backoff.md) | Proposed | Serialize manifest admission with durable leases and preserve bounded retry evidence across restarts. |
+| [0018](0018-vercel-managed-neon-deployment-migrations.md) | Proposed | Use Vercel-managed Neon with pooled runtime queries, direct deployment migrations, and provider-managed Preview branches. |
 
 ## Template
 
