@@ -363,19 +363,19 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
       key: "M4",
       name: "M4 Operator Onboarding",
       description: "First-run activation from installation to a registered loop.",
-      personaTestIds: ["P01", "M01", "M03"],
+      personaTestIds: ["P05", "M04", "M05"],
       issues: [
         {
           title: "GitHub App installation and repository selection",
           labels: ["kind:feature", "milestone:M4", "area:github"],
           template: "feature.yml",
-          personaTestIds: ["P01", "M01"],
+          personaTestIds: ["M04"],
         },
         {
-          title: "First-run activation and actionable empty states",
+          title: "Register a first loop and wire actionable empty states",
           labels: ["kind:feature", "milestone:M4", "area:ui"],
           template: "feature.yml",
-          personaTestIds: ["P01", "M03"],
+          personaTestIds: ["P05", "M05"],
         },
       ],
     },

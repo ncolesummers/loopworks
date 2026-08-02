@@ -92,9 +92,12 @@ Risks:
 | P02 | Product Operator | An issue with `agent-ready` normalizes into a development loop trigger; `spike` plus `agent-ready` normalizes into a research trigger. | Unit, integration |
 | P03 | Product Operator | A durable decision from planning links to an ADR proposal or accepted ADR. | Integration, docs review |
 | P04 | Product Operator | An operator switches between light and dark mode from the app shell; the choice persists across reloads and both themes meet contrast. | Playwright, a11y |
+| P05 | Product Operator | A day-zero operator with no installation, repositories, or loops sees the next activation step instead of an empty operational dashboard, and every empty state routes to an action they can take. | Playwright, a11y |
 | M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, Vercel project links, and search/filter controls. | Playwright, Storybook |
 | M02 | Maintainer | Turning either development or research routing off prevents trigger execution and records the loop-specific skipped reason without fabricating a run. | Unit, integration, Playwright |
 | M03 | Maintainer | Missing Vercel credentials in dev returns explicit fixture fallback metadata; production does not silently return fixtures. | Unit, integration |
+| M04 | Maintainer | A maintainer connects a GitHub App installation and selects repositories into the catalog; a cancelled install and a zero-repository install render distinctly. | Playwright, integration |
+| M05 | Maintainer | A maintainer registers a first loop against a tracked repository and the registry reflects its enabled state, triggers, gates, and approvals. | Playwright, integration |
 | A01 | Agent Supervisor | Run detail shows the exact loop sequence and artifacts: all development stages with separate red/test-plan evidence, or research planning, researching, authoring, and done with four placeholder contracts. | Unit, Storybook, Playwright |
 | A02 | Agent Supervisor | Approval gates show requested, approved, rejected, bypassed, and expired states with actor and evidence; test writing requires an exact approved plan review. | Unit, Storybook, Playwright |
 | A03 | Agent Supervisor | AC-mapped expected-red evidence appears before implementation, and green deterministic validation appears before LLM review or judgment. | Integration, Playwright |
@@ -108,20 +111,29 @@ Risks:
 
 ## MVP Milestone Map
 
+The MVP spans M0 through M5. M5 is the closing gate.
+
 | Milestone | Persona Test IDs |
 | --- | --- |
 | M0 Project Foundation | P01, P03, R02, S04 |
 | M1 Design System Direction + App Shell | P01, P04, M01, A02, R02 |
 | M2 GitHub + Vercel Source Systems | P02, M01, M03, R01, S01, S02, S03, S05 |
 | M3 Durable Loop MVP | M02, A01, A02, A03, R01 |
-| M4 Operator Onboarding | Day-zero operator journey; IDs added by #128 |
+| M4 Operator Onboarding | P05, M04, M05 |
 | M5 MVP Close: Security, Design, and Coverage Gates | A03, R01, R02, S01, S02, S03, S04 |
+
+## Post-MVP Milestone Map
+
+| Milestone | Persona Test IDs |
+| --- | --- |
 | M6 Observability + Alerting | Not yet assigned |
 | M7 Agent Governance + Evals | P03, A02, A03, R02, S04 |
+| M8 Agent Extensibility (Tools, MCP, Skills) | Not yet assigned |
+| M9 Post-MVP Loop Extensions | Not yet assigned |
+| M10 Multi-Platform Chat Integration | Not yet assigned |
+| M11 Docs Site | Not yet assigned |
 
-Post-MVP milestones (M8 Agent Extensibility, M9 Post-MVP Loop Extensions, M10 Multi-Platform Chat Integration, M11 Docs Site) are tracked in the GitHub backlog and do not yet have persona test coverage assigned.
-
-All five personas above are described mid-workflow, with repos, loops, and runs already present. The day-zero journey for M4 is the gap this leaves; #128 adds it.
+The original five personas are described mid-workflow, with repos, loops, and runs already present. P05, M04, and M05 above are the day-zero journey that gap left; #128 implements their coverage.
 
 ## How To Use This Matrix
 
