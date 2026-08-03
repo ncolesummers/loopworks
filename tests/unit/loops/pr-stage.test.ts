@@ -36,7 +36,11 @@ import {
   createPullRequestChangeDigest,
   type GitHubPullRequestWriter,
 } from "@/lib/github/pull-request";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 function runUrlFor(runId: string): string {
   return `https://loopworks.example/runs?run=${runId}`;
@@ -135,9 +139,13 @@ function createMetrics() {
 describe("development-loop PR stage", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
-    vi.stubEnv("LOOPWORKS_PUBLIC_URL", "https://loopworks.example");
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
+    vi.stubEnv("LOOPWORKS_PUBLIC_URL", "https://loopworks.example");
     await context.db.insert(repositories).values({
       defaultBranch: "main",
       enabledLoops: ["Agent-ready development loop"],
@@ -148,12 +156,15 @@ describe("development-loop PR stage", () => {
       owner: "ncolesummers",
       validationGates: ["Aggregate validation"],
     });
-  });
+  }, pgliteTestHookTimeoutMs);
 
   afterEach(async () => {
     vi.unstubAllEnvs();
-    await context.close();
   });
+
+  afterAll(async () => {
+    await context.close();
+  }, pgliteTestHookTimeoutMs);
 
   async function createRun(report: ValidationReportV1 = passingValidationReport()) {
     const created = await createDevelopmentLoopRun({

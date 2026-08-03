@@ -23,7 +23,11 @@ import {
 } from "@/lib/loops/development-run";
 import { prIntentSchemaId } from "@/lib/loops/pr-intent";
 import { validationReportSchemaId } from "@/lib/loops/validation-runner";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const issueTrigger = {
   body: [
@@ -73,13 +77,17 @@ function withTestTrace<T>(callback: () => T): T {
 describe("agent-ready development loop run skeleton", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("defines the ordered issue #11 development stages with validation before review and PR", () => {
     expect(developmentLoopStages.map((stage) => stage.key)).toEqual([

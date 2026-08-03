@@ -24,7 +24,11 @@ import {
   researchLoopStages,
   simulateResearchLoopRun,
 } from "@/lib/loops/research-run";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const issueTrigger = {
   body: "Prove that the neutral orchestrator can route a non-code loop.",
@@ -67,13 +71,17 @@ function withTestTrace<T>(callback: () => T): T {
 describe("spike agent-ready research loop run skeleton", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("defines a deterministic non-code stage and artifact contract", () => {
     expect(researchLoopStages).toEqual([

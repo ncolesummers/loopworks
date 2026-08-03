@@ -521,7 +521,7 @@ describe("ADR 0012 observability metric contract", () => {
     } finally {
       await context.close();
     }
-  }, 15_000);
+  }, 30_000);
 
   it("rejects unsupported OTel metric names", () => {
     expect(resolveObservabilityMetricDefinition("loopworks.run.started")).toMatchObject({

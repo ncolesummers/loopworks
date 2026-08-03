@@ -1,6 +1,10 @@
 /** @vitest-environment node */
 
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 /**
  * The standing counterexample for why the native PostgreSQL admission lane
@@ -19,11 +23,11 @@ describe("PGlite cannot establish multi-session lock scheduling", () => {
 
   beforeEach(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   afterEach(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("exposes no client backends to observe at all", async () => {
     const backends = await context.client.query<{ pid: number }>(
@@ -35,21 +39,25 @@ describe("PGlite cannot establish multi-session lock scheduling", () => {
     expect(backends.rows).toHaveLength(0);
   });
 
-  it("reports the same backend PID for every connection handle", async () => {
-    const second = await createPgliteTestDatabase();
-    try {
-      const [first, other] = await Promise.all([
-        context.client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"),
-        second.client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"),
-      ]);
+  it(
+    "reports the same backend PID for every connection handle",
+    async () => {
+      const second = await createPgliteTestDatabase();
+      try {
+        const [first, other] = await Promise.all([
+          context.client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"),
+          second.client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid"),
+        ]);
 
-      // Separate PGlite instances are separate processes-in-WASM, not separate
-      // sessions on one server, so they can never contend for the same row.
-      expect(first.rows[0].pid).toBe(other.rows[0].pid);
-    } finally {
-      await second.close();
-    }
-  });
+        // Separate PGlite instances are separate processes-in-WASM, not separate
+        // sessions on one server, so they can never contend for the same row.
+        expect(first.rows[0].pid).toBe(other.rows[0].pid);
+      } finally {
+        await second.close();
+      }
+    },
+    pgliteTestHookTimeoutMs,
+  );
 
   it("never records a lock wait, because no session can block another", async () => {
     await context.client.query("BEGIN");

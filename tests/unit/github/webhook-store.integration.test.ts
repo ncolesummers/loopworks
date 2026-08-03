@@ -24,7 +24,11 @@ import type { DevelopmentLoopRunDatabase } from "@/lib/loops/development-run";
 import type { LockContentionMetricInput } from "@/lib/observability/metrics";
 
 import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixture";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const lockTtlMs = 5 * 60 * 1000;
 
@@ -43,14 +47,21 @@ function withTestTrace<T>(callback: () => T): T {
 describe("GitHub webhook delivery store (pglite integration)", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
 
   afterEach(async () => {
     vi.unstubAllEnvs();
-    await context.close();
   });
+
+  afterAll(async () => {
+    await context.close();
+  }, pgliteTestHookTimeoutMs);
 
   function createStore(recordLockContentionMetric?: (input: LockContentionMetricInput) => void) {
     return createDrizzleGithubWebhookDeliveryStore(context.db as unknown as GithubWebhookDatabase, {

@@ -14,13 +14,21 @@ import {
   type DevelopmentLoopTransitionDatabase,
   recordDevelopmentLoopPlanArtifact,
 } from "@/lib/loops/development-run-transitions";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../helpers/pglite";
 
 describe("plan-review approval synchronization", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
     await context.db.insert(repositories).values({
       githubRepoId: 47_000_001,
       owner: "ncolesummers",
@@ -29,9 +37,9 @@ describe("plan-review approval synchronization", () => {
       enabledLoops: ["Agent-ready development loop"],
       validationGates: ["Focused tests"],
     });
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => context.close());
+  afterAll(async () => context.close(), pgliteTestHookTimeoutMs);
 
   it("updates the exact agent plan when its durable review is approved", async () => {
     const run = await createDevelopmentLoopRun({

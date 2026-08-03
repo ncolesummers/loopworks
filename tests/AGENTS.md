@@ -25,7 +25,17 @@ test helpers under `tests/`.
    targets, `where` predicates, transaction rollback), add pglite-backed
    integration tests via `createPgliteTestDatabase` (`tests/helpers/pglite.ts`)
    instead of relying on hand-rolled in-memory fakes.
-9. PGlite runs one embedded backend and does not populate `pg_stat_activity`, so
+9. Reuse one migrated PGlite database per integration-test file when tests only
+   mutate application rows: create it in `beforeAll`, call `reset()` first in
+   `beforeEach`, and close it in `afterAll`. Use `pgliteTestHookTimeoutMs` for
+   those lifecycle hooks so healthy migration replay never depends on Vitest's
+   default five-second budget. Reset truncates every migrated `public` table
+   with identity restart and cascading foreign-key cleanup while preserving
+   Drizzle migration metadata; cleanup failures must fail the suite. Keep a
+   fresh database when the test covers migration replay, database lifecycle,
+   schema/session state, or intentionally independent PGlite instances. Never
+   leave a transaction open across tests.
+10. PGlite runs one embedded backend and does not populate `pg_stat_activity`, so
    it cannot demonstrate lock waiting between concurrent sessions; see
    `tests/unit/loops/pglite-single-backend-limitation.test.ts`. For behavior
    that depends on cross-session lock scheduling (`SELECT ... FOR UPDATE`
@@ -35,12 +45,12 @@ test helpers under `tests/`.
    `bun run test:integration:postgres`. Observe the wait through the lock views
    via `waitForRowLockWait`, which verifies the blocking backend's identity;
    never substitute sleeps, retry loops, or repeated stress runs.
-10. A lock-wait observation only proves what its preconditions allow. Waiting on
+11. A lock-wait observation only proves what its preconditions allow. Waiting on
     `SELECT ... FOR UPDATE` and waiting on an `ON CONFLICT` speculative insert
     are indistinguishable in the lock views, so commit any guard row before
     contending on it and assert it is committed; otherwise the test can pass for
     the wrong reason.
-11. Identify a row-lock wait by a granted `tuple` lock on the target relation,
+12. Identify a row-lock wait by a granted `tuple` lock on the target relation,
     never by "the waiter holds some lock on that relation". A transaction keeps
     relation-level locks on every table it has touched, so the weaker check also
     matches a wait on an unrelated table — for example blocking on the

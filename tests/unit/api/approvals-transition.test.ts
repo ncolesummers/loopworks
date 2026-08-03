@@ -10,7 +10,11 @@ import { auth } from "@/auth";
 import { approvals, approvalTransitionEvents, loopRuns, repositories } from "@/db/schema";
 import { applyApprovalTransition } from "@/lib/approval-transitions";
 import { type ApprovalTransitionDatabase, ApprovalWriteInProgressError } from "@/lib/approvals";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -21,15 +25,22 @@ const authMock = vi.mocked(auth as unknown as () => Promise<Session | null>);
 describe("approval transition API", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
 
   afterEach(async () => {
     authMock.mockReset();
     vi.unstubAllEnvs();
-    await context?.close();
   });
+
+  afterAll(async () => {
+    await context.close();
+  }, pgliteTestHookTimeoutMs);
 
   async function insertRequestedApproval() {
     const repositoryId = "12000000-0000-4000-8000-000000000001";

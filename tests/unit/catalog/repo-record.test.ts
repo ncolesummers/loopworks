@@ -3,18 +3,26 @@ import { eq } from "drizzle-orm";
 
 import { loops, repositories, vercelProjects } from "@/db/schema";
 import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 describe("repo catalog projection", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("materializes a RepoRecord from durable repository, loop, and Vercel rows", async () => {
     const [repository] = await context.db

@@ -26,15 +26,23 @@ import {
   applyDevelopmentLoopImplementationResult,
   type DevelopmentLoopTransitionDatabase,
 } from "@/lib/loops/development-run-transitions";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
 describe("implementation stage transition", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
     await context.db.insert(repositories).values({
       githubRepoId: 48_000_002,
       owner: "ncolesummers",
@@ -43,9 +51,9 @@ describe("implementation stage transition", () => {
       enabledLoops: ["Agent-ready development loop"],
       validationGates: ["Focused tests", "bun run validate"],
     });
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => context.close());
+  afterAll(async () => context.close(), pgliteTestHookTimeoutMs);
 
   async function prepare() {
     const created = await createDevelopmentLoopRun({

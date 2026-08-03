@@ -16,7 +16,11 @@ import {
   type DevelopmentLoopTransitionDatabase,
 } from "@/lib/loops/development-run-transitions";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
 
@@ -31,19 +35,23 @@ function transitionDatabase(context: PgliteTestDatabase): DevelopmentLoopTransit
 describe("development-loop automatic retries", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
     await context.db.insert(repositories).values({
       githubRepoId: 96_000_002,
       owner: "ncolesummers",
       name: "loopworks",
       fullName: "ncolesummers/loopworks",
     });
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("calculates fixed and capped exponential backoff with total-attempt semantics", () => {
     expect(
