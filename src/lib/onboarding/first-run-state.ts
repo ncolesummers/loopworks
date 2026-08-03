@@ -1,6 +1,6 @@
 import type { PortalRecordsResult } from "@/lib/portal/records";
 
-export type FirstRunStage = "no-repositories" | "no-loops";
+export type FirstRunStage = "no-installation" | "no-repositories" | "no-loops";
 
 /**
  * `status` is the only safe discriminant; always narrow on it or with the guards below.
@@ -51,6 +51,10 @@ export function isFirstRunActivated(
 export function deriveFirstRunState(input: { result: PortalRecordsResult }): FirstRunState {
   if (input.result.source === "unavailable") {
     return { reason: input.result.error, status: "unavailable" };
+  }
+
+  if (input.result.records.githubInstallations.length === 0) {
+    return { stage: "no-installation", status: "onboarding" };
   }
 
   if (input.result.records.repos.length === 0) {

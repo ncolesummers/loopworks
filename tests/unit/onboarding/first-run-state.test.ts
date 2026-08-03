@@ -13,6 +13,7 @@ import type { PortalRecords, PortalRecordsResult } from "@/lib/portal/records";
 
 type PortalResultInput = {
   error?: string;
+  githubInstallations?: PortalRecords["githubInstallations"];
   loops?: PortalRecords["loops"];
   repos?: PortalRecords["repos"];
   source?: PortalRecordsResult["source"];
@@ -24,6 +25,14 @@ function portalRecordsResult(input: PortalResultInput = {}): PortalRecordsResult
     approval: portalFixture.approval,
     artifacts: portalFixture.artifacts,
     deployments: portalFixture.deployments,
+    githubInstallations: input.githubInstallations ?? [
+      {
+        accountLogin: "loopworks-org",
+        accountType: "Organization",
+        installationId: 124_001,
+        repositorySelection: "selected",
+      },
+    ],
     githubSettings: portalFixture.githubSettings,
     loops: input.loops ?? portalFixture.loops.slice(0, 1),
     repos: input.repos ?? portalFixture.repos.slice(0, 1),
@@ -62,6 +71,17 @@ function firstRunState(state: FirstRunState): FirstRunState {
 }
 
 describe("deriveFirstRunState", () => {
+  it("returns no-installation before inspecting repositories or loops", () => {
+    const state = deriveFirstRunState({
+      result: portalRecordsResult({ githubInstallations: [] }),
+    });
+
+    expect(state).toEqual({
+      stage: "no-installation",
+      status: "onboarding",
+    });
+  });
+
   it("returns no-repositories onboarding when no repositories exist", () => {
     const state = deriveFirstRunState({
       result: portalRecordsResult({ loops: [], repos: [], timeline: [] }),

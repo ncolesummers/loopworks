@@ -28,6 +28,14 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
       },
       artifacts: [],
       deployments: [],
+      githubInstallations: [
+        {
+          accountLogin: "ncolesummers",
+          accountType: "User",
+          installationId: 800_000_001,
+          repositorySelection: "selected",
+        },
+      ],
       githubSettings: [
         {
           detail: "Authenticated with org-managed sign-in.",

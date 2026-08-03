@@ -44,6 +44,7 @@ export const personaTestIdValues = [
   "S03",
   "S04",
   "S05",
+  "S06",
 ] as const;
 
 export const labelCategoryValues = [

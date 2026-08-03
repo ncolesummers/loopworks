@@ -9,6 +9,7 @@ const fixtureRecords = {
   approval: portalFixture.approval,
   artifacts: portalFixture.artifacts,
   deployments: portalFixture.deployments,
+  githubInstallations: portalFixture.githubInstallations,
   githubSettings: portalFixture.githubSettings,
   loops: portalFixture.loops,
   repos: portalFixture.repos,

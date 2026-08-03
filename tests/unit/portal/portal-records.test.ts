@@ -6,12 +6,12 @@ import {
   getPortalSourceLabel,
   readPortalRecords,
 } from "@/lib/portal/records";
-import { seedDemoData, type SeedDatabase } from "@/lib/seed/demo-data";
+import { type SeedDatabase, seedDemoData } from "@/lib/seed/demo-data";
 
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 describe("portal records (pglite integration)", () => {
@@ -104,6 +104,21 @@ describe("portal records (pglite integration)", () => {
     );
   });
 
+  it("only projects installations belonging to the active GitHub App", async () => {
+    await seedDemoData(testDatabase());
+
+    const result = await readPortalRecords({
+      database: context.db,
+      githubAppId: 999,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+
+    expect(result.records.githubInstallations).toEqual([]);
+    expect(result.records.githubSettings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "sso", enabled: false })]),
+    );
+  });
+
   it("fails closed for reachable production databases that are missing required portal rows", async () => {
     const result = await getPortalRecordsForPortal({
       database: context.db,
@@ -121,6 +136,23 @@ describe("portal records (pglite integration)", () => {
     expect(result.records.deployments).toEqual([]);
     expect(result.records.approval).toBeNull();
     expect(result.records.githubSettings).toEqual([]);
+  });
+
+  it("allows Settings to distinguish a reachable empty production database from failure", async () => {
+    const result = await getPortalRecordsForPortal({
+      allowEmpty: true,
+      database: context.db,
+      env: { NODE_ENV: "production" },
+    });
+
+    expect(result).toMatchObject({
+      source: "db",
+      usedFallback: false,
+      records: {
+        githubInstallations: [],
+        repos: [],
+      },
+    });
   });
 
   it("keeps non-production database failures explicit and fixture backed", async () => {
@@ -230,6 +262,7 @@ describe("portal records (pglite integration)", () => {
           approval: null,
           artifacts: [],
           deployments: [],
+          githubInstallations: [],
           githubSettings: [],
           loops: [],
           repos: [],
@@ -247,6 +280,7 @@ describe("portal records (pglite integration)", () => {
           approval: portalFixture.approval,
           artifacts: portalFixture.artifacts,
           deployments: portalFixture.deployments,
+          githubInstallations: portalFixture.githubInstallations,
           githubSettings: portalFixture.githubSettings,
           loops: portalFixture.loops,
           repos: portalFixture.repos,
@@ -264,6 +298,7 @@ describe("portal records (pglite integration)", () => {
           approval: null,
           artifacts: [],
           deployments: [],
+          githubInstallations: [],
           githubSettings: [],
           loops: [],
           repos: [],
