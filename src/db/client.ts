@@ -2,9 +2,10 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import * as schema from "@/db/schema";
+import { readStringConfig } from "@/lib/config/registry";
 
-const databaseUrl =
-  process.env.DATABASE_URL ?? "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks";
+const databaseUrl = readStringConfig("DATABASE_URL");
+if (!databaseUrl) throw new Error("DATABASE_URL (database): value is required");
 
 const globalForDatabase = globalThis as typeof globalThis & {
   loopworksPostgresClient?: ReturnType<typeof postgres>;
@@ -16,7 +17,7 @@ const client =
     prepare: false,
   });
 
-if (process.env.NODE_ENV !== "production") {
+if (readStringConfig("NODE_ENV") !== "production") {
   globalForDatabase.loopworksPostgresClient = client;
 }
 

@@ -1,4 +1,5 @@
-import { isProductionRuntime, isTruthyEnvValue } from "@/lib/runtime";
+import { readBooleanConfig, readStringListConfig } from "@/lib/config/registry";
+import { isProductionRuntime } from "@/lib/runtime";
 
 export type AuthAllowlistConfig = {
   bypass: boolean;
@@ -19,26 +20,15 @@ function normalizeValue(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function parseCsvAllowlist(value: string | undefined): string[] {
-  if (!value) {
-    return [];
-  }
-
-  return value
-    .split(",")
-    .map(normalizeValue)
-    .filter((entry) => entry.length > 0);
-}
-
 export function readAuthAllowlistConfig(
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ): AuthAllowlistConfig {
-  const bypassRequested = isTruthyEnvValue(env.LOOPWORKS_AUTH_BYPASS);
+  const bypassRequested = readBooleanConfig("LOOPWORKS_AUTH_BYPASS", env);
 
   return {
     bypass: bypassRequested && !isProductionRuntime(env),
-    allowedGithubUsers: parseCsvAllowlist(env.LOOPWORKS_ALLOWED_GITHUB_USERS),
-    allowedGithubOrgs: parseCsvAllowlist(env.LOOPWORKS_ALLOWED_GITHUB_ORGS),
+    allowedGithubUsers: readStringListConfig("LOOPWORKS_ALLOWED_GITHUB_USERS", env),
+    allowedGithubOrgs: readStringListConfig("LOOPWORKS_ALLOWED_GITHUB_ORGS", env),
   };
 }
 

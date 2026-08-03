@@ -1,6 +1,8 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { readStringConfig } from "@/lib/config/registry";
+
 import { db } from "@/db/client";
 import { applyDevelopmentLoopTestWritingResult } from "@/lib/loops/development-run-transitions";
 import { resolveTestWriterFixtureMode } from "../subagents/test-writer/lib/fixture-mode";
@@ -13,7 +15,7 @@ export default defineTool({
   execute: ({ output, runId }) => {
     const parsed = testWritingAgentOutputSchema.parse(output);
     if (resolveTestWriterFixtureMode().enabled) {
-      const receiptSecret = process.env.LOOPWORKS_EVE_TEST_RECEIPT_SECRET;
+      const receiptSecret = readStringConfig("LOOPWORKS_EVE_TEST_RECEIPT_SECRET");
       if (!receiptSecret) throw new Error("Test execution receipt secret is not configured.");
       for (const result of parsed.redEvidence.results) {
         const test = parsed.testPlan.tests.find(({ id }) => id === result.testId);

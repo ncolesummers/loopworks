@@ -13,11 +13,10 @@ import {
   readGithubLoginFromProfile,
 } from "@/lib/auth/identity";
 import { authorizeGithubSession } from "@/lib/auth/session-policy";
+import { readStringConfig } from "@/lib/config/registry";
 import { logger } from "@/lib/observability/logger";
 
-const authSecret =
-  process.env.AUTH_SECRET ??
-  (process.env.NODE_ENV === "production" ? undefined : "loopworks-local-development-secret");
+const authSecret = readStringConfig("AUTH_SECRET");
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -33,8 +32,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     GitHub({
-      clientId: process.env.AUTH_GITHUB_ID ?? "missing-github-client-id",
-      clientSecret: process.env.AUTH_GITHUB_SECRET ?? "missing-github-client-secret",
+      clientId: readStringConfig("AUTH_GITHUB_ID") ?? "missing-github-client-id",
+      clientSecret: readStringConfig("AUTH_GITHUB_SECRET") ?? "missing-github-client-secret",
       authorization: {
         params: {
           scope: "read:user user:email read:org",

@@ -1,14 +1,15 @@
-import { isProductionRuntime, isTruthyEnvValue } from "@/lib/runtime";
+import { readSuppliedBooleanConfig, type BooleanConfigName } from "@/lib/config/registry";
+import { isProductionRuntime } from "@/lib/runtime";
 
 export type StageFixtureMode =
   | { enabled: true; reason: "explicit_non_production_fixture" }
   | { enabled: false; reason: "not_requested" | "production_runtime_blocked" };
 
 export function resolveStageFixtureMode(
-  envVarName: string,
+  envVarName: BooleanConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ): StageFixtureMode {
-  if (!isTruthyEnvValue(env[envVarName])) {
+  if (!readSuppliedBooleanConfig(envVarName, env)) {
     return { enabled: false, reason: "not_requested" };
   }
   if (isProductionRuntime(env)) {

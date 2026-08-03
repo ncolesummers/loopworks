@@ -15,6 +15,9 @@
     "lint": "biome lint .",
     "agent-docs:sync": "bun run scripts/sync-agent-docs.ts --write",
     "agent-docs:check": "bun run scripts/sync-agent-docs.ts --check",
+    "config:sync": "bun run scripts/sync-env-example.ts --write",
+    "config:check": "bun run scripts/sync-env-example.ts --check",
+    "config:access-check": "bun run scripts/check-env-access.ts",
     "markdownlint": "markdownlint-cli2",
     "check": "biome check .",
     "typecheck": "tsc --noEmit",
@@ -36,7 +39,7 @@
     "db:seed": "bun run scripts/seed-demo-data.ts",
     "db:seed:reset": "bun run scripts/seed-demo-data.ts --reset",
     "github:webhook-fixture": "bun run scripts/github-webhook-fixture.ts",
-    "validate": "bun run format:check && bun run lint && bun run agent-docs:check && bun run markdownlint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
+    "validate": "bun run format:check && bun run lint && bun run agent-docs:check && bun run config:check && bun run config:access-check && bun run markdownlint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",

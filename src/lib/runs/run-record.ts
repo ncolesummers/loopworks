@@ -5,6 +5,7 @@ import { approvals, artifacts, loopRuns, repositories, runSteps } from "@/db/sch
 import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import { isProductionRuntime } from "@/lib/runtime";
+import { readSuppliedRawConfig } from "@/lib/config/registry";
 import type {
   ArtifactKind,
   ArtifactRecord,
@@ -481,7 +482,10 @@ export async function getRunRecordsForPortal(input: {
   now?: Date;
 }): Promise<RunRecordsResult> {
   const env = input.env ?? process.env;
-  if (!isProductionRuntime(env) && env.LOOPWORKS_PORTAL_DATA_MODE === "fixtures") {
+  if (
+    !isProductionRuntime(env) &&
+    readSuppliedRawConfig("LOOPWORKS_PORTAL_DATA_MODE", env) === "fixtures"
+  ) {
     input.logger?.warn(
       { fallbackReason: "explicit_fixture_mode" },
       "run_records_fixture_mode_enabled",

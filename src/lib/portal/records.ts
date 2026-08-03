@@ -14,6 +14,7 @@ import type { ApprovalStatus } from "@/lib/approvals";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import { readRunRecords, type RunRecordDatabase } from "@/lib/runs/run-record";
 import { isProductionRuntime } from "@/lib/runtime";
+import { readSuppliedRawConfig } from "@/lib/config/registry";
 import type {
   ApprovalGateRecord,
   ArtifactRecord,
@@ -467,7 +468,10 @@ export async function getPortalRecordsForPortal(input: {
   now?: Date;
 }): Promise<PortalRecordsResult> {
   const env = input.env ?? process.env;
-  if (!isProductionRuntime(env) && env.LOOPWORKS_PORTAL_DATA_MODE === "fixtures") {
+  if (
+    !isProductionRuntime(env) &&
+    readSuppliedRawConfig("LOOPWORKS_PORTAL_DATA_MODE", env) === "fixtures"
+  ) {
     input.logger?.warn(
       { fallbackReason: "explicit_fixture_mode" },
       "portal_records_fixture_mode_enabled",

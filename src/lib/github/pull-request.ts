@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import { App } from "@octokit/app";
 
+import { readStringConfig } from "@/lib/config/registry";
+
 export type GitHubFileChange = {
   content: string;
   path: string;
@@ -123,7 +125,7 @@ type GitHubPullRequestWriterDependencies = {
 };
 
 function requiredEnvironmentValue(name: "GITHUB_APP_ID" | "GITHUB_APP_PRIVATE_KEY"): string {
-  const value = process.env[name]?.trim();
+  const value = readStringConfig(name);
   if (!value) {
     throw new GitHubPullRequestWriteError(
       `GitHub App configuration is missing ${name}.`,

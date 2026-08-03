@@ -1,6 +1,8 @@
 import { SpanStatusCode } from "@opentelemetry/api";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+
+import { readStringConfig } from "@/lib/config/registry";
 import { startLoopworksSpan } from "@/lib/observability/trace-context";
 import { resolveTestWriterFixtureMode } from "../lib/fixture-mode";
 import {
@@ -59,7 +61,7 @@ export default defineTool({
         output: redacted,
         testPaths,
       });
-      const receiptSecret = process.env.LOOPWORKS_EVE_TEST_RECEIPT_SECRET;
+      const receiptSecret = readStringConfig("LOOPWORKS_EVE_TEST_RECEIPT_SECRET");
       if (!receiptSecret) throw new Error("Test execution receipt secret is not configured.");
       const executionReceipt = createTestExecutionReceipt(
         {

@@ -1,8 +1,9 @@
 import pino, { type DestinationStream, type Logger, type LoggerOptions } from "pino";
 
+import { configRegistry, readStringConfig } from "@/lib/config/registry";
 import { withActiveTraceId } from "@/lib/observability/trace-context";
 
-const redactedPaths = [
+const genericRedactionPaths = [
   "accessToken",
   "access_token",
   "authorization",
@@ -65,13 +66,21 @@ const redactedPaths = [
   "*.webhook_secret",
 ];
 
+const registrySecretRedactionPaths = configRegistry
+  .filter((definition) => definition.secret)
+  .flatMap((definition) => [definition.name, `*.${definition.name}`]);
+
+export const loggerRedactionPaths = [
+  ...new Set([...genericRedactionPaths, ...registrySecretRedactionPaths]),
+];
+
 export type LoopworksLogger = Logger;
 
 function defaultBaseBindings() {
   return {
     service: "loopworks",
-    environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
-    deploymentId: process.env.VERCEL_DEPLOYMENT_ID,
+    environment: readStringConfig("VERCEL_ENV") ?? readStringConfig("NODE_ENV") ?? "development",
+    deploymentId: readStringConfig("VERCEL_DEPLOYMENT_ID"),
   };
 }
 
@@ -79,10 +88,10 @@ function buildLoggerOptions(options: LoggerOptions): LoggerOptions {
   const { base, mixin, redact, ...rest } = options;
 
   return {
-    level: process.env.LOG_LEVEL ?? "info",
+    level: readStringConfig("LOG_LEVEL") ?? "info",
     base: base === null ? null : { ...defaultBaseBindings(), ...(base ?? {}) },
     redact: redact ?? {
-      paths: redactedPaths,
+      paths: loggerRedactionPaths,
       censor: "[redacted]",
     },
     mixin(mergeObject, level, logger) {

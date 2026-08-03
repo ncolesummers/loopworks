@@ -3,6 +3,8 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
 
+import { readStringConfig } from "@/lib/config/registry";
+
 export type GithubWebhookFixtureKind = "agent-ready" | "spike-agent-ready";
 
 type GithubWebhookFixtureOptions = {
@@ -255,7 +257,7 @@ export async function runGithubWebhookFixtureCli(args: string[]): Promise<number
     fixture = createGithubWebhookFixture({
       deliveryId: parsed.deliveryId,
       kind: parsed.kind,
-      secret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
+      secret: readStringConfig("GITHUB_WEBHOOK_SECRET") ?? "",
       url: parsed.url,
     });
   } catch (error) {

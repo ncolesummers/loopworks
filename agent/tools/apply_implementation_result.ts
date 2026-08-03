@@ -1,6 +1,8 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { readStringConfig } from "@/lib/config/registry";
+
 import { db } from "@/db/client";
 import { applyDevelopmentLoopImplementationResult } from "@/lib/loops/development-run-transitions";
 import { logger } from "@/lib/observability/logger";
@@ -29,7 +31,7 @@ export default defineTool({
       if (JSON.stringify(parsed.binding) !== JSON.stringify(expectedBinding)) {
         throw new Error("Fixture implementation result is not bound to the exact handoff.");
       }
-      const secret = process.env.LOOPWORKS_EVE_TEST_RECEIPT_SECRET;
+      const secret = readStringConfig("LOOPWORKS_EVE_TEST_RECEIPT_SECRET");
       if (!secret) throw new Error("Implementation execution receipt secret is not configured.");
       for (const evidence of parsed.greenEvidence) {
         if (

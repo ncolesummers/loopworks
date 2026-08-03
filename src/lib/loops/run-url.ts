@@ -1,14 +1,15 @@
+import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { isProductionRuntime } from "@/lib/runtime";
 
 type RunUrlEnvironment = Record<string, string | undefined>;
 
 function configuredLoopworksOrigin(env: RunUrlEnvironment): URL {
   const configured =
-    env.LOOPWORKS_PUBLIC_URL ??
-    (env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : env.VERCEL_URL
-        ? `https://${env.VERCEL_URL}`
+    readSuppliedRawConfig("LOOPWORKS_PUBLIC_URL", env) ??
+    (readSuppliedRawConfig("VERCEL_PROJECT_PRODUCTION_URL", env)
+      ? `https://${readSuppliedRawConfig("VERCEL_PROJECT_PRODUCTION_URL", env)}`
+      : readSuppliedRawConfig("VERCEL_URL", env)
+        ? `https://${readSuppliedRawConfig("VERCEL_URL", env)}`
         : "http://127.0.0.1:3000");
   let origin: URL;
   try {
