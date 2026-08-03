@@ -44,6 +44,7 @@ Research fact sheets with sources are recorded on issue #21.
 | `loopworks.validation.outcome` | counter | `{check}` | `gate`, `command`, `status` (`pass`, `fail`) |
 | `loopworks.validation.duration` | histogram | `s` | `gate`, `command` |
 | `loopworks.webhook.outcome` | counter | `{delivery}` | `event`, `action`, `outcome` (`accepted`, `rejected`, `duplicate`, `invalid_signature`, `error`) |
+| `loopworks.github.installation.outcome` | counter | `{attempt}` | `phase`, `outcome` |
 | `loopworks.deployment.observed` | counter | `{deployment}` | `environment`, `status` |
 | `loopworks.approval.wait_time` | histogram | `s` | `gate`, `decision` (`approved`, `rejected`, `expired`, `bypassed`) |
 | `loopworks.approval.pending` | observable gauge | `{approval}` | `gate` |

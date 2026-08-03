@@ -108,6 +108,7 @@ Risks:
 | S03 | Security Reviewer | Local auth bypass cannot work in production environments. | Unit |
 | S04 | Security Reviewer | Logger redaction removes token, secret, authorization, OAuth, and webhook-sensitive fields. | Unit |
 | S05 | Security Reviewer | GitHub SSO allowlists reject unauthorized identities and persist the GitHub login used for approval attribution. | Unit, Playwright |
+| S06 | Security Reviewer | GitHub App callbacks reject forged or replayed state and verify the active operator can access the installation before persisting it. | Unit, integration |
 
 ## MVP Milestone Map
 
