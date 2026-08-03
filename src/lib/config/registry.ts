@@ -402,6 +402,21 @@ const registryByName: ReadonlyMap<string, ConfigDefinition> = new Map(
 
 export type ConfigName = (typeof configRegistry)[number]["name"];
 
+type ConfigNameWithOutput<Output> = (typeof configRegistry)[number] extends infer Definition
+  ? Definition extends {
+      name: infer Name extends ConfigName;
+      schema: infer Schema extends z.ZodType;
+    }
+    ? z.output<Schema> extends Output
+      ? Name
+      : never
+    : never
+  : never;
+
+export type StringConfigName = ConfigNameWithOutput<string>;
+export type BooleanConfigName = ConfigNameWithOutput<boolean>;
+export type StringListConfigName = ConfigNameWithOutput<readonly string[]>;
+
 export function isConfigName(name: string): name is ConfigName {
   return registryByName.has(name);
 }
@@ -463,7 +478,7 @@ export function readConfigValue(
 }
 
 export function readStringConfig(
-  name: ConfigName,
+  name: StringConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
   context: ConfigRuntimeContext = resolveConfigRuntimeContext(env),
 ): string | undefined {
@@ -473,7 +488,7 @@ export function readStringConfig(
 }
 
 export function readSuppliedStringConfig(
-  name: ConfigName,
+  name: StringConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
   context: ConfigRuntimeContext = resolveConfigRuntimeContext(env),
 ): string | undefined {
@@ -494,7 +509,7 @@ export function readSuppliedRawConfig(
 }
 
 export function readBooleanConfig(
-  name: ConfigName,
+  name: BooleanConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
   context: ConfigRuntimeContext = resolveConfigRuntimeContext(env),
 ): boolean {
@@ -504,7 +519,7 @@ export function readBooleanConfig(
 }
 
 export function readSuppliedBooleanConfig(
-  name: ConfigName,
+  name: BooleanConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
   context: ConfigRuntimeContext = resolveConfigRuntimeContext(env),
 ): boolean | undefined {
@@ -517,7 +532,7 @@ export function readSuppliedBooleanConfig(
 }
 
 export function readStringListConfig(
-  name: ConfigName,
+  name: StringListConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
   context: ConfigRuntimeContext = resolveConfigRuntimeContext(env),
 ): string[] {

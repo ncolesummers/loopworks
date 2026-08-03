@@ -1,4 +1,4 @@
-import { readSuppliedBooleanConfig, type ConfigName } from "@/lib/config/registry";
+import { readSuppliedBooleanConfig, type BooleanConfigName } from "@/lib/config/registry";
 import { isProductionRuntime } from "@/lib/runtime";
 
 export type StageFixtureMode =
@@ -6,7 +6,7 @@ export type StageFixtureMode =
   | { enabled: false; reason: "not_requested" | "production_runtime_blocked" };
 
 export function resolveStageFixtureMode(
-  envVarName: ConfigName,
+  envVarName: BooleanConfigName,
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ): StageFixtureMode {
   if (!readSuppliedBooleanConfig(envVarName, env)) {

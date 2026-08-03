@@ -4,8 +4,12 @@ import path from "node:path";
 import {
   authDevelopmentSecret,
   configRegistry,
+  readBooleanConfig,
   readConfigValue,
   readStringConfig,
+  readStringListConfig,
+  readSuppliedBooleanConfig,
+  readSuppliedStringConfig,
   resolveConfigRuntimeContext,
   validateConfig,
 } from "@/lib/config/registry";
@@ -76,6 +80,23 @@ describe("configuration registry", () => {
     };
     expect(misspelledConfigRead).toBeTypeOf("function");
     expect(readStringConfig("AUTH_SECRET", {}, "development")).toBe(authDevelopmentSecret);
+  });
+
+  it("restricts specialized readers to configuration names with matching outputs", () => {
+    const mismatchedConfigReads = () => {
+      // @ts-expect-error boolean configuration cannot use a string reader
+      readStringConfig("LOOPWORKS_AUTH_BYPASS");
+      // @ts-expect-error boolean configuration cannot use a supplied-string reader
+      readSuppliedStringConfig("LOOPWORKS_AUTH_BYPASS");
+      // @ts-expect-error string configuration cannot use a boolean reader
+      readBooleanConfig("AUTH_SECRET");
+      // @ts-expect-error string configuration cannot use a supplied-boolean reader
+      readSuppliedBooleanConfig("AUTH_SECRET");
+      // @ts-expect-error string configuration cannot use a string-list reader
+      readStringListConfig("AUTH_SECRET");
+    };
+
+    expect(mismatchedConfigReads).toBeTypeOf("function");
   });
 
   it("preserves byte-sensitive secret values and applies defaults only when undefined", () => {
