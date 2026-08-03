@@ -9,6 +9,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    # The gate chain runs in well under four minutes cold. The bound exists so a
+    # hung step fails in minutes rather than burning GitHub's six-hour default.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -18,9 +21,41 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # bun.lock pins every resolved version, so its hash covers the store's
+      # contents; the Bun version covers its on-disk layout. No restore-keys:
+      # a partial restore would re-save the union of old and new tarballs on
+      # every lockfile bump, so the archive would grow without bound.
+      - name: Cache Bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-store-${{ runner.os }}-bun1.3.14-${{ hashFiles('bun.lock') }}
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Read from node_modules rather than a literal, and before the cache step,
+      # so the key actually changes when the resolved version does.
+      - name: Resolve Playwright version
+        id: playwright
+        run: |
+          version="$(bun --print "require('@playwright/test/package.json').version" | tail -n 1)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # Deliberately not gated on `cache-hit`, for two reasons. The cache holds
+      # browser binaries only, so a fresh runner still needs the system packages
+      # `--with-deps` installs. And the browser *set* is not part of the key, so
+      # adding a browser to the Playwright config would hit this chromium-only
+      # cache and silently never download the new one. On a hit the download
+      # itself is a no-op.
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
@@ -32,6 +67,12 @@ jobs:
 
       - name: Agent docs sync check
         run: bun run agent-docs:check
+
+      - name: Env example sync check
+        run: bun run config:check
+
+      - name: Env access check
+        run: bun run config:access-check
 
       - name: Markdownlint
         run: bun run markdownlint
@@ -52,6 +93,7 @@ jobs:
 
   seeded-postgres-e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17-alpine
@@ -75,8 +117,28 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Cache Bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-store-${{ runner.os }}-bun1.3.14-${{ hashFiles('bun.lock') }}
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: playwright
+        run: |
+          version="$(bun --print "require('@playwright/test/package.json').version" | tail -n 1)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
