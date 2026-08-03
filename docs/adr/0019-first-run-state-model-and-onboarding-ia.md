@@ -123,8 +123,13 @@ property-presence narrowing remains unsafe without
 
 `bunx biome check src/lib/onboarding tests/unit/onboarding`,
 `bun run typecheck`, the focused onboarding and unchanged portal test suites,
-`bun run format:check`, `bun run lint`, and `bun run markdownlint` verify the
-implementation and documentation contracts.
+`bun run check`, and `bun run markdownlint` verify the implementation and
+documentation contracts.
+
+Updated for [#134](https://github.com/ncolesummers/loopworks/issues/134): this
+work originally ran `bun run format:check` and `bun run lint`, which surfaced
+the gap that neither runs Biome assists. `bun run check` replaced both in
+`validate`, and is the command to run here.
 
 ## Follow-Ups
 
