@@ -11,7 +11,7 @@ export type DirectProcessEnvRead = {
 };
 
 const sourceRoots = ["agent", "scripts", "src"];
-const sourceExtensions = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"]);
+const sourceExtensions = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"]);
 
 function unwrapExpression(node: ts.Node): ts.Node {
   let current = node;
@@ -52,7 +52,9 @@ function isProcessReference(node: ts.Node): boolean {
 }
 
 function scriptKind(filePath: string): ts.ScriptKind {
-  return filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  if (filePath.endsWith(".tsx")) return ts.ScriptKind.TSX;
+  if (filePath.endsWith(".jsx")) return ts.ScriptKind.JSX;
+  return ts.ScriptKind.TS;
 }
 
 async function sourceFiles(root: string): Promise<string[]> {

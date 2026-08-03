@@ -26,6 +26,23 @@ describe("direct process.env access guard", () => {
     ]);
   });
 
+  it("rejects direct value reads in JSX production sources", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "loopworks-env-access-"));
+    await writeSource(
+      root,
+      "src/direct.jsx",
+      "export const Example = () => <div>{process.env.JSX_SECRET}</div>;\n",
+    );
+
+    await expect(findDirectProcessEnvReads(root)).resolves.toEqual([
+      expect.objectContaining({
+        path: "src/direct.jsx",
+        line: 1,
+        expression: "process.env.JSX_SECRET",
+      }),
+    ]);
+  });
+
   it("rejects destructuring, computed env access, and parenthesized reads", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "loopworks-env-access-"));
     await writeSource(
