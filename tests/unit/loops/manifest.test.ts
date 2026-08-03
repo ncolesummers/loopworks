@@ -316,7 +316,10 @@ describe("loop manifest schema", () => {
     expect(manifest.milestones.length).toBeGreaterThan(0);
 
     for (const milestone of manifest.milestones) {
-      expect(headings.get(milestone.key), `${milestone.key} missing from docs/prd.md`).toBeDefined();
+      expect(
+        headings.get(milestone.key),
+        `${milestone.key} missing from docs/prd.md`,
+      ).toBeDefined();
       expect(milestone.name, `${milestone.key} name drifted from docs/prd.md`).toBe(
         headings.get(milestone.key),
       );
@@ -331,9 +334,7 @@ describe("loop manifest schema", () => {
       resolve(__dirname, "../../../docs/personas-and-test-scenarios.md"),
       "utf8",
     );
-    const documented = Array.from(personas.matchAll(/^\| ([PMARS]\d{2}) \|/gm)).map(
-      ([, id]) => id,
-    );
+    const documented = Array.from(personas.matchAll(/^\| ([PMARS]\d{2}) \|/gm)).map(([, id]) => id);
 
     expect(documented.length).toBeGreaterThan(0);
     expect([...personaTestIdValues].sort()).toEqual([...new Set(documented)].sort());
