@@ -8,6 +8,7 @@ const fakeDatabase = {} as SeedDatabase;
 
 function emptyCounts(): SeedCounts {
   return {
+    githubInstallations: 0,
     repositories: 0,
     vercelProjects: 0,
     loops: 0,

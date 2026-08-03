@@ -114,7 +114,7 @@ describe("Drizzle migrations", () => {
     async () => {
       expect(artifactTypeEnum.enumValues).toContain("screenshot");
       const migrationFiles = readdirSync("drizzle").filter((entry) => entry.endsWith(".sql"));
-      expect(migrationFiles).toHaveLength(1);
+      expect(migrationFiles).toContain("0000_baseline.sql");
 
       const migrationSql = readMigrationSql();
       expect(migrationSql).toContain(
@@ -156,6 +156,14 @@ describe("Drizzle migrations", () => {
     },
     pgliteTestHookTimeoutMs,
   );
+
+  it("tracks independent GitHub installations and one-time callback flows", () => {
+    const migrationSql = readMigrationSql();
+    expect(migrationSql).toContain('CREATE TABLE "github_installations"');
+    expect(migrationSql).toContain('CREATE TABLE "github_installation_flows"');
+    expect(migrationSql).toContain('"state_digest" text NOT NULL');
+    expect(migrationSql).toContain('"consumed_at" timestamp with time zone');
+  });
 
   it(
     "replays generated migrations against a clean Postgres-compatible database",

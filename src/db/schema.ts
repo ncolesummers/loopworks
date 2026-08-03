@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -12,7 +13,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { approvalStatusValues } from "@/lib/approvals";
 
 import { loopStateValues } from "../../schemas/loop-manifest";
@@ -138,6 +138,38 @@ export const verificationTokens = pgTable(
     compoundKey: primaryKey({
       columns: [table.identifier, table.token],
     }),
+  }),
+);
+
+export const githubInstallations = pgTable("github_installations", {
+  installationId: bigint("installation_id", { mode: "number" }).primaryKey(),
+  appId: bigint("app_id", { mode: "number" }).notNull(),
+  accountId: bigint("account_id", { mode: "number" }).notNull(),
+  accountLogin: text("account_login").notNull(),
+  accountType: text("account_type").notNull(),
+  repositorySelection: text("repository_selection").notNull(),
+  installedBy: text("installed_by").notNull(),
+  installedAt: timestamp("installed_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const githubInstallationFlows = pgTable(
+  "github_installation_flows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    stateDigest: text("state_digest").notNull().unique(),
+    actorId: text("actor_id").notNull(),
+    phase: text("phase").$type<"installation" | "authorization">().notNull(),
+    installationId: bigint("installation_id", { mode: "number" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    actorPhaseIndex: index("github_installation_flows_actor_phase_idx").on(
+      table.actorId,
+      table.phase,
+    ),
   }),
 );
 

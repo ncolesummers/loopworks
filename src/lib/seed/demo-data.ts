@@ -6,6 +6,7 @@ import {
   approvalTransitionEvents,
   artifacts,
   deployments,
+  githubInstallations,
   loopRuns,
   loops,
   repositories,
@@ -17,6 +18,7 @@ import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-r
 export type SeedDatabase = Pick<typeof db, "transaction">;
 
 export type SeedCounts = {
+  githubInstallations: number;
   repositories: number;
   vercelProjects: number;
   loops: number;
@@ -188,6 +190,7 @@ export const demoSeedIds = {
 } as const;
 
 export type DemoSeedData = {
+  githubInstallations: (typeof githubInstallations.$inferInsert)[];
   repositories: (typeof repositories.$inferInsert)[];
   vercelProjects: (typeof vercelProjects.$inferInsert)[];
   loops: (typeof loops.$inferInsert)[];
@@ -207,6 +210,20 @@ export type DemoSeedData = {
  */
 export function buildDemoSeedData(): DemoSeedData {
   const ids = demoSeedIds;
+
+  const githubInstallationsData: DemoSeedData["githubInstallations"] = [
+    {
+      installationId: 800_000_001,
+      appId: 800_000,
+      accountId: 700_000_001,
+      accountLogin: "ncolesummers",
+      accountType: "User",
+      repositorySelection: "selected",
+      installedBy: "ncolesummers",
+      installedAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:00:00.000Z"),
+    },
+  ];
 
   const repositoriesData: DemoSeedData["repositories"] = [
     {
@@ -892,6 +909,7 @@ export function buildDemoSeedData(): DemoSeedData {
   ];
 
   return {
+    githubInstallations: githubInstallationsData,
     repositories: repositoriesData,
     vercelProjects: vercelProjectsData,
     loops: loopsData,
@@ -936,6 +954,16 @@ export async function seedDemoData(
       await tx
         .delete(repositories)
         .where(inArray(repositories.id, Object.values(ids.repositories)));
+      await tx
+        .delete(githubInstallations)
+        .where(inArray(githubInstallations.installationId, [800_000_001]));
+    }
+
+    for (const row of data.githubInstallations) {
+      await tx.insert(githubInstallations).values(row).onConflictDoUpdate({
+        target: githubInstallations.installationId,
+        set: row,
+      });
     }
 
     for (const row of data.repositories) {
@@ -994,6 +1022,7 @@ export async function seedDemoData(
     }
 
     return {
+      githubInstallations: data.githubInstallations.length,
       repositories: data.repositories.length,
       vercelProjects: data.vercelProjects.length,
       loops: data.loops.length,
