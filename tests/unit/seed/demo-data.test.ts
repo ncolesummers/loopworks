@@ -9,6 +9,7 @@ import {
   artifactTypeEnum,
   deploymentStatusEnum,
   deployments,
+  githubInstallations,
   loopRuns,
   loopStateEnum,
   loops,
@@ -66,6 +67,7 @@ describe("demo seed data (pglite integration)", () => {
       approvals: built.approvals.length,
       approvalTransitionEvents: built.approvalTransitionEvents.length,
       deployments: built.deployments.length,
+      githubInstallations: built.githubInstallations.length,
     });
 
     const repoRows = await context.db.select().from(repositories);
@@ -77,6 +79,7 @@ describe("demo seed data (pglite integration)", () => {
     const approvalRows = await context.db.select().from(approvals);
     const approvalTransitionRows = await context.db.select().from(approvalTransitionEvents);
     const deploymentRows = await context.db.select().from(deployments);
+    const githubInstallationRows = await context.db.select().from(githubInstallations);
 
     expect(repoRows).toHaveLength(built.repositories.length);
     expect(vercelProjectRows).toHaveLength(built.vercelProjects.length);
@@ -87,6 +90,7 @@ describe("demo seed data (pglite integration)", () => {
     expect(approvalRows).toHaveLength(built.approvals.length);
     expect(approvalTransitionRows).toHaveLength(built.approvalTransitionEvents.length);
     expect(deploymentRows).toHaveLength(built.deployments.length);
+    expect(githubInstallationRows).toHaveLength(built.githubInstallations.length);
   });
 
   it("is idempotent: seeding twice does not duplicate rows", async () => {
@@ -100,6 +104,7 @@ describe("demo seed data (pglite integration)", () => {
     const approvalRows = await context.db.select().from(approvals);
     const approvalTransitionRows = await context.db.select().from(approvalTransitionEvents);
     const deploymentRows = await context.db.select().from(deployments);
+    const githubInstallationRows = await context.db.select().from(githubInstallations);
 
     expect(repoRows).toHaveLength(built.repositories.length);
     expect(loopRows).toHaveLength(built.loops.length);
@@ -107,6 +112,7 @@ describe("demo seed data (pglite integration)", () => {
     expect(approvalRows).toHaveLength(built.approvals.length);
     expect(approvalTransitionRows).toHaveLength(built.approvalTransitionEvents.length);
     expect(deploymentRows).toHaveLength(built.deployments.length);
+    expect(githubInstallationRows).toHaveLength(built.githubInstallations.length);
   });
 
   it("reset clears and reinserts a clean dataset", async () => {

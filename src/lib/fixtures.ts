@@ -23,6 +23,14 @@ const developmentLoopTimeline = projectDevelopmentLoopTimeline(developmentLoopFi
 const developmentLoopArtifacts = projectDevelopmentLoopArtifacts(developmentLoopFixture);
 
 export const portalFixture: FixtureState = {
+  githubInstallations: [
+    {
+      installationId: 800_000_001,
+      accountLogin: "ncolesummers",
+      accountType: "User",
+      repositorySelection: "selected",
+    },
+  ],
   repos: [
     {
       name: "loopworks-web",

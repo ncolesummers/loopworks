@@ -19,10 +19,14 @@ const productionRequiredNames = [
   "AUTH_GITHUB_SECRET",
   "AUTH_SECRET",
   "DATABASE_URL",
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
   "GITHUB_APP_ID",
   "GITHUB_APP_PRIVATE_KEY",
+  "GITHUB_APP_SLUG",
   "GITHUB_WEBHOOK_SECRET",
   "LOOPWORKS_EVE_TEST_RECEIPT_SECRET",
+  "LOOPWORKS_PUBLIC_URL",
 ];
 
 const validProductionConfig = {
@@ -30,10 +34,14 @@ const validProductionConfig = {
   AUTH_GITHUB_SECRET: "github-client-secret",
   AUTH_SECRET: "production-auth-secret",
   DATABASE_URL: "postgres://user:secret@database.example.com/loopworks",
+  GITHUB_APP_CLIENT_ID: "Iv1.production-client-id",
+  GITHUB_APP_CLIENT_SECRET: "production-app-client-secret",
   GITHUB_APP_ID: "12345",
   GITHUB_APP_PRIVATE_KEY: "private-key",
+  GITHUB_APP_SLUG: "loopworks-production",
   GITHUB_WEBHOOK_SECRET: "production-webhook-secret",
   LOOPWORKS_EVE_TEST_RECEIPT_SECRET: "production-receipt-secret",
+  LOOPWORKS_PUBLIC_URL: "https://loopworks.example.com",
 };
 
 function envExampleNames(content: string): string[] {
@@ -114,6 +122,19 @@ describe("configuration registry", () => {
   it("does not enforce production requirements while building or testing", () => {
     expect(() => validateConfig({}, "build")).not.toThrow();
     expect(() => validateConfig({}, "test")).not.toThrow();
+  });
+
+  it.each([
+    "http://loopworks.example.com",
+    "https://operator:secret@loopworks.example.com",
+    "https://loopworks.example.com/base",
+    "https://loopworks.example.com?tenant=other",
+    "https://loopworks.example.com#callback",
+    "ftp://loopworks.example.com",
+  ])("rejects a non-canonical production public origin: %s", (publicUrl) => {
+    expect(() =>
+      validateConfig({ ...validProductionConfig, LOOPWORKS_PUBLIC_URL: publicUrl }, "production"),
+    ).toThrow(/LOOPWORKS_PUBLIC_URL.*runtime/i);
   });
 
   it.each(

@@ -39,8 +39,9 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0016](0016-run-reconciliation-and-terminal-reasons.md) | Proposed | Reconcile active runs with typed terminal reasons, read-only tracker refresh, and injected execution liveness. |
 | [0017](0017-durable-dispatch-leases-and-retry-backoff.md) | Proposed | Serialize manifest admission with durable leases and preserve bounded retry evidence across restarts. |
 | [0018](0018-vercel-managed-neon-deployment-migrations.md) | Proposed | Use Vercel-managed Neon with pooled runtime queries, direct deployment migrations, and provider-managed Preview branches. |
-| [0019](0019-first-run-state-model-and-onboarding-ia.md) | Proposed | Derive no-repositories and no-loops server-side while keeping unavailable data distinct. |
+| [0019](0019-first-run-state-model-and-onboarding-ia.md) | Proposed | Derive no-installation, no-repositories, and no-loops server-side while keeping unavailable data distinct. |
 | [0020](0020-central-validated-configuration-registry.md) | Proposed | Centralize validated environment metadata while preserving injected readers and build-safe startup policy. |
+| [0021](0021-secure-github-app-installation-callback.md) | Proposed | Verify GitHub App installations with one-time actor-bound state, PKCE, and transient user authorization before persistence. |
 
 ## Template
 

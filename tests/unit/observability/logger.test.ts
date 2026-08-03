@@ -1,6 +1,6 @@
+import { context, type Span, TraceFlags, trace } from "@opentelemetry/api";
 import { configRegistry } from "@/lib/config/registry";
 import { createLogger, loggerRedactionPaths } from "@/lib/observability/logger";
-import { context, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
 function createMemoryDestination() {
   const writes: string[] = [];
@@ -138,6 +138,58 @@ describe("Loopworks logger", () => {
       nested: {
         oauth_access_token: "[redacted]",
         github_webhook_secret: "[redacted]",
+      },
+    });
+  });
+
+  it("redacts GitHub installation state, authorization codes, and PKCE verifiers", () => {
+    const sink = createMemoryDestination();
+    const logger = createLogger({ level: "info", base: null }, sink.destination);
+
+    logger.info(
+      {
+        authorizationCode: "one-time-code",
+        codeVerifier: "pkce-verifier",
+        githubInstallationState: "opaque-state",
+        pkceVerifier: "production-pkce-verifier",
+        verifierCookie: "production-cookie-verifier",
+        headers: {
+          cookie: "loopworks-github-install-pkce=header-verifier",
+          Cookie: "loopworks-github-install-pkce=uppercase-header-verifier",
+        },
+        request: {
+          headers: { Cookie: "loopworks-github-install-pkce=request-header-verifier" },
+        },
+        req: {
+          headers: { Cookie: "loopworks-github-install-pkce=req-header-verifier" },
+        },
+        transport: {
+          headers: { Cookie: "loopworks-github-install-pkce=nested-header-verifier" },
+        },
+        nested: {
+          authorization_code: "nested-code",
+          code_verifier: "nested-verifier",
+          github_installation_state: "nested-state",
+        },
+      },
+      "github_installation_redaction_test",
+    );
+
+    const entry = JSON.parse(sink.writes[0] ?? "{}") as Record<string, unknown>;
+    expect(entry).toMatchObject({
+      authorizationCode: "[redacted]",
+      codeVerifier: "[redacted]",
+      githubInstallationState: "[redacted]",
+      pkceVerifier: "[redacted]",
+      verifierCookie: "[redacted]",
+      headers: { cookie: "[redacted]", Cookie: "[redacted]" },
+      request: { headers: { Cookie: "[redacted]" } },
+      req: { headers: { Cookie: "[redacted]" } },
+      transport: { headers: { Cookie: "[redacted]" } },
+      nested: {
+        authorization_code: "[redacted]",
+        code_verifier: "[redacted]",
+        github_installation_state: "[redacted]",
       },
     });
   });

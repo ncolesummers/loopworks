@@ -14,9 +14,10 @@ them distinct.
 
 The MVP activation journey includes installing the GitHub App, selecting a
 repository, and registering a loop. Producing a run is not part of activation.
-However, the current data model cannot truthfully represent every step in that
-journey. `src/db/schema.ts` has no installations table; `installationId` exists
-only as a nullable column on `repositories`.
+Issue #124 adds the independent `github_installations` record required to
+represent the installation step without implying that repository selection has
+already happened. The older nullable `repositories.installationId` remains a
+repository projection rather than the onboarding source of truth.
 
 An installation signal derived from repository rows would make the repository
 stage unreachable by construction: `installationCount > 0` would imply
@@ -27,24 +28,25 @@ whose existence is independent of repository selection.
 
 ## Decision
 
-Define a server-derived `FirstRunState` with two ordered, first-match-wins
+Define a server-derived `FirstRunState` with three ordered, first-match-wins
 onboarding stages:
 
-1. `no-repositories`
-2. `no-loops`
-3. `activated`
+1. `no-installation`
+2. `no-repositories`
+3. `no-loops`
+4. `activated`
 
-Both onboarding stages are reachable from real `readPortalRecords` output.
-Zero repository rows produce `records.repos.length === 0` and select
+All onboarding stages are reachable from real `readPortalRecords` output. Zero
+installation rows select `no-installation`. With an installation present, zero
+repository rows produce `records.repos.length === 0` and select
 `no-repositories`. One or more repository rows with zero loop rows produce
 `records.repos.length > 0` and `records.loops.length === 0`, selecting
 `no-loops`. Populated repositories and loops produce `activated`.
 
-Defer `no-installation` to Issue
-[#124](https://github.com/ncolesummers/loopworks/issues/124), which can
-introduce an independent installation record. This is a deliberate data-model
-boundary, not an omitted stage. `FirstRunState` reads only the
-`PortalRecordsResult` it is handed and adds no query or installation count.
+`no-installation` reads `PortalRecords.githubInstallations`, which is projected
+from the independent installation table by the existing portal-record read.
+`FirstRunState` still reads only the `PortalRecordsResult` it is handed and adds
+no query of its own.
 
 Derive the state server-side for each portal read. Never persist or compute it
 on the client. There is no completion flag, dismissal, or snoozing. At the model
@@ -73,19 +75,14 @@ the supported narrowing API. Consumers must not use property-presence checks
 such as `"reason" in state`, which can be true on an onboarding value carrying
 `reason: undefined`.
 
-Leave `getPortalRecordsForPortal` deliberately unchanged, honoring Issue #123's
-non-goal. Its production `hasRequiredPortalData` gate still returns
-`source: "unavailable"` for an empty control plane. A genuine first-run
-production operator is therefore reported as unavailable upstream of this
-model. This slice delivers the type-level contract, but does not yet make
-first-run emptiness distinguishable at runtime in production.
+Keep the production `hasRequiredPortalData` gate for existing operational
+pages, but let Settings request `allowEmpty: true`. A successful empty database
+read can therefore render the installation action, while a failed read remains
+`source: "unavailable"` and cannot render a connection call to action.
 
-Relaxing that gate must land atomically with the onboarding UI that consumes
-`FirstRunState`. Issues [#124](https://github.com/ncolesummers/loopworks/issues/124)
-and [#127](https://github.com/ncolesummers/loopworks/issues/127) own that
-coordinated runtime change. Until it lands, epic #122's acceptance criterion
-“First-run empty state and error/unavailable state render distinctly” cannot
-close.
+Issue [#127](https://github.com/ncolesummers/loopworks/issues/127) still owns
+the coordinated relaxation and actionable routing for the remaining portal
+empty states.
 
 All work in epic #122 must obey this routing rule: an actionable empty state
 must route to the step it names.
@@ -103,10 +100,10 @@ and intentionally allows repository or loop removal to re-enter onboarding.
 It does not create durable onboarding progress or override the unchanged
 production availability gate.
 
-Fixture/dev mode cannot exercise either onboarding stage while it uses the
-fully populated `portalFixture`; it always computes activated. Issues #124
-through #128 must account for that limitation while implementing and validating
-the onboarding UI.
+Fixture/dev mode cannot exercise onboarding stages while it uses the fully
+populated `portalFixture`; it always computes activated. Focused component and
+PGlite tests cover disconnected Settings state, while Issues #125 through #128
+must account for the same fixture limitation.
 
 `hasRunActivity` is intentionally weaker than an authoritative run signal. It
 cannot distinguish no runs from a preferred run with no recorded steps and
@@ -114,8 +111,8 @@ must not be used as a run count, audit fact, or durable completion claim.
 
 ## Validation
 
-`tests/unit/onboarding/first-run-state.test.ts` covers both onboarding stages,
-both one-to-zero removal boundaries, activated states with and without run
+`tests/unit/onboarding/first-run-state.test.ts` covers all onboarding stages,
+the installation/repository/loop boundaries, activated states with and without run
 activity, unavailable ordering and exact reason propagation, and fixture
 activation. Its non-fresh assignability tests prove that onboarding cannot carry
 a real unavailable reason and unavailable cannot carry a real onboarding stage;
@@ -134,9 +131,10 @@ implementation and documentation contracts.
 - Track and enable `exactOptionalPropertyTypes` as a separate repo-wide
   migration so the `?: never` exclusions also reject explicit `undefined`;
   approximately 93 existing errors must be resolved first.
-- [#124](https://github.com/ncolesummers/loopworks/issues/124): introduce an
-  independent installation record, add the truthful `no-installation` stage,
-  and coordinate production gate relaxation with its consuming UI.
+- [#124](https://github.com/ncolesummers/loopworks/issues/124): implemented the
+  independent installation record, truthful `no-installation` stage, and the
+  Settings-specific successful-empty read path; acceptance remains pending
+  review and aggregate validation.
 - [#125](https://github.com/ncolesummers/loopworks/issues/125): implement
   repository selection.
 - [#126](https://github.com/ncolesummers/loopworks/issues/126): implement first

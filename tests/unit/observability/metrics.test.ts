@@ -19,6 +19,7 @@ import {
   recordDevelopmentLoopStepRetryMetric,
   recordDevelopmentLoopValidationDurationMetric,
   recordDevelopmentLoopValidationOutcomeMetric,
+  recordGithubInstallationFlowOutcomeMetric,
   recordGithubWebhookOutcomeMetric,
   recordLockContentionMetric,
   recordResearchLoopRunCreatedObservability,
@@ -71,6 +72,7 @@ describe("ADR 0012 observability metric contract", () => {
       "loopworks.validation.outcome",
       "loopworks.validation.duration",
       "loopworks.webhook.outcome",
+      "loopworks.github.installation.outcome",
       "loopworks.deployment.observed",
       "loopworks.approval.wait_time",
       "loopworks.approval.pending",
@@ -79,6 +81,33 @@ describe("ADR 0012 observability metric contract", () => {
       "loopworks.model.requests",
       "loopworks.model.tokens",
       "loopworks.model.cost",
+    ]);
+  });
+
+  it("records GitHub installation outcomes without sensitive callback attributes", () => {
+    const recordings: Array<{ attributes?: Record<string, unknown>; name: string; value: number }> =
+      [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+    };
+
+    recordGithubInstallationFlowOutcomeMetric(
+      { outcome: "connected", phase: "authorization" },
+      meter,
+    );
+
+    expect(recordings).toEqual([
+      {
+        attributes: { outcome: "connected", phase: "authorization" },
+        name: "loopworks.github.installation.outcome",
+        value: 1,
+      },
     ]);
   });
 

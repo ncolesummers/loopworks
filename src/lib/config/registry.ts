@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { parseLoopworksPublicOrigin } from "@/lib/public-origin";
 import { isProductionRuntime, isTruthyEnvValue } from "@/lib/runtime";
 
 export type ConfigRuntimeContext = "build" | "development" | "test" | "production";
@@ -170,7 +171,7 @@ export const configRegistry = defineRegistry([
     schema: urlSchema,
     group: "runtime",
     description: "Canonical portal origin used for durable run backlinks.",
-    requiredIn: notRequired,
+    requiredIn: requiredInProduction,
     secret: false,
     readOnly: false,
     defaults: {
@@ -325,6 +326,26 @@ export const configRegistry = defineRegistry([
     exampleValue: "",
   },
   {
+    name: "GITHUB_APP_CLIENT_ID",
+    schema: trimmedStringSchema,
+    group: "github",
+    description: "GitHub App client ID used for installation user verification.",
+    requiredIn: requiredInProduction,
+    secret: false,
+    readOnly: false,
+    exampleValue: "replace-with-github-app-client-id",
+  },
+  {
+    name: "GITHUB_APP_CLIENT_SECRET",
+    schema: stringSchema,
+    group: "github",
+    description: "GitHub App client secret used for installation user verification.",
+    requiredIn: requiredInProduction,
+    secret: true,
+    readOnly: false,
+    exampleValue: "replace-with-github-app-client-secret",
+  },
+  {
     name: "GITHUB_APP_PRIVATE_KEY",
     schema: trimmedStringSchema,
     group: "github",
@@ -333,6 +354,16 @@ export const configRegistry = defineRegistry([
     secret: true,
     readOnly: false,
     exampleValue: "",
+  },
+  {
+    name: "GITHUB_APP_SLUG",
+    schema: trimmedStringSchema,
+    group: "github",
+    description: "GitHub App slug used to build the operator installation URL.",
+    requiredIn: requiredInProduction,
+    secret: false,
+    readOnly: false,
+    exampleValue: "replace-with-github-app-slug",
   },
   {
     name: "GITHUB_WEBHOOK_SECRET",
@@ -474,6 +505,15 @@ export function readConfigValue(
 
   const result = definition.schema.safeParse(rawValue);
   if (!result.success) throw configError(definition, "value is invalid");
+  if (name === "LOOPWORKS_PUBLIC_URL") {
+    try {
+      parseLoopworksPublicOrigin(rawValue, {
+        NODE_ENV: context === "production" ? "production" : "development",
+      });
+    } catch (error) {
+      throw configError(definition, error instanceof Error ? error.message : "value is invalid");
+    }
+  }
   return result.data;
 }
 

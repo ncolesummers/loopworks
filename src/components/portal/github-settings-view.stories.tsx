@@ -7,6 +7,7 @@ const meta = {
   title: "Portal/Shell/GitHub Settings",
   component: GitHubSettingsView,
   args: {
+    githubInstallations: portalFixture.githubInstallations,
     settings: portalFixture.githubSettings,
     sourceLabel: "Fixture fallback",
   },
@@ -17,3 +18,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const Disconnected: Story = {
+  args: {
+    githubInstallations: [],
+    installationOutcome: "cancelled",
+  },
+};

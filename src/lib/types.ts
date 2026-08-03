@@ -62,6 +62,13 @@ export type GitHubSettingKey =
   | "label-mapping"
   | "secret-redaction";
 
+export interface GitHubInstallationRecord {
+  installationId: number;
+  accountLogin: string;
+  accountType: string;
+  repositorySelection: string;
+}
+
 export interface RepoRecord {
   name: string;
   owner: string;
@@ -227,4 +234,5 @@ export interface FixtureState {
   approval: ApprovalGateRecord;
   runs: RunRecord[];
   githubSettings: GitHubSettingRecord[];
+  githubInstallations: GitHubInstallationRecord[];
 }

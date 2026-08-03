@@ -10,5 +10,6 @@ ignores:
   - "coverage"
   - "playwright-report"
   - "test-results"
+  - ".claude/worktrees"
   - "CLAUDE.md"
   - "**/CLAUDE.md"

@@ -40,6 +40,11 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
    in production.
 6. OAuth access tokens may exist in the Auth.js accounts table; logs and UI must
    never expose tokens, raw OAuth profiles, or authorization headers.
+7. GitHub App installation callbacks use expiring actor-bound state and PKCE.
+   The transient GitHub App user token verifies the active operator and
+   installation association, then is discarded without persistence or logging.
+8. Callback state, authorization codes, PKCE verifiers, cookies, client secrets,
+   private keys, tokens, and raw GitHub error objects are excluded from logs.
 
 ## Required Checks
 
@@ -51,6 +56,8 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 6. Basic rate limiting or abuse controls where applicable.
 7. Structured log samples for webhook rejection, duplicate delivery, approval rejection, and Vercel API fallback.
 8. Username/org allowlist coverage for allowed and denied GitHub identities.
+9. Forged, expired, cross-actor, concurrent, and replayed installation callback
+   coverage, including zero durable installation writes on rejection.
 
 ## Approval Audit Notes
 

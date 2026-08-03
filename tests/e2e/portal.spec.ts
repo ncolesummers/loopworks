@@ -401,6 +401,26 @@ test.describe("Loopworks portal", () => {
     ).toBeVisible();
   });
 
+  test("shows GitHub installation results and keeps Settings keyboard-operable", async ({
+    page,
+  }) => {
+    await page.goto("/settings?github=already-connected");
+
+    await expect(page.getByRole("status")).toContainText("already connected");
+    await expect(
+      page.getByLabel("Connection").getByText("ncolesummers", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("projected from repository installation metadata")).toHaveCount(0);
+
+    const connection = page.getByRole("tab", { name: "Connection" });
+    const scoping = page.getByRole("tab", { name: "Scoping" });
+    await connection.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(scoping).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowLeft");
+    await expect(connection).toHaveAttribute("aria-selected", "true");
+  });
+
   for (const viewport of [
     { name: "mobile", width: 390, height: 844 },
     { name: "laptop", width: 1280, height: 832 },

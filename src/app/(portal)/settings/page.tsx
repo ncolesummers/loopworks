@@ -1,5 +1,8 @@
+import {
+  GitHubSettingsView,
+  type GithubInstallationOutcome,
+} from "@/components/portal/github-settings-view";
 import { db } from "@/db/client";
-import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
   getPortalRecordsForPortal,
@@ -11,11 +14,13 @@ import {
 export async function SettingsPageContent({
   database = db,
   env = process.env,
+  installationOutcome,
   now,
   result,
 }: Readonly<{
   database?: PortalRecordsDatabase;
   env?: Partial<NodeJS.ProcessEnv>;
+  installationOutcome?: GithubInstallationOutcome;
   now?: Date;
   result?: PortalRecordsResult;
 }> = {}) {
@@ -25,6 +30,7 @@ export async function SettingsPageContent({
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
+      allowEmpty: true,
       database,
       env,
       logger: requestLogger,
@@ -35,6 +41,8 @@ export async function SettingsPageContent({
   return (
     <GitHubSettingsView
       emptyDetail={emptyDetail}
+      githubInstallations={portalResult.records.githubInstallations}
+      installationOutcome={installationOutcome}
       readOnly={portalResult.source !== "fixtures"}
       settings={portalResult.records.githubSettings}
       sourceLabel={getPortalSourceLabel(portalResult)}
@@ -42,6 +50,23 @@ export async function SettingsPageContent({
   );
 }
 
-export default async function SettingsPage() {
-  return <SettingsPageContent />;
+const installationOutcomes = new Set<GithubInstallationOutcome>([
+  "already-connected",
+  "cancelled",
+  "connected",
+  "error",
+  "pending-approval",
+]);
+
+export default async function SettingsPage({
+  searchParams,
+}: Readonly<{
+  searchParams?: Promise<{ github?: string | string[] }>;
+}>) {
+  const github = (await searchParams)?.github;
+  const outcome =
+    typeof github === "string" && installationOutcomes.has(github as GithubInstallationOutcome)
+      ? (github as GithubInstallationOutcome)
+      : undefined;
+  return <SettingsPageContent installationOutcome={outcome} />;
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo, useState, type ComponentType } from "react";
 import {
   ArrowUpRight,
   Clock3,
@@ -12,6 +11,7 @@ import {
   ShieldCheck,
   Workflow,
 } from "lucide-react";
+import { type ComponentType, useMemo, useState } from "react";
 
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
@@ -34,6 +34,7 @@ const emptyDashboardRecords: PortalRecords = {
   approval: null,
   artifacts: [],
   deployments: [],
+  githubInstallations: [],
   githubSettings: [],
   loops: [],
   repos: [],

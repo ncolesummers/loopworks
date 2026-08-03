@@ -595,6 +595,64 @@ describe("portal reusable components", () => {
     expect(screen.queryByText("Fixture control surface")).toBeNull();
   });
 
+  it("renders a truthful keyboard-operable GitHub App installation state", () => {
+    const { rerender } = render(
+      <GitHubSettingsView
+        githubInstallations={[]}
+        installationOutcome="connected"
+        readOnly
+        settings={[
+          {
+            detail: "No GitHub App installation is connected yet.",
+            enabled: false,
+            key: "sso",
+            title: "GitHub SSO",
+          },
+        ]}
+        sourceLabel="Live database"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Connect GitHub App" }).getAttribute("href")).toBe(
+      "/api/github/install",
+    );
+    expect(
+      screen.queryByDisplayValue("projected from repository installation metadata"),
+    ).toBeNull();
+    expect(screen.queryByDisplayValue("ncolesummers")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("could not be verified");
+
+    rerender(
+      <GitHubSettingsView
+        githubInstallations={[
+          {
+            accountLogin: "loopworks-org",
+            accountType: "Organization",
+            installationId: 124_001,
+            repositorySelection: "selected",
+          },
+        ]}
+        installationOutcome="already-connected"
+        readOnly
+        settings={[
+          {
+            detail: "1 GitHub App installation is connected.",
+            enabled: true,
+            key: "sso",
+            title: "GitHub SSO",
+          },
+        ]}
+        sourceLabel="Live database"
+      />,
+    );
+
+    expect(screen.getByText("loopworks-org")).toBeTruthy();
+    expect(screen.queryByDisplayValue("ncolesummers")).toBeNull();
+    expect(screen.getByText("124001")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("already connected");
+    expect(screen.queryByRole("link", { name: "Connect GitHub App" })).toBeNull();
+  });
+
   it("filters catalog rows by search and health while preserving explicit filtered-empty state", () => {
     const repos: RepoRecord[] = [
       {

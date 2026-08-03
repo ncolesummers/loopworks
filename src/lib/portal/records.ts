@@ -4,23 +4,25 @@ import type { db } from "@/db/client";
 import {
   approvals,
   deployments as deploymentRows,
+  githubInstallations,
   loops,
   repositories,
   vercelProjects,
 } from "@/db/schema";
-import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
-import { portalFixture } from "@/lib/fixtures";
 import type { ApprovalStatus } from "@/lib/approvals";
-import type { LoopworksLogger } from "@/lib/observability/logger";
-import { readRunRecords, type RunRecordDatabase } from "@/lib/runs/run-record";
-import { isProductionRuntime } from "@/lib/runtime";
+import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
+import { portalFixture } from "@/lib/fixtures";
+import type { LoopworksLogger } from "@/lib/observability/logger";
+import { type RunRecordDatabase, readRunRecords } from "@/lib/runs/run-record";
+import { isProductionRuntime } from "@/lib/runtime";
 import type {
   ApprovalGateRecord,
   ArtifactRecord,
   DeploymentEnvironment,
   DeploymentRecord,
   DeploymentState,
+  GitHubInstallationRecord,
   GitHubSettingKey,
   GitHubSettingRecord,
   LoopRegistryItem,
@@ -37,6 +39,7 @@ export type PortalRecords = {
   approval: ApprovalGateRecord | null;
   artifacts: ArtifactRecord[];
   deployments: DeploymentRecord[];
+  githubInstallations: GitHubInstallationRecord[];
   githubSettings: GitHubSettingRecord[];
   loops: LoopRegistryItem[];
   repos: RepoRecord[];
@@ -63,15 +66,16 @@ export type PortalRecordsResult =
       usedFallback: false;
     };
 
-type RepositoryRow = typeof repositories.$inferSelect;
 type LoopRow = typeof loops.$inferSelect;
 type DeploymentRow = typeof deploymentRows.$inferSelect;
 type ApprovalRow = typeof approvals.$inferSelect;
+type GithubInstallationRow = typeof githubInstallations.$inferSelect;
 
 const emptyPortalRecords: PortalRecords = {
   approval: null,
   artifacts: [],
   deployments: [],
+  githubInstallations: [],
   githubSettings: [],
   loops: [],
   repos: [],
@@ -297,11 +301,10 @@ function setting(
 
 function mapSettings(input: {
   approvals: ApprovalRow[];
+  installations: GithubInstallationRow[];
   loops: LoopRow[];
-  repositories: RepositoryRow[];
   runArtifacts: ArtifactRecord[];
 }): GitHubSettingRecord[] {
-  const installedRepos = input.repositories.filter((repo) => repo.installationId !== null);
   const hasLabels = input.loops.some(
     (loop) => loop.areaLabel || loop.milestone || loop.priorityLabel,
   );
@@ -311,10 +314,10 @@ function mapSettings(input: {
     setting(
       "sso",
       "GitHub SSO",
-      installedRepos.length > 0
-        ? `${installedRepos.length} repositories have GitHub installation metadata.`
-        : "No repositories have GitHub installation metadata yet.",
-      installedRepos.length > 0,
+      input.installations.length > 0
+        ? `${input.installations.length} GitHub App installation${input.installations.length === 1 ? " is" : "s are"} connected.`
+        : "No GitHub App installation is connected yet.",
+      input.installations.length > 0,
     ),
     setting(
       "webhooks",
@@ -364,6 +367,7 @@ function fixturePortalRecords(): PortalRecords {
     approval: portalFixture.approval,
     artifacts: portalFixture.artifacts,
     deployments: portalFixture.deployments,
+    githubInstallations: portalFixture.githubInstallations,
     githubSettings: portalFixture.githubSettings,
     loops: portalFixture.loops,
     repos: portalFixture.repos,
@@ -397,11 +401,13 @@ function unavailableResult(): PortalRecordsResult {
 
 export async function readPortalRecords(input: {
   database: PortalRecordsDatabase;
+  githubAppId?: number;
   now?: Date;
 }): Promise<PortalRecordsResult> {
   const now = input.now ?? new Date();
   const [
     repositoryRows,
+    githubInstallationRows,
     loopRows,
     vercelProjectRows,
     deploymentRowsResult,
@@ -409,6 +415,10 @@ export async function readPortalRecords(input: {
     runResult,
   ] = await Promise.all([
     input.database.select().from(repositories).orderBy(asc(repositories.name)),
+    input.database
+      .select()
+      .from(githubInstallations)
+      .orderBy(asc(githubInstallations.accountLogin)),
     input.database.select().from(loops).orderBy(asc(loops.githubIssueNumber)),
     input.database.select().from(vercelProjects).orderBy(asc(vercelProjects.projectName)),
     input.database.select().from(deploymentRows).orderBy(desc(deploymentRows.createdAt)),
@@ -418,6 +428,9 @@ export async function readPortalRecords(input: {
       now,
     }),
   ]);
+  const activeGithubInstallationRows = githubInstallationRows.filter(
+    (installation) => installation.appId === input.githubAppId,
+  );
   const loopsByRepository = groupBy(loopRows, (loop) => loop.repositoryId);
   const vercelProjectByRepository = firstBy(vercelProjectRows, (project) => project.repositoryId);
   const runIssueCounts = new Map<number, number>();
@@ -438,10 +451,16 @@ export async function readPortalRecords(input: {
       approval: mapApproval(approvalRows),
       artifacts,
       deployments: deploymentRowsResult.map((deployment) => mapDeploymentRow(deployment, now)),
+      githubInstallations: activeGithubInstallationRows.map((installation) => ({
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
+        installationId: installation.installationId,
+        repositorySelection: installation.repositorySelection,
+      })),
       githubSettings: mapSettings({
         approvals: approvalRows,
+        installations: activeGithubInstallationRows,
         loops: loopRows,
-        repositories: repositoryRows,
         runArtifacts: artifacts,
       }),
       loops: mapLoops(loopRows, runIssueCounts),
@@ -462,6 +481,7 @@ export async function readPortalRecords(input: {
 }
 
 export async function getPortalRecordsForPortal(input: {
+  allowEmpty?: boolean;
   database: PortalRecordsDatabase;
   env?: Partial<NodeJS.ProcessEnv>;
   logger?: LoopworksLogger;
@@ -486,12 +506,18 @@ export async function getPortalRecordsForPortal(input: {
   }
 
   try {
+    const githubAppId = Number(readSuppliedRawConfig("GITHUB_APP_ID", env));
+    const hasValidGithubAppId = Number.isSafeInteger(githubAppId) && githubAppId > 0;
+    if (isProductionRuntime(env) && !hasValidGithubAppId) {
+      throw new Error("github_app_id_configuration_invalid");
+    }
     const result = await readPortalRecords({
       database: input.database,
+      githubAppId: hasValidGithubAppId ? githubAppId : undefined,
       now: input.now,
     });
 
-    if (isProductionRuntime(env) && !hasRequiredPortalData(result.records)) {
+    if (isProductionRuntime(env) && !input.allowEmpty && !hasRequiredPortalData(result.records)) {
       input.logger?.warn(
         {
           approvalCount: result.records.approval ? 1 : 0,

@@ -1,5 +1,5 @@
 import { readSuppliedRawConfig } from "@/lib/config/registry";
-import { isProductionRuntime } from "@/lib/runtime";
+import { parseLoopworksPublicOrigin } from "@/lib/public-origin";
 
 type RunUrlEnvironment = Record<string, string | undefined>;
 
@@ -11,26 +11,7 @@ function configuredLoopworksOrigin(env: RunUrlEnvironment): URL {
       : readSuppliedRawConfig("VERCEL_URL", env)
         ? `https://${readSuppliedRawConfig("VERCEL_URL", env)}`
         : "http://127.0.0.1:3000");
-  let origin: URL;
-  try {
-    origin = new URL(configured);
-  } catch {
-    throw new Error("LOOPWORKS_PUBLIC_URL must be an absolute Loopworks origin.");
-  }
-  if (
-    origin.username ||
-    origin.password ||
-    origin.pathname !== "/" ||
-    origin.search ||
-    origin.hash ||
-    !["http:", "https:"].includes(origin.protocol)
-  ) {
-    throw new Error("LOOPWORKS_PUBLIC_URL must be an origin without credentials or a path.");
-  }
-  if (isProductionRuntime(env) && origin.protocol !== "https:") {
-    throw new Error("Production Loopworks run URLs require an HTTPS public origin.");
-  }
-  return origin;
+  return parseLoopworksPublicOrigin(configured, env);
 }
 
 export function canonicalLoopworksRunUrl(

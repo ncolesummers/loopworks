@@ -1,32 +1,54 @@
 "use client";
 
-import { useState } from "react";
 import { ExternalLink, KeyRound, Link2, Lock, RefreshCcw, ShieldCheck } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
+import { useState } from "react";
+import { getEnabledStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getEnabledStatus } from "@/components/portal/status-mapping";
-import type { GitHubSettingRecord } from "@/lib/types";
+import type { GitHubInstallationRecord, GitHubSettingRecord } from "@/lib/types";
+
+export type GithubInstallationOutcome =
+  | "already-connected"
+  | "cancelled"
+  | "connected"
+  | "error"
+  | "pending-approval";
+
+const installationOutcomeCopy: Record<GithubInstallationOutcome, string> = {
+  "already-connected": "That GitHub App installation is already connected.",
+  cancelled: "GitHub App installation was cancelled. No connection was saved.",
+  connected: "GitHub App installation connected successfully.",
+  error: "GitHub App installation could not be verified. Start a new connection attempt.",
+  "pending-approval": "GitHub is waiting for an organization owner to approve this installation.",
+};
 
 export function GitHubSettingsView({
   emptyDetail = "GitHub settings will be projected after repository and loop rows exist.",
+  githubInstallations = [],
+  installationOutcome,
   readOnly = false,
   settings: initialSettings = [],
   sourceLabel = "Unavailable",
 }: Readonly<{
   emptyDetail?: string;
+  githubInstallations?: GitHubInstallationRecord[];
+  installationOutcome?: GithubInstallationOutcome;
   readOnly?: boolean;
   settings?: GitHubSettingRecord[];
   sourceLabel?: string;
 }>) {
   const [settings, setSettings] = useState(initialSettings);
-  const hasEnabledSetting = settings.some((setting) => setting.enabled);
+  const hasInstallation = githubInstallations.length > 0;
+  const displayedInstallationOutcome =
+    !hasInstallation &&
+    (installationOutcome === "connected" || installationOutcome === "already-connected")
+      ? "error"
+      : installationOutcome;
   const showFixtureControls = !readOnly && sourceLabel === "Fixture fallback";
 
   return (
@@ -48,11 +70,17 @@ export function GitHubSettingsView({
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={settings.length > 0 ? "ready" : "empty"} label={sourceLabel} />
           <StatusBadge
-            status={hasEnabledSetting ? "ready" : "empty"}
-            label={hasEnabledSetting ? "GitHub app connected" : "No settings"}
+            status={hasInstallation ? "ready" : "empty"}
+            label={hasInstallation ? "GitHub app connected" : "Not connected"}
           />
         </div>
       </section>
+
+      {displayedInstallationOutcome ? (
+        <div role="status" className="rounded-md border bg-muted/40 px-4 py-3 text-sm">
+          {installationOutcomeCopy[displayedInstallationOutcome]}
+        </div>
+      ) : null}
 
       {settings.length === 0 ? (
         <Card className="shadow-none">
@@ -81,16 +109,40 @@ export function GitHubSettingsView({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="org">Organization</Label>
-                    <Input id="org" defaultValue="ncolesummers" readOnly={readOnly} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="app-id">GitHub App installation</Label>
-                    <Input
-                      id="app-id"
-                      defaultValue="projected from repository installation metadata"
-                      readOnly={readOnly}
-                    />
+                    <Label>GitHub App installation</Label>
+                    {hasInstallation ? (
+                      <div className="space-y-3 rounded-md border p-4">
+                        {githubInstallations.map((installation) => (
+                          <div
+                            key={installation.installationId}
+                            className="flex flex-wrap items-center justify-between gap-3"
+                          >
+                            <div>
+                              <div className="text-sm font-medium">{installation.accountLogin}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {installation.accountType} · {installation.repositorySelection}{" "}
+                                repositories
+                              </div>
+                            </div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {installation.installationId}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4">
+                        <div>
+                          <div className="text-sm font-medium">No installation connected</div>
+                          <div className="text-sm text-muted-foreground">
+                            Install the Loopworks GitHub App before selecting repositories.
+                          </div>
+                        </div>
+                        <Button asChild>
+                          <a href="/api/github/install">Connect GitHub App</a>
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center justify-between rounded-md border p-4">
                     <div>
