@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import {
   createValidationReportArtifactMetadata,
+  evaluateValidationCommand,
   runValidationGates,
   runValidationWithScreenshotEvidence,
   type ValidationCommandExecutionInput,
@@ -14,8 +15,8 @@ import type { LoopDefinition } from "../../../schemas/loop-manifest";
 const fixtureGates = [
   {
     key: "format",
-    name: "Format check",
-    command: "bun run format:check",
+    name: "Biome check",
+    command: "bun run check",
     required: true,
     phase: "before_implementation",
     produces: "validation_report",
@@ -45,6 +46,20 @@ function createSteppedClock() {
 }
 
 describe("deterministic validation runner", () => {
+  it("allows the Biome gate that runs assists and rejects the ones that skip them", () => {
+    // The allowlist is the only machine-enforced constraint on what a loop may
+    // declare as a validation gate. Leaving the assist-blind commands in it
+    // would let a loop emit a green validation report over unsorted imports —
+    // the same hole in `validate` that this allowlist is now the last guard for.
+    expect(evaluateValidationCommand("bun run check")).toMatchObject({ allowed: true });
+
+    for (const command of ["bun run format:check", "bun run lint"]) {
+      expect(evaluateValidationCommand(command), `\`${command}\` is still allowed`).toMatchObject({
+        allowed: false,
+      });
+    }
+  });
+
   it("classifies pass, fail, and skipped gates in manifest order", async () => {
     const executor = vi.fn(async ({ gate }: ValidationCommandExecutionInput) => ({
       exitCode: gate.key === "unit-tests" ? 1 : 0,
@@ -84,7 +99,7 @@ describe("deterministic validation runner", () => {
     ]);
     expect(report.results.map((result) => result.outcome)).toEqual(["pass", "fail", "skipped"]);
     expect(report.results[0]).toMatchObject({
-      command: "bun run format:check",
+      command: "bun run check",
       durationMs: 1000,
       exitCode: 0,
       output: {

@@ -10,7 +10,10 @@ while maintaining pull requests.
 
 1. Keep CI aligned with local deterministic validation.
 2. Prefer explicit workflow steps over hidden aggregate commands when CI output
-   benefits from step-level failure visibility.
+   benefits from step-level failure visibility. Biome is the deliberate
+   exception: it runs as one `bun run check` step because splitting it into
+   `format:check` and `lint` drops assists such as import sorting entirely. Its
+   diagnostics name their own rule, so step-level detail is not lost.
 3. Issue templates should capture acceptance criteria and validation evidence.
 4. Do not put secrets, tokens, private keys, or production credentials in
    workflows or templates.

@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 type WorkflowStep = {
@@ -41,6 +43,49 @@ const validateScriptGates = packageJson.scripts.validate
   .split("&&")
   .map((command) => command.trim())
   .filter((command) => command.length > 0);
+
+const probeDirectory = mkdtempSync(path.join(os.tmpdir(), "loopworks-biome-gate-"));
+
+/**
+ * The Biome subcommands `bun run validate` actually reaches, resolved through
+ * `package.json` rather than named here. Restating them would let the chain drop
+ * a Biome gate entirely while this file kept asserting against the old one.
+ */
+function biomeGatesOfValidate(): { command: string; script: string; subcommand: string }[] {
+  return validateScriptGates.flatMap((command) => {
+    const script = command.replace(/^bun run /, "");
+    const definition = packageJson.scripts[script] ?? "";
+    const subcommand = definition.match(/^biome ([a-z:]+)/)?.[1];
+    return subcommand ? [{ command, script, subcommand }] : [];
+  });
+}
+
+function writeProbe(name: string, specifiers: [string, string]): string {
+  const probe = path.join(probeDirectory, name);
+  writeFileSync(
+    probe,
+    `import { a } from "${specifiers[0]}";\nimport { b } from "${specifiers[1]}";\n\nexport const value = [a, b];\n`,
+  );
+  return probe;
+}
+
+/**
+ * The probe cannot live inside the repository — `biome check .` would then fail
+ * the real `validate` — so `--config-path` points Biome at the repo's own
+ * `biome.json`. Everything else is left at the settings the real gate uses,
+ * including VCS discovery. The installed binary is invoked directly rather than
+ * through `bunx`, which can reach the network to resolve a package and would
+ * turn a registry hiccup into a hung gate.
+ */
+function runBiome(subcommand: string, probe: string) {
+  const result = spawnSync(
+    path.join(repoRoot, "node_modules/.bin/biome"),
+    [subcommand, `--config-path=${repoRoot}`, probe],
+    { cwd: repoRoot, encoding: "utf8", timeout: 60_000 },
+  );
+  expect(result.error, `\`biome ${subcommand}\` did not run`).toBeUndefined();
+  return result;
+}
 
 /** Both jobs check out, install, and drive Playwright, so both must cache. */
 const cachingJobs = ["validate", "seeded-postgres-e2e"] as const;
@@ -88,6 +133,10 @@ const isBrowserInstall = (step: WorkflowStep) =>
   step.run?.includes("playwright install --with-deps chromium") === true;
 
 describe("ci workflow", () => {
+  afterAll(() => {
+    rmSync(probeDirectory, { force: true, recursive: true });
+  });
+
   it.each(cachingJobs)("bounds the runtime of the `%s` job", (jobName) => {
     const timeout = workflow.jobs[jobName]?.["timeout-minutes"];
     expect(typeof timeout).toBe("number");
@@ -186,6 +235,49 @@ describe("ci workflow", () => {
   it("keeps the auth bypass on the validate Playwright step", () => {
     const step = stepsOf("validate").find((candidate) => candidate.run === "bun run test:e2e");
     expect(step?.env?.LOOPWORKS_AUTH_BYPASS).toBe("true");
+  });
+
+  it("gates Biome assists, not just the formatter and linter", () => {
+    // `organizeImports` is an assist, and assists run under `biome check` only:
+    // `biome format` and `biome lint` both exit 0 on unsorted imports, so a
+    // chain built from those two lets them through every gate we have.
+    const gates = biomeGatesOfValidate();
+    expect(
+      gates.map((gate) => gate.script),
+      "no gate in `bun run validate` invokes Biome at all",
+    ).not.toHaveLength(0);
+
+    const sorted = writeProbe("sorted.ts", ["./earlier", "./later"]);
+    const unsorted = writeProbe("unsorted.ts", ["./later", "./earlier"]);
+
+    const rejecting = gates.filter((gate) => {
+      // The control run is what stops this test from passing vacuously. A
+      // renamed flag, an unparseable config, or a missing binary makes *every*
+      // invocation exit non-zero, including this one — so a broken gate fails
+      // here rather than masquerading as a gate that caught something.
+      expect(
+        runBiome(gate.subcommand, sorted).status,
+        `\`${gate.command}\` rejects sorted imports`,
+      ).toBe(0);
+
+      const result = runBiome(gate.subcommand, unsorted);
+      if (result.status === 0) {
+        return false;
+      }
+
+      // Non-zero alone would also be satisfied by an unrelated diagnostic, so
+      // the rule that fired has to be the assist this issue is about.
+      expect(
+        `${result.stdout}${result.stderr}`,
+        `\`${gate.command}\` failed for some other reason`,
+      ).toContain("assist/source/organizeImports");
+      return true;
+    });
+
+    expect(
+      rejecting.map((gate) => gate.script),
+      "no gate in `bun run validate` rejects unsorted imports",
+    ).not.toHaveLength(0);
   });
 
   it("still runs both seeded Postgres gates", () => {

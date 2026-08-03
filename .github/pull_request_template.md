@@ -22,8 +22,7 @@ Closes #
 
 ## Green validation
 
-- [ ] `bun run format:check`
-- [ ] `bun run lint`
+- [ ] `bun run check`
 - [ ] `bun run agent-docs:check`
 - [ ] `bun run markdownlint`
 - [ ] `bun run typecheck`

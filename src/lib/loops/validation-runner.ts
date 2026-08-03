@@ -35,11 +35,14 @@ export {
   validationReportVersion,
 } from "./validation-report";
 
+// `check` is the only Biome entry point here on purpose. `format:check` and
+// `lint` skip assists, so a loop declaring either as its Biome gate would report
+// green over unsorted imports; they stay in `package.json` for focused local use
+// but are not gates a loop may claim credit for.
 const allowedBunRunScripts = new Set([
   "agent-docs:check",
   "build",
-  "format:check",
-  "lint",
+  "check",
   "markdownlint",
   "storybook:build",
   "test",

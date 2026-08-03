@@ -113,11 +113,11 @@ function unrelatedPassingValidationReport(): ValidationReportV1 {
     overallOutcome: "pass",
     results: [
       {
-        command: "bun run format:check",
+        command: "bun run check",
         durationMs: 500,
         exitCode: 0,
         key: "format-check",
-        name: "Format check",
+        name: "Biome check",
         outcome: "pass",
         phase: "before_rollout",
         produces: "validation_report",
