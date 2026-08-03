@@ -27,7 +27,11 @@ import {
   validationReportV1Schema,
 } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const issueTrigger = {
   body: "## Acceptance Criteria\n- Lifecycle telemetry records deterministic validation outcomes.",
@@ -133,13 +137,17 @@ function createMetricRecorder() {
 describe("development-loop run transitions", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("persists a passing validation report, advances to review, and skips optional telemetry", async () => {
     const runId = await createRun(context);

@@ -38,15 +38,23 @@ import {
   screenshotEvidenceSchemaId,
 } from "@/lib/loops/screenshot-evidence";
 import type { ValidationReportV1 } from "@/lib/loops/validation-report";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
 describe("validation review transition", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
     await context.db.insert(repositories).values({
       githubRepoId: 49_000_002,
       owner: "ncolesummers",
@@ -55,9 +63,9 @@ describe("validation review transition", () => {
       enabledLoops: ["Agent-ready development loop"],
       validationGates: ["Aggregate validation"],
     });
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => context.close());
+  afterAll(async () => context.close(), pgliteTestHookTimeoutMs);
 
   async function prepare() {
     const created = await createDevelopmentLoopRun({

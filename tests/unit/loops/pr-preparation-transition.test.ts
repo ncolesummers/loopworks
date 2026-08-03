@@ -27,7 +27,11 @@ import { applyApprovalTransition } from "@/lib/approval-transitions";
 import type { ApprovalTransitionDatabase } from "@/lib/approvals";
 import { createScreenshotEvidenceArtifactMetadata } from "@/lib/loops/screenshot-evidence";
 import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-report";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 function runDatabase(context: PgliteTestDatabase): DevelopmentLoopRunDatabase {
   return context.db as unknown as DevelopmentLoopRunDatabase;
@@ -40,9 +44,13 @@ function transitionDatabase(context: PgliteTestDatabase): DevelopmentLoopTransit
 describe("PR preparation transition", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
-    vi.stubEnv("LOOPWORKS_PUBLIC_URL", "https://loopworks.example");
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
+  }, pgliteTestHookTimeoutMs);
+
+  beforeEach(async () => {
+    await context.reset();
+    vi.stubEnv("LOOPWORKS_PUBLIC_URL", "https://loopworks.example");
     await context.db.insert(repositories).values({
       defaultBranch: "main",
       enabledLoops: ["Agent-ready development loop"],
@@ -53,12 +61,15 @@ describe("PR preparation transition", () => {
       owner: "ncolesummers",
       validationGates: ["Aggregate validation"],
     });
-  });
+  }, pgliteTestHookTimeoutMs);
 
   afterEach(async () => {
     vi.unstubAllEnvs();
-    await context.close();
   });
+
+  afterAll(async () => {
+    await context.close();
+  }, pgliteTestHookTimeoutMs);
 
   async function prepare() {
     const fixture = createPrPreparationFixtureContext();

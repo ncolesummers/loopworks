@@ -17,7 +17,11 @@ import {
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { createResearchLoopRun } from "@/lib/loops/research-run";
 import type { LoopManifest } from "../../../schemas/loop-manifest";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
 
@@ -72,14 +76,18 @@ async function insertRepository(context: PgliteTestDatabase) {
 describe("development-loop dispatch admission", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-    await insertRepository(context);
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+    await insertRepository(context);
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("defers over-cap work and leases it after the in-flight run terminates", async () => {
     const manifest = manifestWith({ maxInFlight: 1 });

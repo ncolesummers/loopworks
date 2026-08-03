@@ -16,7 +16,11 @@ import {
   createDevelopmentLoopRunStore,
   type DevelopmentLoopReconciliationDatabase,
 } from "@/lib/loops/development-run-reconciliation-store";
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 const trigger = {
   body: "## Acceptance Criteria\n- Reconcile runs deterministically.",
@@ -36,13 +40,17 @@ function runDatabase(context: PgliteTestDatabase): DevelopmentLoopRunDatabase {
 describe("development-loop reconciliation store", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   it("lists active runs with latest step activity and delegates finalization", async () => {
     const [repository] = await context.db

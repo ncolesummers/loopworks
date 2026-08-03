@@ -27,18 +27,26 @@ import {
   seedDemoData,
 } from "@/lib/seed/demo-data";
 
-import { createPgliteTestDatabase, type PgliteTestDatabase } from "../../helpers/pglite";
+import {
+  createPgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
+  type PgliteTestDatabase,
+} from "../../helpers/pglite";
 
 describe("demo seed data (pglite integration)", () => {
   let context: PgliteTestDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     context = await createPgliteTestDatabase();
-  });
+  }, pgliteTestHookTimeoutMs);
 
-  afterEach(async () => {
+  beforeEach(async () => {
+    await context.reset();
+  }, pgliteTestHookTimeoutMs);
+
+  afterAll(async () => {
     await context.close();
-  });
+  }, pgliteTestHookTimeoutMs);
 
   function testDatabase(): SeedDatabase {
     return context.db as unknown as SeedDatabase;
