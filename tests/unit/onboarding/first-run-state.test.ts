@@ -1,7 +1,14 @@
 /** @vitest-environment node */
 
 import { portalFixture } from "@/lib/fixtures";
-import { deriveFirstRunState, type FirstRunState } from "@/lib/onboarding/first-run-state";
+import {
+  deriveFirstRunState,
+  type FirstRunStage,
+  type FirstRunState,
+  isFirstRunActivated,
+  isFirstRunOnboarding,
+  isFirstRunUnavailable,
+} from "@/lib/onboarding/first-run-state";
 import type { PortalRecords, PortalRecordsResult } from "@/lib/portal/records";
 
 type PortalResultInput = {
@@ -48,6 +55,10 @@ function portalRecordsResult(input: PortalResultInput = {}): PortalRecordsResult
     source,
     usedFallback: false,
   };
+}
+
+function firstRunState(state: FirstRunState): FirstRunState {
+  return state;
 }
 
 describe("deriveFirstRunState", () => {
@@ -198,5 +209,71 @@ describe("deriveFirstRunState", () => {
     const rejected: FirstRunState = conflated;
 
     expect(rejected).toBe(conflated);
+  });
+});
+
+describe("FirstRunState guards", () => {
+  const activated = firstRunState({
+    hasRunActivity: true,
+    status: "activated",
+  });
+  const onboarding = firstRunState({
+    stage: "no-loops",
+    status: "onboarding",
+  });
+  const unavailable = firstRunState({
+    reason: "Portal data store unavailable.",
+    status: "unavailable",
+  });
+
+  it("identifies and narrows the unavailable arm", () => {
+    expect(isFirstRunUnavailable(unavailable)).toBe(true);
+    expect(isFirstRunUnavailable(onboarding)).toBe(false);
+    expect(isFirstRunUnavailable(activated)).toBe(false);
+
+    if (isFirstRunUnavailable(unavailable)) {
+      const reason: string = unavailable.reason;
+
+      expect(reason).toBe("Portal data store unavailable.");
+    }
+  });
+
+  it("identifies and narrows the onboarding arm", () => {
+    expect(isFirstRunOnboarding(onboarding)).toBe(true);
+    expect(isFirstRunOnboarding(unavailable)).toBe(false);
+    expect(isFirstRunOnboarding(activated)).toBe(false);
+
+    if (isFirstRunOnboarding(onboarding)) {
+      const stage: FirstRunStage = onboarding.stage;
+
+      expect(stage).toBe("no-loops");
+    }
+  });
+
+  it("identifies and narrows the activated arm", () => {
+    expect(isFirstRunActivated(activated)).toBe(true);
+    expect(isFirstRunActivated(unavailable)).toBe(false);
+    expect(isFirstRunActivated(onboarding)).toBe(false);
+
+    if (isFirstRunActivated(activated)) {
+      const hasRunActivity: boolean = activated.hasRunActivity;
+
+      expect(hasRunActivity).toBe(true);
+    }
+  });
+
+  it("documents that property-presence narrowing is unsafe without exactOptionalPropertyTypes", () => {
+    const conflated = {
+      reason: undefined,
+      stage: "no-loops" as const,
+      status: "onboarding" as const,
+    };
+
+    // Follow-up: see ADR 0019's repo-wide exactOptionalPropertyTypes migration item.
+    const accepted: FirstRunState = conflated;
+
+    expect("reason" in accepted).toBe(true);
+    expect(isFirstRunOnboarding(accepted)).toBe(true);
+    expect(accepted.reason).toBeUndefined();
   });
 });
