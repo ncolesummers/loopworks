@@ -33,6 +33,12 @@ jobs:
       - name: Agent docs sync check
         run: bun run agent-docs:check
 
+      - name: Env example sync check
+        run: bun run config:check
+
+      - name: Env access check
+        run: bun run config:access-check
+
       - name: Markdownlint
         run: bun run markdownlint
 
