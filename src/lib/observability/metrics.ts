@@ -71,6 +71,12 @@ export const observabilityMetricContract = [
   },
   {
     instrument: "counter",
+    name: "loopworks.github.installation.outcome",
+    requiredAttributes: ["phase", "outcome"],
+    unit: "{attempt}",
+  },
+  {
+    instrument: "counter",
     name: "loopworks.deployment.observed",
     requiredAttributes: ["environment", "status"],
     unit: "{deployment}",
@@ -205,6 +211,7 @@ const stepDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>(
 const stepRetryCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
+const githubInstallationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const supportedGithubWebhookMetricEvents = new Set(["issues", "unknown", "unsupported"]);
 const sensitiveMetricCommandPattern =
   /\b(token|secret|password|authorization|credential|api[-_]?key|prompt)\b|Bearer\s+|gh[pousr]_|sk-[A-Za-z0-9_-]+/i;
@@ -225,6 +232,18 @@ export type GithubWebhookOutcomeMetricInput = {
   action?: string | null;
   event: string;
   outcome: GithubWebhookOutcome;
+};
+
+export type GithubInstallationFlowOutcomeMetricInput = {
+  outcome:
+    | "started"
+    | "authorize"
+    | "connected"
+    | "already-connected"
+    | "cancelled"
+    | "pending-approval"
+    | "error";
+  phase: "installation" | "authorization";
 };
 
 export type ApprovalWaitTimeMetricInput = {
@@ -434,6 +453,19 @@ function getWebhookOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes
   return counter;
 }
 
+function getGithubInstallationOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
+  const cached = githubInstallationOutcomeCounters.get(meter);
+  if (cached) return cached;
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.github.installation.outcome");
+  const counter = meter.createCounter(metric.name, {
+    description: "GitHub App installation flow outcomes.",
+    unit: metric.unit,
+  });
+  githubInstallationOutcomeCounters.set(meter, counter);
+  return counter;
+}
+
 function getApprovalWaitTimeHistogram(meter: HistogramMeter): Histogram<MetricAttributes> {
   const cached = approvalWaitTimeHistograms.get(meter);
   if (cached) {
@@ -550,6 +582,20 @@ export function recordGithubWebhookOutcomeMetric(
     });
   } catch {
     // OTel emission must never affect webhook request handling.
+  }
+}
+
+export function recordGithubInstallationFlowOutcomeMetric(
+  input: GithubInstallationFlowOutcomeMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getGithubInstallationOutcomeCounter(meter).add(1, {
+      outcome: input.outcome,
+      phase: input.phase,
+    });
+  } catch {
+    // OTel emission must never affect installation request handling.
   }
 }
 

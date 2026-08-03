@@ -25,6 +25,14 @@ export function startLoopworksSpan(
   return tracer.startSpan(name, options);
 }
 
+export function withLoopworksActiveSpan<T>(
+  name: string,
+  callback: (span: Span) => Promise<T>,
+  tracer = getLoopworksTracer(),
+): Promise<T> {
+  return tracer.startActiveSpan(name, callback);
+}
+
 export function startDevelopmentLoopReconciliationSpan(tracer = getLoopworksTracer()): {
   setRunCount(count: number): void;
   span: Span;
