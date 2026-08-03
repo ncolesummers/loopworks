@@ -1,8 +1,7 @@
 import { AlertCircle, Ban, FolderOpen, Loader2, ShieldAlert } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export function LoadingState() {
   return (

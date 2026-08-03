@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
-
+import { isAllowedProductionArtifactPath } from "../../../implementation-agent";
 import { createExecutionReceipt, verifyExecutionReceipt } from "../../../lib/receipts";
 import { redactSecrets } from "../../../lib/redaction";
-import { isAllowedProductionArtifactPath } from "../../../implementation-agent";
 
 export type ImplementationExecutionReceiptPayload = {
   kind: "focused" | "aggregate";

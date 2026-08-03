@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
-
-import nativePostgresConfig from "../../../vitest.postgres.config";
-import defaultVitestConfig from "../../../vitest.config";
 import { runNativePostgresTests } from "../../../scripts/test-native-postgres";
+import defaultVitestConfig from "../../../vitest.config";
+import nativePostgresConfig from "../../../vitest.postgres.config";
 
 const nativeDatabaseUrl = "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e";
 

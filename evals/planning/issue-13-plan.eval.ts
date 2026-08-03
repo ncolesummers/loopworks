@@ -1,10 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pinnedPlanningAgentOutputSchema } from "@agent/planning-agent";
+import type { EveEvalToolCall } from "eve/evals";
 import { defineEval } from "eve/evals";
 import { includes, matches } from "eve/evals/expect";
-import type { EveEvalToolCall } from "eve/evals";
-
-import { pinnedPlanningAgentOutputSchema } from "@agent/planning-agent";
 
 type IssueFixture = {
   body: string;

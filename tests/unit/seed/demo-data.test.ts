@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 
 import {
   approvalStatusEnum,
-  approvalTransitionEvents,
   approvals,
+  approvalTransitionEvents,
   artifacts,
   artifactTypeEnum,
   deploymentStatusEnum,
@@ -30,8 +30,8 @@ import {
 
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 describe("demo seed data (pglite integration)", () => {

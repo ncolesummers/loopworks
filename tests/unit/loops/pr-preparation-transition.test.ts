@@ -1,10 +1,10 @@
 /** @vitest-environment node */
 
-import { and, eq, inArray } from "drizzle-orm";
+import { computePrPreparationDigest } from "@agent/pr-preparation-agent";
 
 import { createPrPreparationFixtureContext } from "@agent/pr-preparation-fixture";
-import { computePrPreparationDigest } from "@agent/pr-preparation-agent";
 import { createPrPreparationResultFromContext } from "@agent/subagents/pr-preparer/lib/context";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   agentPlans,
   approvals,
@@ -14,23 +14,23 @@ import {
   repositories,
   runSteps,
 } from "@/db/schema";
+import { applyApprovalTransition } from "@/lib/approval-transitions";
+import type { ApprovalTransitionDatabase } from "@/lib/approvals";
 import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import {
   applyDevelopmentLoopPrPreparationResult,
-  executeDevelopmentLoopPrStage,
   type DevelopmentLoopTransitionDatabase,
+  executeDevelopmentLoopPrStage,
 } from "@/lib/loops/development-run-transitions";
-import { applyApprovalTransition } from "@/lib/approval-transitions";
-import type { ApprovalTransitionDatabase } from "@/lib/approvals";
 import { createScreenshotEvidenceArtifactMetadata } from "@/lib/loops/screenshot-evidence";
 import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-report";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 function runDatabase(context: PgliteTestDatabase): DevelopmentLoopRunDatabase {

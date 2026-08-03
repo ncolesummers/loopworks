@@ -17,8 +17,8 @@ import { demoSeedIds, type SeedDatabase, seedDemoData } from "@/lib/seed/demo-da
 
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 describe("run records (pglite integration)", () => {

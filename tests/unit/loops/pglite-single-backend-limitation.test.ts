@@ -2,8 +2,8 @@
 
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 /**

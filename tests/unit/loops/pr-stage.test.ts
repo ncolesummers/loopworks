@@ -1,5 +1,4 @@
 /** @vitest-environment node */
-import { and, eq, inArray } from "drizzle-orm";
 
 import {
   computePrPreparationDigest,
@@ -7,17 +6,22 @@ import {
   prPreparationResultSchema,
   prPreparationResultSchemaId,
 } from "@agent/pr-preparation-agent";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { approvals, artifacts, deployments, loopRuns, repositories, runSteps } from "@/db/schema";
 import {
+  createPullRequestChangeDigest,
+  type GitHubPullRequestWriter,
+} from "@/lib/github/pull-request";
+import {
   createDevelopmentLoopRun,
-  runDevelopmentLoopRetrySupervisorTick,
   type DevelopmentLoopRunDatabase,
+  runDevelopmentLoopRetrySupervisorTick,
 } from "@/lib/loops/development-run";
 import {
   applyDevelopmentLoopValidationReport,
-  executeDevelopmentLoopPrStage,
   type DevelopmentLoopTransitionDatabase,
+  executeDevelopmentLoopPrStage,
 } from "@/lib/loops/development-run-transitions";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 import {
@@ -33,13 +37,9 @@ import {
   validationReportV1Schema,
 } from "@/lib/loops/validation-report";
 import {
-  createPullRequestChangeDigest,
-  type GitHubPullRequestWriter,
-} from "@/lib/github/pull-request";
-import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 function runUrlFor(runId: string): string {

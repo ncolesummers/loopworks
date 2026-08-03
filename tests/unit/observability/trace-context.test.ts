@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { trace, type Context, type Span, type Tracer } from "@opentelemetry/api";
+import { type Context, type Span, type Tracer, trace } from "@opentelemetry/api";
 
 import {
   startDevelopmentLoopDispatchSpan,

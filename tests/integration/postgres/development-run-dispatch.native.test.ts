@@ -4,9 +4,9 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { idempotencyLocks, loopRuns, repositories } from "@/db/schema";
 import {
+  type DevelopmentLoopRunDatabase,
   dispatchDevelopmentLoopRun,
   resolveDevelopmentLoopConcurrencyGroup,
-  type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { createResearchLoopRun } from "@/lib/loops/research-run";

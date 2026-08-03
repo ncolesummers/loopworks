@@ -25,8 +25,8 @@ import { prIntentSchemaId } from "@/lib/loops/pr-intent";
 import { validationReportSchemaId } from "@/lib/loops/validation-runner";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const issueTrigger = {

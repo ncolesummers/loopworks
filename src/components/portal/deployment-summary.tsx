@@ -1,15 +1,14 @@
 import { ExternalLink, Monitor } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import {
   getDeploymentEnvironmentStatus,
   getDeploymentStatus,
 } from "@/components/portal/status-mapping";
-import type { DeploymentRecord } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Status } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { DeploymentRecord } from "@/lib/types";
 
 function MetadataChip({
   children,

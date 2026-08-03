@@ -5,8 +5,8 @@ import { loops, repositories, vercelProjects } from "@/db/schema";
 import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 describe("repo catalog projection", () => {

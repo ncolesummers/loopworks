@@ -2,10 +2,10 @@ import { asc, eq, inArray } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import { approvals, artifacts, loopRuns, repositories, runSteps } from "@/db/schema";
+import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import { isProductionRuntime } from "@/lib/runtime";
-import { readSuppliedRawConfig } from "@/lib/config/registry";
 import type {
   ArtifactKind,
   ArtifactRecord,

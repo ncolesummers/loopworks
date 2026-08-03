@@ -3,8 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 
 import {
   computeImplementationDigest,
-  implementationAgentModelLabel,
   type ImplementationResult,
+  implementationAgentModelLabel,
   implementationResultSchemaId,
 } from "@agent/implementation-agent";
 import { createImplementationExecutionReceipt } from "@agent/subagents/implementer/lib/tool-policy";
@@ -28,8 +28,8 @@ import {
 } from "@/lib/loops/development-run-transitions";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");

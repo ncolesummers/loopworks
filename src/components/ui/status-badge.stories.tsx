@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import { StatusBadge, STATUS_META, type Status } from "@/components/ui/status-badge";
+import { STATUS_META, type Status, StatusBadge } from "@/components/ui/status-badge";
 
 const meta = {
   title: "UI/Primitives/StatusBadge",

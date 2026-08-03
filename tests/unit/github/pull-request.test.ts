@@ -1,9 +1,9 @@
 /** @vitest-environment node */
 import {
-  createPullRequestChangeDigest,
   createGitHubPullRequestWriter,
-  GitHubPullRequestWriteError,
+  createPullRequestChangeDigest,
   type GitHubPullRequestClient,
+  GitHubPullRequestWriteError,
   type GitHubPullRequestWriterInput,
 } from "@/lib/github/pull-request";
 

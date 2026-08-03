@@ -40,8 +40,8 @@ import {
 import type { ValidationReportV1 } from "@/lib/loops/validation-report";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");

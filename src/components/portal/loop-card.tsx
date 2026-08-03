@@ -1,15 +1,14 @@
 "use client";
 
 import { useId } from "react";
-
-import { Label } from "@/components/ui/label";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Switch } from "@/components/ui/switch";
 import {
   getLoopEnabledStatus,
   getLoopRiskStatus,
   getLoopStateStatus,
 } from "@/components/portal/status-mapping";
+import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Switch } from "@/components/ui/switch";
 import type { LoopRegistryItem } from "@/lib/types";
 
 export function LoopCard({

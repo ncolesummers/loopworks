@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { AlertTriangle, Clock3, FileJson2, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
-import { getApprovalStatus, getRunStatus } from "@/components/portal/status-mapping";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
+import { getApprovalStatus, getRunStatus } from "@/components/portal/status-mapping";
 import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

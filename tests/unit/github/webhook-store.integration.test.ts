@@ -26,8 +26,8 @@ import type { LockContentionMetricInput } from "@/lib/observability/metrics";
 import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixture";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const lockTtlMs = 5 * 60 * 1000;
