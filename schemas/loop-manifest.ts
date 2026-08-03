@@ -28,9 +28,12 @@ export const personaTestIdValues = [
   "P02",
   "P03",
   "P04",
+  "P05",
   "M01",
   "M02",
   "M03",
+  "M04",
+  "M05",
   "A01",
   "A02",
   "A03",
@@ -40,6 +43,7 @@ export const personaTestIdValues = [
   "S02",
   "S03",
   "S04",
+  "S05",
 ] as const;
 
 export const labelCategoryValues = [

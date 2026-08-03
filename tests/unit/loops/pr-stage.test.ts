@@ -165,7 +165,7 @@ describe("development-loop PR stage", () => {
         issueNumber: 15,
         issueUrl: "https://github.com/ncolesummers/loopworks/issues/15",
         labels: ["area:github", "area:loops", "priority:p1"],
-        milestone: "M4 Validation + PR Path + MVP Security Review",
+        milestone: "M5 MVP Close: Security, Design, and Coverage Gates",
         repositoryFullName: "ncolesummers/loopworks",
         title: "PR creation path",
       },

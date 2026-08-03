@@ -1,5 +1,13 @@
+/** @vitest-environment node */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
-import { loopManifestSchema, retryableStatusValues } from "../../../schemas/loop-manifest";
+import {
+  loopManifestSchema,
+  personaTestIdValues,
+  retryableStatusValues,
+} from "../../../schemas/loop-manifest";
 import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
 
 type JsonSchemaObject = {
@@ -288,6 +296,69 @@ describe("loop manifest schema", () => {
         expect(issue.personaTestIds, `${milestone.name} / ${issue.title}`).toEqual(
           expect.arrayContaining([expect.stringMatching(/^[PMARS]\d{2}$/)]),
         );
+      }
+    }
+  });
+
+  it("keeps manifest milestone names in sync with the PRD roadmap", () => {
+    // The manifest is served verbatim by GET /api/loops/manifest, so a stale
+    // milestone name here hands operators and generated issues a roadmap that
+    // disagrees with docs/prd.md. Pin the two together.
+    const prd = readFileSync(resolve(__dirname, "../../../docs/prd.md"), "utf8");
+    const headings = new Map(
+      Array.from(prd.matchAll(/^### (M(\d+)) (.+)$/gm)).map(([, key, , title]) => [
+        key,
+        `${key} ${title}`.trim(),
+      ]),
+    );
+
+    const manifest = parseLoopManifest(defaultLoopManifest);
+    expect(manifest.milestones.length).toBeGreaterThan(0);
+
+    for (const milestone of manifest.milestones) {
+      expect(
+        headings.get(milestone.key),
+        `${milestone.key} missing from docs/prd.md`,
+      ).toBeDefined();
+      expect(milestone.name, `${milestone.key} name drifted from docs/prd.md`).toBe(
+        headings.get(milestone.key),
+      );
+    }
+  });
+
+  it("keeps the persona test id enum in sync with the persona matrix", () => {
+    // personaTestIdValues is what the manifest may claim as acceptance coverage.
+    // If it drifts from docs/personas-and-test-scenarios.md, seeded issues can
+    // either claim ids that no scenario defines or miss ids that do exist.
+    const personas = readFileSync(
+      resolve(__dirname, "../../../docs/personas-and-test-scenarios.md"),
+      "utf8",
+    );
+    const documented = Array.from(personas.matchAll(/^\| ([PMARS]\d{2}) \|/gm)).map(([, id]) => id);
+
+    expect(documented.length).toBeGreaterThan(0);
+    expect([...personaTestIdValues].sort()).toEqual([...new Set(documented)].sort());
+  });
+
+  it("keeps the JSON schema persona enum aligned with the Zod enum", () => {
+    // schemas/loop-manifest.schema.json is a hand-maintained mirror with no
+    // codegen link (see #106), so the two enums can silently disagree.
+    const jsonSchema = loopManifestJsonSchema as JsonSchemaObject & {
+      $defs?: Record<string, { enum?: string[] }>;
+    };
+
+    expect(jsonSchema.$defs?.personaTestId?.enum).toEqual([...personaTestIdValues]);
+  });
+
+  it("keeps milestone issue labels aligned with their milestone key", () => {
+    const manifest = parseLoopManifest(defaultLoopManifest);
+
+    for (const milestone of manifest.milestones) {
+      for (const issue of milestone.issues) {
+        const milestoneLabels = issue.labels.filter((label) => label.startsWith("milestone:"));
+        expect(milestoneLabels, `${milestone.key} / ${issue.title}`).toEqual([
+          `milestone:${milestone.key}`,
+        ]);
       }
     }
   });

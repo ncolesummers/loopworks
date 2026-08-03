@@ -71,7 +71,7 @@ The first usable Loopworks slice includes:
 11. PR creation path or dev-mode PR intent artifact after validations and approvals pass.
 12. MVP security review issue before declaring the MVP complete.
 13. Pino structured logging for API and integration boundaries with redaction and correlation fields.
-14. First-run operator activation: connecting a GitHub App installation, selecting repositories into the catalog, and registering a first loop, so a new operator can reach a first run without hand-editing configuration.
+14. First-run operator activation: connecting a GitHub App installation, selecting repositories into the catalog, and registering a first loop, so a new operator reaches a registered, runnable loop without hand-editing configuration. Activation completes at the registered loop; producing a first run depends on a trigger and is not part of activation.
 
 ## User Experience Requirements
 
@@ -83,7 +83,7 @@ The first usable Loopworks slice includes:
 6. Approval gates must show who approved, what changed, what validation evidence exists, and what operation will happen next.
 7. Vercel previews should be inspectable without leaving the work context.
 8. UI components should have Storybook coverage before becoming broad reusable primitives.
-9. Requirement 1 describes the returning operator. For an operator with no installation, no repos, or no loops, the first screen must show the next activation step rather than an empty operational dashboard. An empty state must never name an action it cannot route to, and first-run emptiness must render distinctly from an unavailable data source.
+9. Requirement 1 describes the returning operator. For an operator with no installation, no repos, or no loops, the first screen must show the next activation step rather than an empty operational dashboard. An operator who has registered a loop but produced no runs is activated, not onboarding: that surface explains what will trigger the first run rather than repeating an activation step. An empty state must never name an action it cannot route to, and first-run emptiness must render distinctly from an unavailable data source.
 
 ## Design System Direction
 
@@ -158,6 +158,8 @@ UI work is not complete until relevant Playwright coverage and Storybook stories
 Workflow work should reference persona-derived test cases where applicable. The matrix in `personas-and-test-scenarios.md` is the starting set for MVP acceptance coverage.
 
 ## MVP Milestones
+
+The MVP spans M0 through M5. M5 is the closing gate.
 
 ### M0 Project Foundation
 
@@ -236,6 +238,10 @@ Exit criteria:
 5. Coverage requirements are documented and enforced in CI against the full MVP surface.
 6. Persona test IDs A03, R01, R02, S01, S02, S03, and S04 are referenced by the milestone and seeded issues.
 
+## Post-MVP Milestones
+
+The MVP closes at M5. These milestones are sequenced in the GitHub backlog and recorded here so the map stays complete; M6 and M7 are specified to MVP depth because they were scoped before the boundary moved.
+
 ### M6 Observability + Alerting
 
 Instrument the implemented control-plane paths, ship logs to Axiom, build the first operator dashboards, and define alert monitors.
@@ -259,10 +265,6 @@ Exit criteria:
 2. Agent prompt/model/tool changes have eval scenarios.
 3. Governance policy is visible in the portal and in PR checks.
 4. Persona test IDs P03, A02, A03, R02, and S04 are referenced by the milestone and seeded issues.
-
-## Post-MVP Milestones
-
-These milestones exist in the GitHub backlog and are recorded here so the map stays complete. They are sequenced but not yet specified to the depth of M0-M7.
 
 ### M8 Agent Extensibility (Tools, MCP, Skills)
 

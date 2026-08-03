@@ -35,7 +35,7 @@ const issueTrigger = {
   issueNumber: 73,
   issueUrl: "https://github.com/ncolesummers/loopworks/issues/73",
   labels: ["agent-ready", "area:loops", "area:validation", "area:observability"],
-  milestone: "M4 Validation + PR Path + MVP Security Review",
+  milestone: "M5 MVP Close: Security, Design, and Coverage Gates",
   repositoryFullName: "ncolesummers/loopworks",
   title: "Add lifecycle telemetry to deterministic validation and run transitions",
 };

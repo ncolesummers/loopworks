@@ -26,7 +26,7 @@ body:
     attributes:
       label: Milestone
       description: Which milestone owns the review?
-      placeholder: M4 Validation + PR Path + MVP Security Review
+      placeholder: "M5 MVP Close: Security, Design, and Coverage Gates"
     validations:
       required: true
 

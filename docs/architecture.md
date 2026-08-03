@@ -244,7 +244,7 @@ Security-sensitive MVP areas:
 9. SSR and API route authorization.
 10. Audit attribution for approvals and high-impact actions.
 
-The M4 security review issue must check these areas before MVP completion.
+The M5 security review issue must check these areas before MVP completion. It runs after M4 Operator Onboarding so the GitHub App installation and callback path are in scope.
 
 ## CI And Local Validation
 
