@@ -10,9 +10,7 @@ import {
   repositories,
   runTerminalReasonEnum,
 } from "@/db/schema";
-import { createPgliteTestDatabase } from "../../helpers/pglite";
-
-const migrationReplayTimeoutMs = 15_000;
+import { createPgliteTestDatabase, pgliteTestHookTimeoutMs } from "../../helpers/pglite";
 
 function readMigrationSql() {
   return readdirSync("drizzle")
@@ -156,7 +154,7 @@ describe("Drizzle migrations", () => {
         await context.close();
       }
     },
-    migrationReplayTimeoutMs,
+    pgliteTestHookTimeoutMs,
   );
 
   it(
@@ -170,6 +168,6 @@ describe("Drizzle migrations", () => {
         await context.close();
       }
     },
-    migrationReplayTimeoutMs,
+    pgliteTestHookTimeoutMs,
   );
 });
