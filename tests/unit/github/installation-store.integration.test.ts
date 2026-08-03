@@ -151,4 +151,42 @@ describe("GitHub installation persistence", () => {
       updatedAt: new Date("2026-08-03T04:06:00.000Z"),
     });
   });
+
+  it("does not let stale or cross-App callbacks overwrite installation metadata", async () => {
+    const installationStore = store();
+    const currentInstallation = {
+      accountId: 12_400,
+      accountLogin: "current-loopworks-org",
+      accountType: "Organization",
+      appId: 124,
+      installationId: 124_001,
+      installedAt: new Date("2026-08-03T04:05:00.000Z"),
+      installedBy: "ncolesummers",
+      repositorySelection: "all",
+      updatedAt: new Date("2026-08-03T04:06:00.000Z"),
+    };
+    await installationStore.connectInstallation(currentInstallation);
+
+    await installationStore.connectInstallation({
+      ...currentInstallation,
+      accountLogin: "stale-loopworks-org",
+      repositorySelection: "selected",
+      updatedAt: new Date("2026-08-03T04:05:30.000Z"),
+    });
+    await installationStore.connectInstallation({
+      ...currentInstallation,
+      accountLogin: "other-app-org",
+      appId: 999,
+      updatedAt: new Date("2026-08-03T04:07:00.000Z"),
+    });
+
+    await expect(context.db.select().from(githubInstallations)).resolves.toEqual([
+      expect.objectContaining({
+        accountLogin: "current-loopworks-org",
+        appId: 124,
+        repositorySelection: "all",
+        updatedAt: new Date("2026-08-03T04:06:00.000Z"),
+      }),
+    ]);
+  });
 });

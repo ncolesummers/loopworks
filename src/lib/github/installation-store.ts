@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, lte } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import { githubInstallationFlows, githubInstallations } from "@/db/schema";
@@ -79,7 +79,13 @@ export function createGithubInstallationStore(database: GithubInstallationDataba
           repositorySelection: input.repositorySelection,
           updatedAt: input.updatedAt,
         })
-        .where(eq(githubInstallations.installationId, input.installationId));
+        .where(
+          and(
+            eq(githubInstallations.installationId, input.installationId),
+            eq(githubInstallations.appId, input.appId),
+            lte(githubInstallations.updatedAt, input.updatedAt),
+          ),
+        );
       return "already-connected";
     },
   };
