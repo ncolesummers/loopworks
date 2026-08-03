@@ -124,6 +124,19 @@ describe("configuration registry", () => {
     expect(() => validateConfig({}, "test")).not.toThrow();
   });
 
+  it.each([
+    "http://loopworks.example.com",
+    "https://operator:secret@loopworks.example.com",
+    "https://loopworks.example.com/base",
+    "https://loopworks.example.com?tenant=other",
+    "https://loopworks.example.com#callback",
+    "ftp://loopworks.example.com",
+  ])("rejects a non-canonical production public origin: %s", (publicUrl) => {
+    expect(() =>
+      validateConfig({ ...validProductionConfig, LOOPWORKS_PUBLIC_URL: publicUrl }, "production"),
+    ).toThrow(/LOOPWORKS_PUBLIC_URL.*runtime/i);
+  });
+
   it.each(
     configRegistry.flatMap((entry) => {
       const exampleValue = "exampleValue" in entry ? entry.exampleValue : undefined;

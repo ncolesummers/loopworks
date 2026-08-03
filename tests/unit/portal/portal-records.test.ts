@@ -38,6 +38,7 @@ describe("portal records (pglite integration)", () => {
 
     const result = await readPortalRecords({
       database: context.db,
+      githubAppId: 800_000,
       now: new Date("2026-06-30T09:10:00.000Z"),
     });
 
@@ -119,6 +120,67 @@ describe("portal records (pglite integration)", () => {
     );
   });
 
+  it("projects installations and derived settings for the matching active GitHub App", async () => {
+    await seedDemoData(testDatabase());
+
+    const result = await readPortalRecords({
+      database: context.db,
+      githubAppId: 800_000,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+
+    expect(result.records.githubInstallations).toEqual([
+      expect.objectContaining({ installationId: 800_000_001 }),
+    ]);
+    expect(result.records.githubSettings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "sso", enabled: true })]),
+    );
+  });
+
+  it.each([
+    ["missing", {}],
+    ["malformed", { GITHUB_APP_ID: "not-an-app-id" }],
+    ["zero", { GITHUB_APP_ID: "0" }],
+    ["negative", { GITHUB_APP_ID: "-1" }],
+    ["non-integer", { GITHUB_APP_ID: "1.5" }],
+    ["unsafe", { GITHUB_APP_ID: "9007199254740992" }],
+  ])("projects no installations when the active GitHub App ID is %s", async (_label, env) => {
+    await seedDemoData(testDatabase());
+
+    const result = await getPortalRecordsForPortal({
+      allowEmpty: true,
+      database: context.db,
+      env: { NODE_ENV: "development", ...env },
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+
+    expect(result.records.githubInstallations).toEqual([]);
+    expect(result.records.githubSettings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "sso", enabled: false })]),
+    );
+  });
+
+  it.each([
+    ["missing", {}],
+    ["malformed", { GITHUB_APP_ID: "not-an-app-id" }],
+  ])("surfaces unavailable state for %s production App identity", async (_label, env) => {
+    await seedDemoData(testDatabase());
+
+    const result = await getPortalRecordsForPortal({
+      allowEmpty: true,
+      database: context.db,
+      env: { NODE_ENV: "production", ...env },
+    });
+
+    expect(result).toMatchObject({
+      error: "Portal data store unavailable.",
+      source: "unavailable",
+      usedFallback: false,
+    });
+    expect(result.records.githubInstallations).toEqual([]);
+    expect(result.records.githubSettings).toEqual([]);
+  });
+
   it("fails closed for reachable production databases that are missing required portal rows", async () => {
     const result = await getPortalRecordsForPortal({
       database: context.db,
@@ -142,7 +204,7 @@ describe("portal records (pglite integration)", () => {
     const result = await getPortalRecordsForPortal({
       allowEmpty: true,
       database: context.db,
-      env: { NODE_ENV: "production" },
+      env: { GITHUB_APP_ID: "800000", NODE_ENV: "production" },
     });
 
     expect(result).toMatchObject({
@@ -217,6 +279,7 @@ describe("portal records (pglite integration)", () => {
     const result = await getPortalRecordsForPortal({
       database: unavailableDatabase as never,
       env: {
+        GITHUB_APP_ID: "800000",
         LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
         NODE_ENV: "production",
       },

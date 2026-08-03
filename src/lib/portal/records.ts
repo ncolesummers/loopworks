@@ -428,9 +428,9 @@ export async function readPortalRecords(input: {
       now,
     }),
   ]);
-  const activeGithubInstallationRows = input.githubAppId
-    ? githubInstallationRows.filter((installation) => installation.appId === input.githubAppId)
-    : githubInstallationRows;
+  const activeGithubInstallationRows = githubInstallationRows.filter(
+    (installation) => installation.appId === input.githubAppId,
+  );
   const loopsByRepository = groupBy(loopRows, (loop) => loop.repositoryId);
   const vercelProjectByRepository = firstBy(vercelProjectRows, (project) => project.repositoryId);
   const runIssueCounts = new Map<number, number>();
@@ -507,9 +507,13 @@ export async function getPortalRecordsForPortal(input: {
 
   try {
     const githubAppId = Number(readSuppliedRawConfig("GITHUB_APP_ID", env));
+    const hasValidGithubAppId = Number.isSafeInteger(githubAppId) && githubAppId > 0;
+    if (isProductionRuntime(env) && !hasValidGithubAppId) {
+      throw new Error("github_app_id_configuration_invalid");
+    }
     const result = await readPortalRecords({
       database: input.database,
-      githubAppId: Number.isSafeInteger(githubAppId) && githubAppId > 0 ? githubAppId : undefined,
+      githubAppId: hasValidGithubAppId ? githubAppId : undefined,
       now: input.now,
     });
 

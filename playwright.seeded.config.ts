@@ -18,6 +18,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       DATABASE_URL: process.env.DATABASE_URL ?? "",
+      GITHUB_APP_ID: "800000",
       LOOPWORKS_PORTAL_DATA_MODE: "",
     },
   },

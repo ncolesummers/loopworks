@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { parseLoopworksPublicOrigin } from "@/lib/public-origin";
 import { isProductionRuntime, isTruthyEnvValue } from "@/lib/runtime";
 
 export type ConfigRuntimeContext = "build" | "development" | "test" | "production";
@@ -504,6 +505,15 @@ export function readConfigValue(
 
   const result = definition.schema.safeParse(rawValue);
   if (!result.success) throw configError(definition, "value is invalid");
+  if (name === "LOOPWORKS_PUBLIC_URL") {
+    try {
+      parseLoopworksPublicOrigin(rawValue, {
+        NODE_ENV: context === "production" ? "production" : "development",
+      });
+    } catch (error) {
+      throw configError(definition, error instanceof Error ? error.message : "value is invalid");
+    }
+  }
   return result.data;
 }
 
