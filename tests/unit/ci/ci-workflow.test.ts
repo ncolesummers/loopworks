@@ -23,8 +23,24 @@ type Workflow = {
   jobs: Record<string, WorkflowJob>;
 };
 
-const workflowPath = path.resolve(__dirname, "../../../.github/workflows/ci.yml");
-const workflow = parse(readFileSync(workflowPath, "utf8")) as Workflow;
+const repoRoot = path.resolve(__dirname, "../../..");
+const workflow = parse(
+  readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8"),
+) as Workflow;
+
+const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
+
+/**
+ * The gates `bun run validate` chains, read off the script itself. `&&` means a
+ * gate that is present but non-blocking in CI is a real divergence, which is why
+ * the workflow assertions check for `continue-on-error` and `if` too.
+ */
+const validateScriptGates = packageJson.scripts.validate
+  .split("&&")
+  .map((command) => command.trim())
+  .filter((command) => command.length > 0);
 
 /** Both jobs check out, install, and drive Playwright, so both must cache. */
 const cachingJobs = ["validate", "seeded-postgres-e2e"] as const;
@@ -135,11 +151,11 @@ describe("ci workflow", () => {
     const installIndex = indexOfStep(jobName, isBrowserInstall, "Playwright browser install step");
     const install = stepsOf(jobName)[installIndex];
 
-    // Restoring the cache is an optimisation, not a precondition. Gating the
-    // install on `cache-hit` makes a partial or stale cache permanently fatal,
-    // because cache entries are immutable and a truncated save would then be
-    // restored forever. Running the install every time repairs such a cache and
-    // picks up any newly required browser; on a hit it is a no-op.
+    // Restoring the cache is an optimisation, not a precondition. The cache
+    // holds browser binaries only, so a fresh runner still needs the system
+    // packages `--with-deps` installs; and the browser *set* is not part of the
+    // key, so gating on `cache-hit` would let a newly configured browser hit
+    // this chromium-only cache and never download. On a hit it is a no-op.
     expect(install.if, `job \`${jobName}\` gates the browser install on the cache`).toBeUndefined();
     expect(cacheIndex).toBeLessThan(installIndex);
   });
@@ -160,18 +176,11 @@ describe("ci workflow", () => {
   }
 
   it("runs the same blocking gates as `bun run validate`", () => {
-    expectBlockingGates("validate", [
-      "bun run format:check",
-      "bun run lint",
-      "bun run agent-docs:check",
-      "bun run config:check",
-      "bun run config:access-check",
-      "bun run markdownlint",
-      "bun run typecheck",
-      "bun run test",
-      "bun run storybook:build",
-      "bun run test:e2e",
-    ]);
+    // Derived from the script rather than restated, so that adding a gate to
+    // `validate` without adding it to CI fails here. A second hand-maintained
+    // list would just recreate the drift this is meant to catch.
+    expect(validateScriptGates.length).toBeGreaterThan(0);
+    expectBlockingGates("validate", validateScriptGates);
   });
 
   it("keeps the auth bypass on the validate Playwright step", () => {

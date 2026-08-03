@@ -50,11 +50,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
-      # Deliberately not gated on `cache-hit`. Cache entries are immutable, so a
-      # truncated save (cancelled or timed-out job) would otherwise be restored
-      # forever and skip the install permanently. Running it every time repairs
-      # such a cache and picks up any newly required browser; on a hit the
-      # download is a no-op and only the system packages are installed.
+      # Deliberately not gated on `cache-hit`, for two reasons. The cache holds
+      # browser binaries only, so a fresh runner still needs the system packages
+      # `--with-deps` installs. And the browser *set* is not part of the key, so
+      # adding a browser to the Playwright config would hit this chromium-only
+      # cache and silently never download the new one. On a hit the download
+      # itself is a no-op.
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
