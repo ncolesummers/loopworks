@@ -22,6 +22,7 @@ import {
 } from "@agent/subagents/pr-preparer/lib/context";
 import { verifyImplementationExecutionReceipt } from "@agent/subagents/implementer/lib/tool-policy";
 import { verifyTestExecutionReceipt } from "@agent/subagents/test-writer/lib/tool-policy";
+import { readStringConfig } from "@/lib/config/registry";
 import {
   computeTestPlanDigest,
   createRedTestEvidenceArtifactContractMetadata,
@@ -507,7 +508,8 @@ export async function applyDevelopmentLoopTestWritingResult(
         );
       }
 
-      const receiptSecret = input.receiptSecret ?? process.env.LOOPWORKS_EVE_TEST_RECEIPT_SECRET;
+      const receiptSecret =
+        input.receiptSecret ?? readStringConfig("LOOPWORKS_EVE_TEST_RECEIPT_SECRET");
       if (!receiptSecret) {
         throw new DevelopmentLoopTransitionError(
           "Test execution receipt verification is not configured.",
@@ -800,7 +802,8 @@ export async function applyDevelopmentLoopImplementationResult(
         );
       }
 
-      const receiptSecret = input.receiptSecret ?? process.env.LOOPWORKS_EVE_TEST_RECEIPT_SECRET;
+      const receiptSecret =
+        input.receiptSecret ?? readStringConfig("LOOPWORKS_EVE_TEST_RECEIPT_SECRET");
       if (!receiptSecret) {
         throw new DevelopmentLoopTransitionError(
           "Implementation execution receipt verification is not configured.",

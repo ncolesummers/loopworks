@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { db } from "@/db/client";
+import { readStringConfig, readSuppliedBooleanConfig } from "@/lib/config/registry";
 import { createDrizzleGithubWebhookDeliveryStore } from "@/lib/github/webhook-store";
 import {
   canUseInMemoryGithubWebhookDeliveryStore,
@@ -117,15 +118,11 @@ const loopEnabledEnvKeys = {
   research: "LOOPWORKS_RESEARCH_LOOP_ENABLED",
 } as const;
 
-function readLoopEnabledFlag(value: string | undefined): boolean {
-  return value?.trim().toLowerCase() !== "false";
-}
-
 const resolveAgentReadyLoopState: GithubAgentReadyLoopResolver = (trigger) => ({
-  enabled: readLoopEnabledFlag(
-    process.env[loopEnabledEnvKeys[trigger.workflow]] ??
-      process.env.LOOPWORKS_AGENT_READY_LOOP_ENABLED,
-  ),
+  enabled:
+    readSuppliedBooleanConfig(loopEnabledEnvKeys[trigger.workflow]) ??
+    readSuppliedBooleanConfig("LOOPWORKS_AGENT_READY_LOOP_ENABLED") ??
+    true,
 });
 
 function getNextAction(
@@ -319,7 +316,7 @@ export async function handleGithubWebhookPost(
   request: Request,
   dependencies: GithubWebhookPostDependencies = {},
 ) {
-  const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
+  const webhookSecret = readStringConfig("GITHUB_WEBHOOK_SECRET");
   const deliveryId = request.headers.get("x-github-delivery");
   const event = request.headers.get("x-github-event") ?? "unknown";
   const getAgentReadyTrigger =

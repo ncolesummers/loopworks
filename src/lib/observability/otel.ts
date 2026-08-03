@@ -2,9 +2,15 @@ import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { PeriodicExportingMetricReader, type MetricReader } from "@opentelemetry/sdk-metrics";
 import { registerOTel, type Configuration } from "@vercel/otel";
 
+import { readSuppliedRawConfig, type ConfigName } from "@/lib/config/registry";
+
 export const loopworksServiceName = "loopworks";
 
 type Env = Record<string, string | undefined>;
+
+function envValue(name: ConfigName, env: Env): string | undefined {
+  return readSuppliedRawConfig(name, env);
+}
 
 export type LoopworksOtelMode = "local-safe" | "otlp-configured";
 
@@ -19,15 +25,17 @@ function compactResourceAttributes(attributes: Record<string, string | undefined
 }
 
 function resolveDeploymentEnvironment(env: Env): string {
-  return firstPresent(env.VERCEL_ENV, env.NODE_ENV) ?? "development";
+  return firstPresent(envValue("VERCEL_ENV", env), envValue("NODE_ENV", env)) ?? "development";
 }
 
 function resolveRepositoryName(env: Env): string | undefined {
-  if (env.VERCEL_GIT_REPO_OWNER && env.VERCEL_GIT_REPO_SLUG) {
-    return `${env.VERCEL_GIT_REPO_OWNER}/${env.VERCEL_GIT_REPO_SLUG}`;
+  const owner = envValue("VERCEL_GIT_REPO_OWNER", env);
+  const slug = envValue("VERCEL_GIT_REPO_SLUG", env);
+  if (owner && slug) {
+    return `${owner}/${slug}`;
   }
 
-  return env.VERCEL_GIT_REPO_SLUG;
+  return slug;
 }
 
 export function buildLoopworksResourceAttributes(env: Env = process.env) {
@@ -36,23 +44,23 @@ export function buildLoopworksResourceAttributes(env: Env = process.env) {
   return compactResourceAttributes({
     "deployment.environment": deploymentEnvironment,
     "deployment.environment.name": deploymentEnvironment,
-    "deployment.id": env.VERCEL_DEPLOYMENT_ID,
-    "loopworks.runtime": firstPresent(env.NEXT_RUNTIME, "nodejs"),
+    "deployment.id": envValue("VERCEL_DEPLOYMENT_ID", env),
+    "loopworks.runtime": firstPresent(envValue("NEXT_RUNTIME", env), "nodejs"),
     "service.name": loopworksServiceName,
     "service.namespace": "loopworks",
-    "vcs.ref.head.revision": env.VERCEL_GIT_COMMIT_SHA,
+    "vcs.ref.head.revision": envValue("VERCEL_GIT_COMMIT_SHA", env),
     "vcs.repository.name": resolveRepositoryName(env),
-    "vercel.environment": env.VERCEL_ENV,
-    "vercel.region": env.VERCEL_REGION,
+    "vercel.environment": envValue("VERCEL_ENV", env),
+    "vercel.region": envValue("VERCEL_REGION", env),
   });
 }
 
 export function resolveLoopworksOtelMode(env: Env = process.env): LoopworksOtelMode {
   return firstPresent(
-    env.OTEL_EXPORTER_OTLP_ENDPOINT,
-    env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
-    env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
-    env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+    envValue("OTEL_EXPORTER_OTLP_ENDPOINT", env),
+    envValue("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", env),
+    envValue("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", env),
+    envValue("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", env),
   )
     ? "otlp-configured"
     : "local-safe";
@@ -60,13 +68,19 @@ export function resolveLoopworksOtelMode(env: Env = process.env): LoopworksOtelM
 
 function hasOtlpTraceConfig(env: Env): boolean {
   return Boolean(
-    firstPresent(env.OTEL_EXPORTER_OTLP_ENDPOINT, env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT),
+    firstPresent(
+      envValue("OTEL_EXPORTER_OTLP_ENDPOINT", env),
+      envValue("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", env),
+    ),
   );
 }
 
 function hasOtlpMetricsConfig(env: Env): boolean {
   return Boolean(
-    firstPresent(env.OTEL_EXPORTER_OTLP_ENDPOINT, env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT),
+    firstPresent(
+      envValue("OTEL_EXPORTER_OTLP_ENDPOINT", env),
+      envValue("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", env),
+    ),
   );
 }
 

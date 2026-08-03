@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 
+import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { isProductionRuntime } from "@/lib/runtime";
 
 export type LocalDatabaseSafetyOptions = {
@@ -31,7 +32,7 @@ export function getLocalDatabaseSafetyError(
     );
   }
 
-  const value = env.DATABASE_URL;
+  const value = readSuppliedRawConfig("DATABASE_URL", env);
   if (!value) {
     return options.requireExplicitUrl
       ? "Refusing local database mutation: DATABASE_URL must explicitly identify a local Postgres database."

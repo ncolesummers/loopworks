@@ -1,4 +1,5 @@
-import { createLogger } from "@/lib/observability/logger";
+import { configRegistry } from "@/lib/config/registry";
+import { createLogger, loggerRedactionPaths } from "@/lib/observability/logger";
 import { context, trace, TraceFlags, type Span } from "@opentelemetry/api";
 
 function createMemoryDestination() {
@@ -139,6 +140,26 @@ describe("Loopworks logger", () => {
         github_webhook_secret: "[redacted]",
       },
     });
+  });
+
+  it("derives redaction paths for every registry secret", () => {
+    const secretNames = configRegistry.filter((entry) => entry.secret).map((entry) => entry.name);
+    for (const name of secretNames) {
+      expect(loggerRedactionPaths).toContain(name);
+      expect(loggerRedactionPaths).toContain(`*.${name}`);
+    }
+
+    const sink = createMemoryDestination();
+    const logger = createLogger({ level: "info", base: null }, sink.destination);
+    const secretValues = Object.fromEntries(secretNames.map((name) => [name, `value-for-${name}`]));
+
+    logger.info({ ...secretValues, nested: secretValues }, "registry_secret_redaction_test");
+
+    const entry = JSON.parse(sink.writes[0] ?? "{}") as Record<string, unknown>;
+    for (const name of secretNames) {
+      expect(entry[name]).toBe("[redacted]");
+      expect((entry.nested as Record<string, unknown>)[name]).toBe("[redacted]");
+    }
   });
 
   it("attaches the active W3C trace id while preserving structured log fields", () => {

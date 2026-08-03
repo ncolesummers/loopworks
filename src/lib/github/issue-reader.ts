@@ -1,5 +1,7 @@
 import { App } from "@octokit/app";
 
+import { readStringConfig } from "@/lib/config/registry";
+
 export type GitHubIssueSnapshot = {
   labels: string[];
   state: "open" | "closed";
@@ -34,7 +36,7 @@ type GitHubIssueReaderDependencies = {
 };
 
 function requiredEnvironmentValue(name: "GITHUB_APP_ID" | "GITHUB_APP_PRIVATE_KEY"): string {
-  const value = process.env[name]?.trim();
+  const value = readStringConfig(name);
   if (!value) throw new Error(`GitHub App configuration is missing ${name}.`);
   return value;
 }

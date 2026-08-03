@@ -34,6 +34,14 @@ describe("auth allowlist", () => {
     expect(config.bypass).toBe(false);
   });
 
+  it("defaults an omitted production bypass to disabled", () => {
+    expect(readAuthAllowlistConfig({ NODE_ENV: "production" })).toEqual({
+      bypass: false,
+      allowedGithubUsers: [],
+      allowedGithubOrgs: [],
+    });
+  });
+
   it("allows a configured GitHub user", () => {
     const allowed = isAllowedGithubIdentity(
       {

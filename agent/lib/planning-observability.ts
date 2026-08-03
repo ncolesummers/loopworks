@@ -1,4 +1,5 @@
-import { isProductionRuntime, isTruthyEnvValue } from "@/lib/runtime";
+import { readBooleanConfig } from "@/lib/config/registry";
+import { isProductionRuntime } from "@/lib/runtime";
 
 export type PlanningAgentTelemetryPolicy = {
   captureRawIO: boolean;
@@ -37,7 +38,7 @@ export type PlanningAgentLogFields = {
 export function resolvePlanningAgentTelemetryPolicy(
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ): PlanningAgentTelemetryPolicy {
-  const requestedRawCapture = isTruthyEnvValue(env.LOOPWORKS_EVE_CAPTURE_IO);
+  const requestedRawCapture = readBooleanConfig("LOOPWORKS_EVE_CAPTURE_IO", env);
 
   if (requestedRawCapture && isProductionRuntime(env)) {
     return {

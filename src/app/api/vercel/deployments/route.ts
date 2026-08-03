@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireApiSession } from "@/lib/auth/api";
+import { readStringConfig } from "@/lib/config/registry";
 import { createRequestLogger } from "@/lib/observability/logger";
 import { createVercelDeploymentClient } from "@/lib/vercel/client";
 
@@ -23,9 +24,9 @@ export async function GET(request: Request) {
   }
 
   const client = createVercelDeploymentClient({
-    accessToken: process.env.VERCEL_ACCESS_TOKEN,
-    teamId: process.env.VERCEL_TEAM_ID,
-    teamSlug: process.env.VERCEL_TEAM_SLUG,
+    accessToken: readStringConfig("VERCEL_ACCESS_TOKEN"),
+    teamId: readStringConfig("VERCEL_TEAM_ID"),
+    teamSlug: readStringConfig("VERCEL_TEAM_SLUG"),
     logger: requestLogger,
   });
 

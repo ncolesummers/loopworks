@@ -2,6 +2,8 @@ import { SpanStatusCode } from "@opentelemetry/api";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { readStringConfig } from "@/lib/config/registry";
+
 import { startLoopworksSpan } from "@/lib/observability/trace-context";
 import { computeTestPlanDigest } from "../../../test-writing-agent";
 import { loadImplementationHandoff } from "../lib/context";
@@ -73,7 +75,7 @@ export default defineTool({
           productionPatchSha256: input.productionPatchSha256,
           testPaths: [],
         },
-        process.env.LOOPWORKS_EVE_TEST_RECEIPT_SECRET ?? "",
+        readStringConfig("LOOPWORKS_EVE_TEST_RECEIPT_SECRET") ?? "",
       );
       span.setStatus({ code: SpanStatusCode.OK });
       return {
