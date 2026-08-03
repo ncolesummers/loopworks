@@ -1,10 +1,11 @@
 /** @vitest-environment node */
-import { defaultLoopManifest } from "@/lib/loops/manifest";
+
 import {
   type DevelopmentLoopActiveRun,
   type DevelopmentLoopRunStore,
   reconcileDevelopmentLoopRuns,
 } from "@/lib/loops/development-run-reconciliation";
+import { defaultLoopManifest } from "@/lib/loops/manifest";
 
 const now = new Date("2026-07-22T16:10:00.000Z");
 

@@ -1,4 +1,4 @@
-import { readSuppliedBooleanConfig, type BooleanConfigName } from "@/lib/config/registry";
+import { type BooleanConfigName, readSuppliedBooleanConfig } from "@/lib/config/registry";
 import { isProductionRuntime } from "@/lib/runtime";
 
 export type StageFixtureMode =

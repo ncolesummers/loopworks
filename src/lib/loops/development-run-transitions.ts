@@ -15,14 +15,13 @@ import {
   type PrPreparationResult,
   prPreparationResultSchema,
 } from "@agent/pr-preparation-agent";
+import { verifyImplementationExecutionReceipt } from "@agent/subagents/implementer/lib/tool-policy";
 import {
   createPrPreparationResultFromContext,
   loadPrPreparationContextWithDatabase,
   type PrPreparationReadDatabase,
 } from "@agent/subagents/pr-preparer/lib/context";
-import { verifyImplementationExecutionReceipt } from "@agent/subagents/implementer/lib/tool-policy";
 import { verifyTestExecutionReceipt } from "@agent/subagents/test-writer/lib/tool-policy";
-import { readStringConfig } from "@/lib/config/registry";
 import {
   computeTestPlanDigest,
   createRedTestEvidenceArtifactContractMetadata,
@@ -51,6 +50,7 @@ import {
   repositories,
   runSteps,
 } from "@/db/schema";
+import { readStringConfig } from "@/lib/config/registry";
 import type {
   GitHubFileChange,
   GitHubPullRequestWriteResult,
@@ -59,10 +59,10 @@ import type {
 import { createGitHubPullRequest, createPullRequestChangeDigest } from "@/lib/github/pull-request";
 import {
   calculateDevelopmentLoopRetryDelaySeconds,
+  type DevelopmentLoopRunDatabase,
   developmentLoopKey,
   drainDevelopmentLoopDispatchQueue,
   insertLinkedDevelopmentLoopRetryInTransaction,
-  type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { createPrIntentArtifactMetadata } from "@/lib/loops/pr-intent";
@@ -94,8 +94,8 @@ import {
   type DevelopmentLoopValidationDurationMetricInput,
   type DevelopmentLoopValidationOutcomeMetricInput,
   developmentLoopRunCompletedEventType,
-  recordDevelopmentLoopRunCompletedObservability,
   recordDevelopmentLoopRunCompletedMetric,
+  recordDevelopmentLoopRunCompletedObservability,
   recordDevelopmentLoopRunDurationMetric,
   recordDevelopmentLoopStepDurationMetric,
   recordDevelopmentLoopStepRetryMetric,

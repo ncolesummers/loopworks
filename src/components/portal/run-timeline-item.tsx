@@ -1,5 +1,5 @@
-import { StatusBadge } from "@/components/ui/status-badge";
 import { getRunStepStatus, getTimelineKindStatus } from "@/components/portal/status-mapping";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { TimelineEvent } from "@/lib/types";
 
 export function RunTimelineItem({ event }: Readonly<{ event: TimelineEvent }>) {

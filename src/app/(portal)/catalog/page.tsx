@@ -1,5 +1,5 @@
-import { db } from "@/db/client";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
+import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
   getPortalRecordsForPortal,

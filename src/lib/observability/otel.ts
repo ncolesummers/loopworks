@@ -1,8 +1,8 @@
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
-import { PeriodicExportingMetricReader, type MetricReader } from "@opentelemetry/sdk-metrics";
-import { registerOTel, type Configuration } from "@vercel/otel";
+import { type MetricReader, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
+import { type Configuration, registerOTel } from "@vercel/otel";
 
-import { readSuppliedRawConfig, type ConfigName } from "@/lib/config/registry";
+import { type ConfigName, readSuppliedRawConfig } from "@/lib/config/registry";
 
 export const loopworksServiceName = "loopworks";
 

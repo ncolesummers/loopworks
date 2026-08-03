@@ -8,12 +8,12 @@ import {
   buildPromptSubmitReport,
   buildStopReport,
   buildSubagentStartReport,
+  type ChangedFile,
   extractTouchedPaths,
   getGitRoot,
   isGeneratedPath,
   listChangedFilesFromGit,
   parseHookInput,
-  type ChangedFile,
 } from "../../../.codex/hooks/lib";
 import { sanitizeGitEnvironment } from "../../../scripts/git-environment";
 

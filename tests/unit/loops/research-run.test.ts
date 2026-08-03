@@ -26,8 +26,8 @@ import {
 } from "@/lib/loops/research-run";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const issueTrigger = {

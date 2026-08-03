@@ -2,8 +2,8 @@ import { ExternalLink, FileJson2 } from "lucide-react";
 
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
 import type { Status } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { ValidationGateOutcome, ValidationGateSummaryRecord } from "@/lib/types";
 
 function getValidationGateStatus(outcome: ValidationGateOutcome): {

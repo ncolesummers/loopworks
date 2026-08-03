@@ -1,4 +1,3 @@
-import type * as React from "react";
 import { cva } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -16,6 +15,7 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
+import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 

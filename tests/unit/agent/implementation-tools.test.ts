@@ -1,10 +1,11 @@
 /** @vitest-environment node */
-import { resolveImplementerFixtureMode } from "@agent/subagents/implementer/lib/fixture-mode";
+
 import { createImplementationFixtureHandoff } from "@agent/implementation-fixture";
+import { resolveImplementerFixtureMode } from "@agent/subagents/implementer/lib/fixture-mode";
 import {
   assertAllowedProductionFiles,
-  assertProductionWriteNotClaimed,
   assertExactFocusedCommand,
+  assertProductionWriteNotClaimed,
   assertWellFormedRepositoryFullName,
   classifyGreenRun,
   createImplementationExecutionReceipt,

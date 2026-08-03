@@ -29,8 +29,8 @@ import {
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const issueTrigger = {

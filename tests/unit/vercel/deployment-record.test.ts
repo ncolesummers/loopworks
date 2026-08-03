@@ -1,9 +1,9 @@
+import type { DeploymentRecord } from "@/lib/types";
 import {
   getDeploymentRecordsForResult,
   getDeploymentSourceLabel,
   mapVercelSummaryToDeploymentRecord,
 } from "@/lib/vercel/deployment-record";
-import type { DeploymentRecord } from "@/lib/types";
 import type { VercelDeploymentListResult, VercelDeploymentSummary } from "@/lib/vercel/types";
 
 const now = new Date("2026-06-18T21:05:00.000Z");

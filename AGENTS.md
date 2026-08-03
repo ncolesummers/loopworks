@@ -33,9 +33,14 @@ Before changing a scoped area, read its nearest guide:
 
 ## Validation
 
-Run focused checks while working. For broad changes run `bun run validate`. For
-app/runtime changes also run `bun run build`. Before committing, run
-`bun run precommit` or let `pre-k` run it.
+Run focused checks while working; `bun run check` is the Biome gate, covering
+formatting, lint, and assists such as import sorting in one pass. Never
+substitute `bun run format:check` or `bun run lint` for it — those skip assists,
+so unsorted imports pass them. `bun run check:fix` applies the safe fixes.
+
+For broad changes run `bun run validate`. For app/runtime changes also run
+`bun run build`. Before committing, run `bun run precommit` or let `pre-k` run
+it.
 
 ## Agent Docs
 

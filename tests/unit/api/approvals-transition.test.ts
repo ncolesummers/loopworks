@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 
-import type { Session } from "next-auth";
 import { eq } from "drizzle-orm";
+import type { Session } from "next-auth";
 import {
   handleApprovalTransitionPost,
   POST as postApprovalTransition,
@@ -12,8 +12,8 @@ import { applyApprovalTransition } from "@/lib/approval-transitions";
 import { type ApprovalTransitionDatabase, ApprovalWriteInProgressError } from "@/lib/approvals";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 vi.mock("@/auth", () => ({

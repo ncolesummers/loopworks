@@ -17,8 +17,8 @@ import { demoSeedIds, type SeedDatabase, seedDemoData } from "@/lib/seed/demo-da
 
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 describe("run records (pglite integration)", () => {
@@ -118,12 +118,12 @@ describe("run records (pglite integration)", () => {
     await seedDemoData(testDatabase());
     const report = validationReport([
       {
-        command: "bun run format:check",
+        command: "bun run check",
         durationMs: 1800,
         exitCode: 0,
         key: "format",
-        message: "Biome formatting passed.",
-        name: "Format check",
+        message: "Biome check passed.",
+        name: "Biome check",
         outcome: "pass",
         output: {
           sha256: "a".repeat(64),
@@ -190,11 +190,11 @@ describe("run records (pglite integration)", () => {
     });
     expect(failed?.validationSummary.gates).toEqual([
       expect.objectContaining({
-        command: "bun run format:check",
-        detail: "Biome formatting passed.",
+        command: "bun run check",
+        detail: "Biome check passed.",
         duration: "1.8s",
         key: "format",
-        name: "Format check",
+        name: "Biome check",
         outcome: "pass",
         rawArtifactHref: "https://github.com/ncolesummers/loopworks/actions/runs/76-format",
         required: true,
@@ -291,11 +291,11 @@ describe("run records (pglite integration)", () => {
         metadata: createValidationReportArtifactMetadata(
           validationReport([
             {
-              command: "bun run format:check",
+              command: "bun run check",
               durationMs: 1000,
               exitCode: 0,
               key: "format",
-              name: "Format check",
+              name: "Biome check",
               outcome: "pass",
               phase: "before_review",
               produces: "validation_report",

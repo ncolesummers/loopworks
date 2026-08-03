@@ -4,11 +4,11 @@ import { ValidationGateSummary } from "@/components/portal/validation-gate-summa
 import type { ValidationGateSummaryRecord } from "@/lib/types";
 
 const passedGate: ValidationGateSummaryRecord["gates"][number] = {
-  command: "bun run format:check",
-  detail: "Biome formatting passed.",
+  command: "bun run check",
+  detail: "Biome check passed.",
   duration: "1.8s",
   key: "format",
-  name: "Format check",
+  name: "Biome check",
   outcome: "pass",
   phase: "before_review",
   rawArtifactHref: "https://github.com/ncolesummers/loopworks/actions/runs/76-format",

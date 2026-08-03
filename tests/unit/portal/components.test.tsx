@@ -97,11 +97,11 @@ describe("portal reusable components", () => {
       state: "ready",
       gates: [
         {
-          command: "bun run format:check",
-          detail: "Biome formatting passed.",
+          command: "bun run check",
+          detail: "Biome check passed.",
           duration: "1.8s",
           key: "format",
-          name: "Format check",
+          name: "Biome check",
           outcome: "pass",
           phase: "before_review",
           rawArtifactHref: "artifact://validation/format.log",
@@ -134,7 +134,7 @@ describe("portal reusable components", () => {
     render(<ValidationGateSummary summary={summary} />);
 
     expect(screen.getByRole("region", { name: "Validation gates" })).toBeTruthy();
-    expect(screen.getByText("Format check")).toBeTruthy();
+    expect(screen.getByText("Biome check")).toBeTruthy();
     expect(screen.getByText("Unit tests")).toBeTruthy();
     expect(screen.getByText("Playwright")).toBeTruthy();
     expect(screen.getByText("Passed")).toBeTruthy();
@@ -142,11 +142,11 @@ describe("portal reusable components", () => {
     expect(screen.getByText("Skipped")).toBeTruthy();
     expect(screen.getAllByText("Required")).toHaveLength(2);
     expect(screen.getByText("Optional")).toBeTruthy();
-    expect(screen.getByText("bun run format:check")).toBeTruthy();
-    expect(screen.getByText("Biome formatting passed.")).toBeTruthy();
-    expect(screen.getByText("Biome formatting passed.").className).toContain("break-words");
+    expect(screen.getByText("bun run check")).toBeTruthy();
+    expect(screen.getByText("Biome check passed.")).toBeTruthy();
+    expect(screen.getByText("Biome check passed.").className).toContain("break-words");
     expect(
-      screen.getByRole("link", { name: "Open raw artifact for Format check" }).getAttribute("href"),
+      screen.getByRole("link", { name: "Open raw artifact for Biome check" }).getAttribute("href"),
     ).toBe("artifact://validation/format.log");
     expect(screen.queryByRole("link", { name: "Open raw artifact for Unit tests" })).toBeNull();
     expect(screen.getByText("Invalid raw artifact link")).toBeTruthy();

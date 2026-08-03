@@ -1,13 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   ArrowRight,
   CheckCircle2,
-  Clock3,
   Circle,
+  Clock3,
   Database,
   GitBranch,
   Github,
@@ -16,10 +13,11 @@ import {
   SquareTerminal,
   Workflow,
 } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 
 const navigation = [

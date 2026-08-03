@@ -18,8 +18,8 @@ import {
 } from "@/lib/loops/development-run-reconciliation-store";
 import {
   createPgliteTestDatabase,
-  pgliteTestHookTimeoutMs,
   type PgliteTestDatabase,
+  pgliteTestHookTimeoutMs,
 } from "../../helpers/pglite";
 
 const trigger = {

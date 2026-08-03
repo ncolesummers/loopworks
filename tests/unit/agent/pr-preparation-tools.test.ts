@@ -1,11 +1,11 @@
 /** @vitest-environment node */
 
+import { computePrPreparationDigest } from "@agent/pr-preparation-agent";
+import { createPrPreparationFixtureContext } from "@agent/pr-preparation-fixture";
 import {
   createPrPreparationResultFromContext,
   validatePrPreparationContext,
 } from "@agent/subagents/pr-preparer/lib/context";
-import { createPrPreparationFixtureContext } from "@agent/pr-preparation-fixture";
-import { computePrPreparationDigest } from "@agent/pr-preparation-agent";
 
 describe("PR preparation context policy", () => {
   it("accepts the exact post-review and post-commit handoff", () => {

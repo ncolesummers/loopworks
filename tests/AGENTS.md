@@ -61,4 +61,4 @@ test helpers under `tests/`.
 Include `bun run test` and relevant Playwright, Storybook, or Storybook-native
 component checks in final validation evidence.
 For auth changes, run the focused auth tests, `bun run typecheck`, and
-`bun run format:check` before the final aggregate validation.
+`bun run check` before the final aggregate validation.

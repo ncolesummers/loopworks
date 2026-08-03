@@ -1,5 +1,5 @@
-import { db } from "@/db/client";
 import { LoopRegistry } from "@/components/portal/dashboard-view";
+import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
   getPortalRecordsForPortal,

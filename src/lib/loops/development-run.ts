@@ -22,10 +22,12 @@ import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { createPrIntentArtifactContractMetadata } from "@/lib/loops/pr-intent";
 import { createScreenshotEvidenceArtifactContractMetadata } from "@/lib/loops/screenshot-evidence";
 import { createValidationReportArtifactContractMetadata } from "@/lib/loops/validation-report";
-import { recordDevelopmentLoopRunCreatedObservability } from "@/lib/observability/metrics";
-import { recordLockContentionMetric } from "@/lib/observability/metrics";
-import { recordDevelopmentLoopStepRetryMetric } from "@/lib/observability/metrics";
 import { logger } from "@/lib/observability/logger";
+import {
+  recordDevelopmentLoopRunCreatedObservability,
+  recordDevelopmentLoopStepRetryMetric,
+  recordLockContentionMetric,
+} from "@/lib/observability/metrics";
 import {
   getActiveTraceId,
   isValidW3cTraceId,

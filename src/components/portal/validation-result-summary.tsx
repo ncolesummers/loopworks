@@ -1,10 +1,9 @@
 import { ExternalLink } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { getValidationResultStatus } from "@/components/portal/status-mapping";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { ValidationResultRecord } from "@/lib/types";
 
 export function ValidationResultSummary({

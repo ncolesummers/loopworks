@@ -1,3 +1,9 @@
+import type { ScreenshotEvidence } from "@/lib/loops/screenshot-evidence";
+import {
+  computeScreenshotEvidenceDigest,
+  screenshotEvidenceSchemaId,
+} from "@/lib/loops/screenshot-evidence";
+import type { ValidationReportV1 } from "@/lib/loops/validation-report";
 import { createPlanningAgentSeedPlan } from "./planning-agent";
 import { computePrPreparationDigest } from "./pr-preparation-agent";
 import {
@@ -6,12 +12,6 @@ import {
   validationReviewAgentModelLabel,
   validationReviewResultSchemaId,
 } from "./validation-review-agent";
-import type { ScreenshotEvidence } from "@/lib/loops/screenshot-evidence";
-import {
-  computeScreenshotEvidenceDigest,
-  screenshotEvidenceSchemaId,
-} from "@/lib/loops/screenshot-evidence";
-import type { ValidationReportV1 } from "@/lib/loops/validation-report";
 
 export function createPrPreparationFixtureContext(input?: {
   deployment?: {

@@ -1,16 +1,14 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-
-import { readStringConfig } from "@/lib/config/registry";
-
 import { db } from "@/db/client";
+import { readStringConfig } from "@/lib/config/registry";
 import { applyDevelopmentLoopImplementationResult } from "@/lib/loops/development-run-transitions";
 import { logger } from "@/lib/observability/logger";
 import { computeImplementationDigest, implementationResultSchema } from "../implementation-agent";
 import { createImplementationFixtureHandoff } from "../implementation-fixture";
-import { computeTestPlanDigest } from "../test-writing-agent";
 import { resolveImplementerFixtureMode } from "../subagents/implementer/lib/fixture-mode";
 import { verifyImplementationExecutionReceipt } from "../subagents/implementer/lib/tool-policy";
+import { computeTestPlanDigest } from "../test-writing-agent";
 
 export default defineTool({
   description: "Persist a verified implementation patch and advance the durable run to validation.",

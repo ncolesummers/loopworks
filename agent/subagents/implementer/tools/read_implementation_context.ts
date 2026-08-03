@@ -5,8 +5,8 @@ import { z } from "zod";
 import { startLoopworksSpan } from "@/lib/observability/trace-context";
 import { computeImplementationDigest } from "../../../implementation-agent";
 import { computeTestPlanDigest } from "../../../test-writing-agent";
-import { resolveImplementerFixtureMode } from "../lib/fixture-mode";
 import { loadImplementationHandoff } from "../lib/context";
+import { resolveImplementerFixtureMode } from "../lib/fixture-mode";
 import { assertWellFormedRepositoryFullName } from "../lib/tool-policy";
 
 export default defineTool({

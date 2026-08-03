@@ -1,8 +1,7 @@
 import { ArrowUpRight, FileJson2 } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { getArtifactStatus } from "@/components/portal/status-mapping";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { ArtifactRecord } from "@/lib/types";
 
 export function ArtifactListItem({ artifact }: Readonly<{ artifact: ArtifactRecord }>) {

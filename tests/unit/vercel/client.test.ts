@@ -1,5 +1,5 @@
-import { createVercelDeploymentClient, mapVercelDeployment } from "@/lib/vercel/client";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { createVercelDeploymentClient, mapVercelDeployment } from "@/lib/vercel/client";
 import { vercelDeploymentFixtures } from "@/lib/vercel/fixtures";
 import type { DeploymentSummaryStatus, VercelDeploymentPayload } from "@/lib/vercel/types";
 

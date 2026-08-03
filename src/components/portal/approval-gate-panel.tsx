@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { ShieldCheck, Sparkles } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
+import { useState } from "react";
+import { getApprovalChecklistStatus, getApprovalStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -17,8 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { getApprovalChecklistStatus, getApprovalStatus } from "@/components/portal/status-mapping";
 import type { ApprovalGateRecord } from "@/lib/types";
 
 export function ApprovalGatePanel({

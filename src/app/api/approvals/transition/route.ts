@@ -5,9 +5,9 @@ import { applyApprovalTransition } from "@/lib/approval-transitions";
 import {
   ApprovalExpectedStatusError,
   ApprovalNotFoundError,
-  ApprovalWriteInProgressError,
   type ApprovalTransitionDatabase,
   ApprovalTransitionError,
+  ApprovalWriteInProgressError,
   approvalActionValues,
   approvalStatusValues,
 } from "@/lib/approvals";

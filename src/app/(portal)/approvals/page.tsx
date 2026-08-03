@@ -1,5 +1,5 @@
-import { db } from "@/db/client";
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
+import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
   getPortalRecordsForPortal,

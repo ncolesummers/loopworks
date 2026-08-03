@@ -1,5 +1,4 @@
 import type { GitHubIssueReader, GitHubIssueSnapshot } from "@/lib/github/issue-reader";
-import type { LoopManifest } from "../../../schemas/loop-manifest";
 import type {
   DevelopmentLoopTerminalReason,
   DevelopmentLoopTerminalStatus,
@@ -10,6 +9,7 @@ import {
   markLoopworksSpanOk,
   startDevelopmentLoopReconciliationSpan,
 } from "@/lib/observability/trace-context";
+import type { LoopManifest } from "../../../schemas/loop-manifest";
 
 export type DevelopmentLoopExecutionLiveness = "active" | "inactive" | "unknown";
 

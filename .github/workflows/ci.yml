@@ -59,11 +59,11 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Biome format check
-        run: bun run format:check
-
-      - name: Biome lint
-        run: bun run lint
+      # `check` is formatter + linter + assists in one pass. The narrower
+      # `format:check` and `lint` scripts skip assists entirely, so
+      # `assist/source/organizeImports` violations used to clear every gate.
+      - name: Biome check
+        run: bun run check
 
       - name: Agent docs sync check
         run: bun run agent-docs:check
