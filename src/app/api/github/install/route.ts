@@ -4,7 +4,11 @@ import { requireApiSession } from "@/lib/auth/api";
 import { createGithubInstallationRuntime } from "@/lib/github/installation-runtime";
 import { createRequestLogger } from "@/lib/observability/logger";
 import { recordGithubInstallationFlowOutcomeMetric } from "@/lib/observability/metrics";
-import { withLoopworksActiveSpan } from "@/lib/observability/trace-context";
+import {
+  type LoopworksSpan,
+  markGithubInstallationSpanOutcome,
+  withLoopworksActiveSpan,
+} from "@/lib/observability/trace-context";
 
 type StartSession =
   | { authenticated: true; actorId: string }
@@ -12,40 +16,68 @@ type StartSession =
 
 type GithubInstallationStartDependencies = {
   requireSession: (input: { route: string }) => Promise<StartSession>;
+  span: LoopworksSpan;
   start: (input: { actorId: string }) => Promise<{ location: string }>;
+};
+
+type GithubInstallationStartRouteDependencies = {
+  handleStart: typeof handleGithubInstallationStart;
+  withSpan: typeof withLoopworksActiveSpan;
 };
 
 export async function handleGithubInstallationStart(
   _request: Request,
   dependencies: Partial<GithubInstallationStartDependencies> = {},
 ): Promise<NextResponse> {
-  const session = await (dependencies.requireSession ?? requireApiSession)({
-    route: "api.github.install",
-  });
-  if (!session.authenticated) return session.response;
+  const phase = "installation" as const;
+  const requestLogger = createRequestLogger({ route: "api.github.install" });
 
-  const result = await (dependencies.start ?? createGithubInstallationRuntime().start)({
-    actorId: session.actorId,
-  });
-  recordGithubInstallationFlowOutcomeMetric({ outcome: "started", phase: "installation" });
-  createRequestLogger({ route: "api.github.install", actorId: session.actorId }).info(
-    { outcome: "started", phase: "installation" },
-    "github_installation_started",
+  try {
+    const session = await (dependencies.requireSession ?? requireApiSession)({
+      route: "api.github.install",
+    });
+    if (!session.authenticated) {
+      markGithubInstallationSpanOutcome(dependencies.span, {
+        outcome: "unauthenticated",
+        phase,
+      });
+      return session.response;
+    }
+
+    const result = await (dependencies.start ?? createGithubInstallationRuntime().start)({
+      actorId: session.actorId,
+    });
+    recordGithubInstallationFlowOutcomeMetric({ outcome: "started", phase });
+    createRequestLogger({ route: "api.github.install", actorId: session.actorId }).info(
+      { outcome: "started", phase },
+      "github_installation_started",
+    );
+    markGithubInstallationSpanOutcome(dependencies.span, { outcome: "started", phase });
+    return NextResponse.redirect(result.location);
+  } catch {
+    recordGithubInstallationFlowOutcomeMetric({ outcome: "error", phase });
+    requestLogger.warn({ outcome: "error", phase }, "github_installation_start_failed");
+    markGithubInstallationSpanOutcome(dependencies.span, { outcome: "error", phase });
+    return NextResponse.redirect(new URL("/settings?github=error", _request.url));
+  }
+}
+
+export async function runGithubInstallationStartRoute(
+  request: Request,
+  dependencies: Partial<GithubInstallationStartRouteDependencies> = {},
+): Promise<NextResponse> {
+  return (dependencies.withSpan ?? withLoopworksActiveSpan)(
+    "github.installation.start",
+    async (span) => {
+      try {
+        return await (dependencies.handleStart ?? handleGithubInstallationStart)(request, { span });
+      } finally {
+        span.end();
+      }
+    },
   );
-  return NextResponse.redirect(result.location);
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const requestLogger = createRequestLogger({ route: "api.github.install" });
-  return withLoopworksActiveSpan("github.installation.start", async (span) => {
-    try {
-      return await handleGithubInstallationStart(request);
-    } catch {
-      recordGithubInstallationFlowOutcomeMetric({ outcome: "error", phase: "installation" });
-      requestLogger.warn({ outcome: "error" }, "github_installation_start_failed");
-      return NextResponse.redirect(new URL("/settings?github=error", request.url));
-    } finally {
-      span.end();
-    }
-  });
+  return runGithubInstallationStartRoute(request);
 }

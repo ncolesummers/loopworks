@@ -153,7 +153,19 @@ describe("Loopworks logger", () => {
         githubInstallationState: "opaque-state",
         pkceVerifier: "production-pkce-verifier",
         verifierCookie: "production-cookie-verifier",
-        headers: { cookie: "loopworks-github-install-pkce=header-verifier" },
+        headers: {
+          cookie: "loopworks-github-install-pkce=header-verifier",
+          Cookie: "loopworks-github-install-pkce=uppercase-header-verifier",
+        },
+        request: {
+          headers: { Cookie: "loopworks-github-install-pkce=request-header-verifier" },
+        },
+        req: {
+          headers: { Cookie: "loopworks-github-install-pkce=req-header-verifier" },
+        },
+        transport: {
+          headers: { Cookie: "loopworks-github-install-pkce=nested-header-verifier" },
+        },
         nested: {
           authorization_code: "nested-code",
           code_verifier: "nested-verifier",
@@ -170,7 +182,10 @@ describe("Loopworks logger", () => {
       githubInstallationState: "[redacted]",
       pkceVerifier: "[redacted]",
       verifierCookie: "[redacted]",
-      headers: { cookie: "[redacted]" },
+      headers: { cookie: "[redacted]", Cookie: "[redacted]" },
+      request: { headers: { Cookie: "[redacted]" } },
+      req: { headers: { Cookie: "[redacted]" } },
+      transport: { headers: { Cookie: "[redacted]" } },
       nested: {
         authorization_code: "[redacted]",
         code_verifier: "[redacted]",

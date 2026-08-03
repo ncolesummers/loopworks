@@ -13,6 +13,8 @@ const w3cTraceIdPattern = /^[0-9a-f]{32}$/;
 const emptyTraceId = "00000000000000000000000000000000";
 const loopworksTracerName = "loopworks";
 
+export type LoopworksSpan = Span;
+
 export function getLoopworksTracer(): Tracer {
   return trace.getTracer(loopworksTracerName);
 }
@@ -105,6 +107,22 @@ export function markLoopworksSpanOk(span: Span): void {
 export function markLoopworksSpanError(span: Span, error: unknown): void {
   span.recordException(error instanceof Error ? error : String(error));
   span.setStatus({ code: SpanStatusCode.ERROR });
+}
+
+export function markGithubInstallationSpanOutcome(
+  span: Span | undefined,
+  input: { outcome: string; phase: "authorization" | "installation" },
+): void {
+  if (!span) return;
+
+  span.setAttribute("loopworks.github.installation.phase", input.phase);
+  span.setAttribute("loopworks.github.installation.outcome", input.outcome);
+  span.setStatus({
+    code:
+      input.outcome === "error" || input.outcome === "unauthenticated"
+        ? SpanStatusCode.ERROR
+        : SpanStatusCode.OK,
+  });
 }
 
 export function isValidW3cTraceId(traceId: unknown): traceId is string {
