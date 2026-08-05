@@ -70,6 +70,16 @@ export type GithubInstallationStore = {
   }): Promise<GithubInstallationChallenge | undefined>;
 };
 
+export type AvailableGithubRepository = {
+  archived: boolean;
+  defaultBranch: string;
+  fullName: string;
+  githubRepoId: number;
+  name: string;
+  owner: string;
+  private: boolean;
+};
+
 export type GithubInstallationGateway = {
   exchangeUserCode(input: {
     clientId: string;
@@ -79,6 +89,7 @@ export type GithubInstallationGateway = {
     redirectUri: string;
   }): Promise<string>;
   getAuthenticatedUserLogin(accessToken: string): Promise<string>;
+  listInstallationRepositories(installationId: number): Promise<AvailableGithubRepository[]>;
   userCanAccessInstallation(accessToken: string, installationId: number): Promise<boolean>;
   verifyAppInstallation(installationId: number): Promise<VerifiedGithubInstallation>;
 };

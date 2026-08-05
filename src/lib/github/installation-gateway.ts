@@ -2,12 +2,17 @@ import { App } from "@octokit/app";
 import { Octokit } from "@octokit/rest";
 
 import type {
+  AvailableGithubRepository,
   GithubInstallationGateway,
   VerifiedGithubInstallation,
 } from "@/lib/github/installation-flow";
 
 type AppClient = {
   request(route: string, parameters: Record<string, unknown>): Promise<{ data: unknown }>;
+};
+
+type InstallationClient = {
+  paginate(route: string, parameters: Record<string, unknown>): Promise<unknown[]>;
 };
 
 type UserClient = {
@@ -68,21 +73,49 @@ function normalizeInstallation(value: unknown): VerifiedGithubInstallation {
   };
 }
 
+function normalizeRepository(value: unknown): AvailableGithubRepository {
+  const data = object(value);
+  const owner = object(data?.owner);
+  const githubRepoId = positiveInteger(data?.id);
+  const name = typeof data?.name === "string" ? data.name : null;
+  const fullName = typeof data?.full_name === "string" ? data.full_name : null;
+  const ownerLogin = typeof owner?.login === "string" ? owner.login : null;
+  const defaultBranch = typeof data?.default_branch === "string" ? data.default_branch : null;
+
+  if (!githubRepoId || !name || !fullName || !ownerLogin || !defaultBranch) {
+    throw new Error("github_repository_verification_failed");
+  }
+
+  return {
+    archived: data?.archived === true,
+    defaultBranch,
+    fullName,
+    githubRepoId,
+    name,
+    owner: ownerLogin,
+    private: data?.private === true,
+  };
+}
+
 export function createGithubInstallationGateway(input: {
   appId: number;
   createAppClient?: () => AppClient;
+  createInstallationClient?: (installationId: number) => Promise<InstallationClient>;
   createUserClient?: (accessToken: string) => UserClient;
   fetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   privateKey: string;
 }): GithubInstallationGateway {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const createAppClient =
-    input.createAppClient ??
-    (() =>
-      new App({
-        appId: input.appId,
-        privateKey: input.privateKey.replaceAll("\\n", "\n"),
-      }).octokit as unknown as AppClient);
+  const app = () =>
+    new App({
+      appId: input.appId,
+      privateKey: input.privateKey.replaceAll("\\n", "\n"),
+    });
+  const createAppClient = input.createAppClient ?? (() => app().octokit as unknown as AppClient);
+  const createInstallationClient =
+    input.createInstallationClient ??
+    (async (installationId: number) =>
+      (await app().getInstallationOctokit(installationId)) as unknown as InstallationClient);
   const createUserClient =
     input.createUserClient ??
     ((accessToken: string) => new Octokit({ auth: accessToken }) as unknown as UserClient);
@@ -114,6 +147,14 @@ export function createGithubInstallationGateway(input: {
         throw new Error("github_oauth_exchange_failed");
       }
       return payload.access_token;
+    },
+
+    async listInstallationRepositories(installationId) {
+      const client = await createInstallationClient(installationId);
+      const repositories = await client.paginate("GET /installation/repositories", {
+        per_page: 100,
+      });
+      return repositories.map(normalizeRepository);
     },
 
     async getAuthenticatedUserLogin(accessToken) {

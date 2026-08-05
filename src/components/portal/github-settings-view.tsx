@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, KeyRound, Link2, Lock, RefreshCcw, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { getEnabledStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,9 @@ export function GitHubSettingsView({
                             </div>
                           </div>
                         ))}
+                        <Button asChild variant="outline" size="sm">
+                          <Link href="/settings/repositories">Select repositories</Link>
+                        </Button>
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4">

@@ -23,6 +23,9 @@ const portalRoutes = [
   },
 ] as const;
 
+// Reached from Settings rather than the nav, so it carries no `nav` entry.
+const repositorySelectionPath = "/settings/repositories";
+
 const portalSourceLabel = "Fixture fallback";
 const dbBackedPortalPaths = ["/", "/catalog", "/loops", "/approvals", "/settings"] as const;
 
@@ -392,6 +395,43 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByRole("dialog", { name: "Request security approval" })).toBeHidden();
   });
 
+  test("routes an operator from settings into repository selection and back", async ({ page }) => {
+    await page.goto("/settings");
+    await page.getByRole("link", { name: "Select repositories" }).click();
+
+    await expect(page).toHaveURL("/settings/repositories");
+    await expect(page.getByRole("heading", { name: "Repository selection" })).toBeVisible();
+    await page.getByRole("link", { name: "Back to GitHub settings" }).click();
+    await expect(page).toHaveURL("/settings");
+  });
+
+  test("keeps repository selection keyboard-operable and stable at mobile width", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/settings/repositories");
+
+    const search = page.getByLabel("Search repositories");
+    const selection = page.getByRole("checkbox", { name: /loopworks-agent/ });
+    const save = page.getByRole("button", { name: "Save selection" });
+
+    await expect(save).toBeDisabled();
+    await search.focus();
+    await search.fill("agent");
+    await expect(page.getByRole("checkbox", { name: /loopworks-web/ })).toHaveCount(0);
+
+    await selection.focus();
+    await page.keyboard.press("Space");
+    await expect(selection).toBeChecked();
+    // The fixture server serves ids GitHub does not know, so saving stays disabled and says why.
+    await expect(save).toBeDisabled();
+    await expect(page.getByText(/fixture data, so saving is disabled/i)).toBeVisible();
+
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+
   test("keeps the legacy GitHub settings route as a settings alias", async ({ page }) => {
     await page.goto("/github");
 
@@ -503,7 +543,7 @@ test.describe("Loopworks portal", () => {
       test("has no a11y violations (incl. contrast) on primary portal surfaces", async ({
         page,
       }) => {
-        for (const { path } of portalRoutes) {
+        for (const path of [...portalRoutes.map((route) => route.path), repositorySelectionPath]) {
           await page.goto(path);
           // Full default axe rule set (wcag2/wcag21/best-practice) WITH
           // color-contrast — only the prior contrast suppression is removed.
