@@ -49,6 +49,9 @@ function createHarness() {
     async getAuthenticatedUserLogin() {
       return "ncolesummers";
     },
+    async listInstallationRepositories() {
+      return [];
+    },
     async userCanAccessInstallation() {
       return true;
     },
