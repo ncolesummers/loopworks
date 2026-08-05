@@ -1,3 +1,4 @@
+import type { RepositorySelectionSnapshot } from "@/lib/github/repository-selection";
 import {
   createDevelopmentLoopRunSkeleton,
   projectDevelopmentLoopArtifacts,
@@ -21,6 +22,56 @@ const developmentLoopFixture = createDevelopmentLoopRunSkeleton({
 
 const developmentLoopTimeline = projectDevelopmentLoopTimeline(developmentLoopFixture);
 const developmentLoopArtifacts = projectDevelopmentLoopArtifacts(developmentLoopFixture);
+
+/**
+ * Development-only snapshot for the repository selection surface. Fixture mode never reaches
+ * GitHub, so this keeps the surface exercisable in Storybook, Playwright, and `dev:fixture`.
+ */
+export const repositorySelectionFixture: RepositorySelectionSnapshot = {
+  installation: {
+    accountLogin: "ncolesummers",
+    accountType: "User",
+    appId: 800_000,
+    installationId: 800_000_001,
+    repositorySelection: "selected",
+  },
+  repositories: [
+    {
+      accessible: true,
+      archived: false,
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-web",
+      githubRepoId: 900_000_001,
+      name: "loopworks-web",
+      owner: "ncolesummers",
+      private: false,
+      selected: true,
+    },
+    {
+      accessible: true,
+      archived: false,
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-agent",
+      githubRepoId: 900_000_002,
+      name: "loopworks-agent",
+      owner: "ncolesummers",
+      private: true,
+      selected: false,
+    },
+    {
+      accessible: true,
+      archived: true,
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-legacy",
+      githubRepoId: 900_000_003,
+      name: "loopworks-legacy",
+      owner: "ncolesummers",
+      private: false,
+      selected: false,
+    },
+  ],
+  status: "ready",
+};
 
 export const portalFixture: FixtureState = {
   githubInstallations: [
