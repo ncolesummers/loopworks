@@ -140,8 +140,20 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   independent installation record, truthful `no-installation` stage, and the
   Settings-specific successful-empty read path; acceptance remains pending
   review and aggregate validation.
-- [#125](https://github.com/ncolesummers/loopworks/issues/125): implement
-  repository selection.
+- [#125](https://github.com/ncolesummers/loopworks/issues/125): implemented
+  repository selection at `/settings/repositories`. Selection writes identity
+  fields into `repositories`, so the `no-repositories` boundary this ADR models
+  is now reachable from operator action rather than only from seeded data.
+  Deselection hard-deletes the row, matching this ADR's boundary statement, but
+  the store refuses when the repository still has `loops` or `loop_runs` rows so
+  the cascade never silently destroys run history.
+  `tests/unit/github/repository-selection.integration.test.ts` asserts both
+  boundary crossings through `readPortalRecords` and `deriveFirstRunState`. The
+  fixture limitation this ADR records still holds: `dev:fixture` cannot exercise
+  the onboarding transition, so the page serves an explicit, non-production
+  `repositorySelectionFixture` for Playwright and Storybook coverage while the
+  transition itself is proven by PGlite tests. Acceptance remains pending review
+  and aggregate validation.
 - [#126](https://github.com/ncolesummers/loopworks/issues/126): implement first
   loop registration.
 - [#127](https://github.com/ncolesummers/loopworks/issues/127): implement
