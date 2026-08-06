@@ -18,3 +18,7 @@ review, loop manifests, and contributor-facing documentation under `docs/`.
 ## Routing
 
 Use `docs/adr/AGENTS.md` for ADR-specific rules.
+
+Put operator procedures that touch live environments in `docs/runbooks/`. State
+the target environment at the top, and mark any destructive or secret-handling
+step as such where it appears, not only in a preamble.
