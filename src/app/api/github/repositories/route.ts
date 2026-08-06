@@ -18,6 +18,7 @@ const maxRepositoriesPerRequest = 500;
  */
 const loggableReasons = new Set([
   "github_installation_configuration_invalid",
+  "github_installation_token_failed",
   "github_repository_selection_failed",
   "github_repository_verification_failed",
 ]);

@@ -102,23 +102,56 @@ export function createGithubInstallationGateway(input: {
   createAppClient?: () => AppClient;
   createInstallationClient?: (installationId: number) => Promise<InstallationClient>;
   createUserClient?: (accessToken: string) => UserClient;
-  fetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  /** Only the OAuth code exchange. The Octokit clients below do not route through this. */
+  oauthFetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   privateKey: string;
 }): GithubInstallationGateway {
-  const fetchImpl = input.fetchImpl ?? fetch;
-  const app = () =>
-    new App({
+  const oauthFetchImpl = input.oauthFetchImpl ?? fetch;
+  let appInstance: App | null = null;
+  // Constructing `App` is not free and each mint re-signs an RSA JWT; build it once per gateway.
+  const app = () => {
+    appInstance ??= new App({
       appId: input.appId,
       privateKey: input.privateKey.replaceAll("\\n", "\n"),
     });
-  const createAppClient = input.createAppClient ?? (() => app().octokit as unknown as AppClient);
+    return appInstance;
+  };
+  // None of these three are annotated on purpose. The annotation is what #152 effectively had:
+  // it asserts the default satisfies the contract instead of checking it, so a client missing a
+  // method compiles clean and fails in production. Leaving them inferred makes each call site
+  // compare the real SDK shape against the structural type. Do not add a type annotation here.
+  const createAppClient = input.createAppClient ?? (() => app().octokit);
+  // `App.getInstallationOctokit` returns an `@octokit/core` instance, which has no `paginate`.
+  // Mint the installation token and wrap it in `@octokit/rest`, which bundles the paginate plugin.
+  // `getInstallationOctokit` cached its token internally; cache per installation so replacing it
+  // does not multiply mints against the per-installation rate limit. Tokens live an hour and a
+  // gateway is built per request, so no expiry handling is needed at this lifetime.
+  const installationClients = new Map<number, Promise<InstallationClient>>();
+  const mintInstallationClient = async (installationId: number) => {
+    const response = await app().octokit.request(
+      "POST /app/installations/{installation_id}/access_tokens",
+      { installation_id: installationId },
+    );
+    const token = object(response.data)?.token;
+    // An absent or renamed token would silently build an unauthenticated client, which fails
+    // later as an opaque 401 against a different endpoint.
+    if (typeof token !== "string" || !token) throw new Error("github_installation_token_failed");
+    return new Octokit({ auth: token });
+  };
   const createInstallationClient =
     input.createInstallationClient ??
-    (async (installationId: number) =>
-      (await app().getInstallationOctokit(installationId)) as unknown as InstallationClient);
+    ((installationId: number) => {
+      let client = installationClients.get(installationId);
+      if (!client) {
+        client = mintInstallationClient(installationId);
+        // A rejected mint must not be cached, or one transient failure poisons the gateway.
+        client.catch(() => installationClients.delete(installationId));
+        installationClients.set(installationId, client);
+      }
+      return client;
+    });
   const createUserClient =
-    input.createUserClient ??
-    ((accessToken: string) => new Octokit({ auth: accessToken }) as unknown as UserClient);
+    input.createUserClient ?? ((accessToken: string) => new Octokit({ auth: accessToken }));
 
   return {
     async exchangeUserCode(exchangeInput) {
@@ -129,7 +162,7 @@ export function createGithubInstallationGateway(input: {
         code_verifier: exchangeInput.codeVerifier,
         redirect_uri: exchangeInput.redirectUri,
       });
-      const response = await fetchImpl("https://github.com/login/oauth/access_token", {
+      const response = await oauthFetchImpl("https://github.com/login/oauth/access_token", {
         method: "POST",
         body,
         headers: {
