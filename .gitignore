@@ -16,6 +16,8 @@ test-results
 .env
 .env.local
 .env.*.local
+# Filled-in copy of scripts/prod-env.example; holds live production secrets.
+prod-env.local
 CLAUDE.local.md
 tsconfig.tsbuildinfo
 .vercel
