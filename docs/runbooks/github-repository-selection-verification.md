@@ -17,12 +17,21 @@ which makes it the only workable target without disabling deployment protection.
 | 5 | Production redeployed and booting | done |
 | 6 | `loopworks-empty` org | **not done** — only needed for step 10 |
 | 7 | PR #149 merged | done |
-| 8 | #152 (`paginate`) fixed and deployed | see below |
+| 8 | #152 (`paginate`) fixed and deployed | done |
 
-`/settings/repositories` shipped with #149, but #152 made every read fail:
-the installation client had no `paginate`, so steps 3-10 returned
-"Repository list unavailable" and `GET /api/github/repositories` returned 502.
-Steps 3-10 need the #152 fix deployed to production.
+`/settings/repositories` shipped with #149, but #152 made every read fail: the
+installation client had no `paginate`, so steps 3-10 returned "Repository list
+unavailable" and `GET /api/github/repositories` returned 502. Fixed in #154 and
+deployed to production.
+
+### Last verified
+
+2026-08-06, against installation `151596823` on `loopworks-sandbox`. Steps 3-5
+and 7-9 passed. Step 6 fails on a separate defect (#155). Step 10 has never been
+run — it needs the `loopworks-empty` org.
+
+Merging to `main` deploys production automatically through the Vercel Git
+integration; no manual deploy step is needed for a code change.
 
 ## What was already set up
 
@@ -107,17 +116,47 @@ Sign in at <https://loopworks.vercel.app>, then go to `/settings`.
 | --- | --- | --- |
 | 1 | `/settings` before installing | "Not connected" badge and a Connect GitHub App button |
 | 2 | Connect the App → `loopworks-sandbox`, "Only select repositories", pick 6 of 8 | returns to `/settings` with "connected successfully"; account `loopworks-sandbox`, type Organization, and the installation id render |
-| 3 | Click "Select repositories" | the 6 granted repos list; `factory-core`/`spike-notes` show Private, `legacy-runner` shows Archived, `delivery-ops` shows `trunk`, `ops-scripts` shows `develop`; the 2 ungranted repos are absent |
-| 4 | Type `ops` in search | list narrows to `ops-scripts`; Save stays disabled until a checkbox actually changes |
-| 5 | Select 2 repos → Save | "2 repositories selected, 0 removed"; Save returns to disabled and the boxes stay checked |
-| 6 | Visit `/catalog` | both repos present; "No repositories tracked" gone |
-| 7 | Back to selection, deselect 1 → Save | "0 repositories selected, 1 removed"; gone from `/catalog` |
-| 8 | Deselect the last one → Save | the catalog empty state returns |
+| 3 | Click "Select repositories" | the 6 granted repos list; `delivery-ops`/`factory-core` show Private, `legacy-runner` shows Archived, `delivery-ops` shows `trunk`, `ops-scripts` shows `develop`; `docs-site` and `spike-notes` are absent |
+| 4 | Type `scripts` in search | list narrows to `ops-scripts`; Save stays disabled until a checkbox actually changes |
+| 5 | Select 2 repos → Save | "2 repositories selected, 0 repositories removed."; Save returns to disabled and the boxes stay checked |
+| 6 | Visit `/catalog` | **blocked by #155** — see below |
+| 7 | Back to selection, deselect 1 → Save | "0 repositories selected, 1 repository removed." |
+| 8 | Deselect the last one → Save | the counter returns to "0 repositories selected" |
 | 9 | On GitHub, remove access to a *selected* repo, then reload the surface | that row shows "Access revoked", no Private/Archived badge, and is still deselectable |
 | 10 | Install on `loopworks-empty` with "All repositories", against an empty database | "No repositories reachable" with the "Adjust repository access on GitHub" link — different copy from step 1 |
 
+Which repos are granted is what step 3 actually asserts, so re-read it from the
+installation rather than trusting this table if the grant set has been changed.
+As of the last verification the 6 granted are `delivery-ops`, `factory-core`,
+`integration-playground`, `legacy-runner`, `ops-scripts`, and `portal-web`.
+
+Search is a substring match over the full name, so `ops` matches both
+`delivery-ops` and `ops-scripts` — it does not isolate one row. Use `scripts`.
+
 Step 5 is the one that proves the fix for the frozen-state bug the reviewers
 found: before it, Save stayed enabled and the same change could be replayed.
+
+Steps 6-8 originally asserted catalog contents. `/catalog` currently renders
+"No repositories tracked" no matter what is selected: in production the portal
+discards every record unless repositories, loops, deployments, an approval, and
+settings are *all* non-empty (`src/lib/portal/records.ts:520`), and loop
+registration is #126. Tracked as **#155**. Until it is fixed, verify steps 5-8
+through the selection counter and `GET /api/github/repositories`, not the
+catalog.
+
+### Step 9 in practice
+
+`gh api -X DELETE /user/installations/<id>/repositories/<repo_id>` returns 403
+with a personal access token — the endpoint needs a user-to-server token from
+the App. Do it through the web UI instead:
+
+<https://github.com/organizations/loopworks-sandbox/settings/installations/151596823>
+
+GitHub gates that page behind a sudo prompt ("Confirm access"), which needs an
+interactive password or passkey. An agent cannot clear it; a human has to.
+
+Restore access afterwards from the same page — "Select repositories" → pick the
+repo → Save — or the next run of step 3 will be one repo short.
 
 ### The in-use refusal
 
@@ -130,8 +169,12 @@ INSERT INTO loops (repository_id, github_issue_number, title)
 SELECT id, 1, 'manual in-use probe' FROM repositories LIMIT 1;
 ```
 
-Deselect that repo → expect it kept, the message "still has loop or run
-history", and the row still in `/catalog`. Then delete the probe row.
+Deselect that repo → expect it kept and the message "still has loop or run
+history". Then delete the probe row.
+
+Do not assert the row in `/catalog` here either — #155 keeps that surface empty,
+and one probe loop is not enough to satisfy its gate. This probe has not been
+run since #152 was fixed.
 
 ## Resetting between runs
 
@@ -180,4 +223,11 @@ To redo step 1, uninstall the App from the org:
 - **Operator-bound authorization (#145).** Any allowlisted operator can manage
   the installation; there is no per-operator access check to observe.
 - **Large installations (#148).** Eight repos will not surface the batching or
-  pagination limits.
+  pagination limits. Nor will they surface rate-limit behavior: the installation
+  client carries no retry or throttling plugin, so a secondary rate limit
+  mid-pagination fails the whole read with no retry and no coded reason.
+- **Real pagination.** Six repositories fit in one page at `per_page=100`, so no
+  step here crosses a page boundary. That path is covered offline instead, by
+  the MSW cases in `tests/unit/github/installation-gateway.test.ts` (ADR 0022).
+- **Catalog behavior (#155).** Nothing in this runbook can currently assert
+  catalog contents.
