@@ -15,7 +15,7 @@ which makes it the only workable target without disabling deployment protection.
 | 3 | GitHub App `loopworks-dev` (App ID 4491786) | done, settings confirmed |
 | 4 | Ten production env vars | done |
 | 5 | Production redeployed and booting | done |
-| 6 | `loopworks-empty` org | **not done** — only needed for step 10 |
+| 6 | `loopworks-sandbox-empty` org | done — empty by design, only needed for step 10 |
 | 7 | PR #149 merged | done |
 | 8 | #152 (`paginate`) fixed and deployed | done |
 
@@ -28,7 +28,7 @@ deployed to production.
 
 2026-08-06, against installation `151596823` on `loopworks-sandbox`. Steps 3-5
 and 7-9 passed. Step 6 fails on a separate defect (#155). Step 10 has never been
-run — it needs the `loopworks-empty` org.
+run — see "Step 10 costs a reset" below.
 
 Merging to `main` deploys production automatically through the Vercel Git
 integration; no manual deploy step is needed for a code change.
@@ -123,7 +123,7 @@ Sign in at <https://loopworks.vercel.app>, then go to `/settings`.
 | 7 | Back to selection, deselect 1 → Save | "0 repositories selected, 1 repository removed." |
 | 8 | Deselect the last one → Save | the counter returns to "0 repositories selected" |
 | 9 | On GitHub, remove access to a *selected* repo, then reload the surface | that row shows "Access revoked", no Private/Archived badge, and is still deselectable |
-| 10 | Install on `loopworks-empty` with "All repositories", against an empty database | "No repositories reachable" with the "Adjust repository access on GitHub" link — different copy from step 1 |
+| 10 | Install on `loopworks-sandbox-empty` with "All repositories", against an empty database | "No repositories reachable" with the "Adjust repository access on GitHub" link — different copy from step 1 |
 
 Which repos are granted is what step 3 actually asserts, so re-read it from the
 installation rather than trusting this table if the grant set has been changed.
@@ -143,6 +143,31 @@ settings are *all* non-empty (`src/lib/portal/records.ts:520`), and loop
 registration is #126. Tracked as **#155**. Until it is fixed, verify steps 5-8
 through the selection counter and `GET /api/github/repositories`, not the
 catalog.
+
+### Step 10 costs a reset
+
+Step 10 cannot be appended to a normal run. It needs
+`loopworks-sandbox-empty` to be the **only** connected installation, and that
+takes more than uninstalling the other one:
+
+- The surface manages one installation, chosen as the lowest installation id —
+  `const [installation] = await store.listInstallations()`
+  (`src/lib/github/repository-selection.ts:86`) over
+  `.orderBy(asc(githubInstallations.installationId))`
+  (`repository-selection-store.ts:60`). GitHub ids increase, so a newer
+  installation never wins while `loopworks-sandbox` (151596823) is connected.
+  That is #146.
+- Uninstalling `loopworks-sandbox` is still not enough: its row survives in
+  `github_installations` (#147), so it keeps winning the ordering and the
+  surface fails trying to read repositories the App can no longer reach. That is
+  an *error* state, not the empty state step 10 asserts.
+
+So the full sequence is: truncate, install on `loopworks-sandbox-empty` with
+"All repositories", verify, then reinstall on `loopworks-sandbox` and redo
+step 2. Budget a whole cycle for it, and expect several GitHub sudo prompts.
+
+The org itself exists and is intentionally empty — do not add repositories to
+it. `loopworks-empty` is a different, unrelated account owned by someone else.
 
 ### Step 9 in practice
 
