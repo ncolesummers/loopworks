@@ -98,7 +98,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.5.4",
     "drizzle-kit": "^0.31.10",
-    "jsdom": "^27.3.0",
+    "jsdom": "^30.0.1",
     "just-bash": "^3.2.0",
     "markdownlint-cli2": "^0.23.2",
     "msw": "^2.15.0",
