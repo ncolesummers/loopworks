@@ -60,6 +60,42 @@ describe("security scanner registry", () => {
     expect(validateLane).toEqual(["gitleaks", "osv", "semgrep"]);
   });
 
+  it("keeps the committed-history scan in the CI-only lane", () => {
+    // Asserted as an explicit list rather than derived. `it.each` over a
+    // filtered registry registers *zero tests* when the filter is empty, so
+    // deleting this scanner outright would have silently removed its coverage
+    // along with the scanner.
+    const ciOnly = scannerRegistry
+      .filter((scanner) => scanner.lane === "ci-only")
+      .map((scanner) => scanner.id);
+    expect(ciOnly).toEqual(["gitleaks-history"]);
+  });
+
+  it.each([
+    ["osv", "--config=osv-scanner.toml"],
+    ["gitleaks", "--exit-code=1"],
+    ["gitleaks", "--config=.gitleaks.toml"],
+    ["gitleaks", "--redact"],
+    ["gitleaks-history", "--exit-code=1"],
+    ["gitleaks-history", "--log-opts=--all"],
+    ["semgrep", "--error"],
+    ["semgrep", "--config=.semgrep/loopworks.yml"],
+  ])("keeps `%s` invoked with `%s`", (id, argument) => {
+    // Arguments are load-bearing, not cosmetic. Dropping `--error` makes
+    // semgrep exit 0 on findings; dropping `--exit-code=1` does the same for
+    // gitleaks; dropping `--config` points a scanner at default rules nobody
+    // reviewed. Each of those disables a gate while leaving it visibly wired.
+    expect(scannerById(id).scanArgs).toContain(argument);
+  });
+
+  it("keeps `--redact` on every gitleaks invocation", () => {
+    // CI logs are far more widely readable than the repository, so a matched
+    // secret must never be echoed into one.
+    for (const scanner of scannerRegistry.filter((entry) => entry.binary === "gitleaks")) {
+      expect(scanner.scanArgs, `${scanner.id} does not redact`).toContain("--redact");
+    }
+  });
+
   it("enforces secret and code findings, and records dependency findings", () => {
     // Pinned deliberately: OSV is the one advisory lane, and it is advisory
     // only until the dependency backlog is cleared. If a second scanner ever

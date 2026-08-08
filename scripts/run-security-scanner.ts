@@ -42,6 +42,12 @@ export type ScannerObservation = {
   installedVersion?: string;
   exitCode?: number;
   timedOut?: boolean;
+  /**
+   * Set when the scan was killed. Reported separately from `timedOut` so a
+   * SIGSEGV or an OOM kill is not described as a timeout, which would send
+   * whoever reads the failure hunting a performance problem that is not there.
+   */
+  killedBySignal?: string;
 };
 
 export type ScannerPolicy = {
@@ -125,7 +131,10 @@ export const scannerRegistry: readonly ScannerDefinition[] = [
     script: "security:semgrep",
     binary: "semgrep",
     version: "1.172.0",
-    versionArgs: ["--version"],
+    // The offline flags belong on the probe as well as the scan: bare
+    // `semgrep --version` contacts the update service, so a blocked network
+    // makes an installed semgrep look absent — locally that is a silent skip.
+    versionArgs: ["--version", "--metrics=off", "--disable-version-check"],
     scanArgs: [
       "scan",
       "--config=.semgrep/loopworks.yml",
@@ -207,6 +216,13 @@ export function resolveScannerOutcome(
     };
   }
 
+  if (observation.killedBySignal !== undefined) {
+    return {
+      disposition: "fail",
+      reason: `${scanner.binary} was killed by ${observation.killedBySignal} without producing a verdict`,
+    };
+  }
+
   if (observation.exitCode === undefined) {
     // A spawn failure sets neither an exit code nor the timeout flag. Treating
     // that as a pass would disable the gate without any visible signal.
@@ -259,12 +275,16 @@ function observe(scanner: ScannerDefinition, cwd: string): ScannerObservation {
     timeout: scanner.timeoutMs,
   });
 
+  // Node reports a killed child through the signal rather than the code, and
+  // flags the timeout case specifically through `error.code`. Reading only the
+  // signal would file every crash as a timeout.
+  const timedOut = (scan.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
   return {
     binaryPresent: true,
     installedVersion,
     exitCode: scan.status ?? undefined,
-    // Node reports a killed-by-timeout child through the signal, not the code.
-    timedOut: scan.signal !== null,
+    timedOut,
+    killedBySignal: !timedOut && scan.signal !== null ? scan.signal : undefined,
   };
 }
 

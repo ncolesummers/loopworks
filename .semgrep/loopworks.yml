@@ -28,9 +28,9 @@ rules:
 
   - id: loopworks-no-shell-exec
     message: >-
-      exec/execSync run the argument through a shell, so any interpolated value
-      becomes shell syntax. Use execFile/execFileSync with an argument array,
-      as src/lib/loops/validation-runner.ts does.
+      This runs the argument through a shell, so any interpolated value becomes
+      shell syntax. Use execFile/execFileSync with an argument array, as
+      src/lib/loops/validation-runner.ts does.
     severity: ERROR
     languages: [typescript, javascript]
     metadata:
@@ -48,6 +48,15 @@ rules:
       - patterns:
           - pattern: exec($CMD, ...)
           - pattern-not-regex: '\.\s*exec\s*\('
+      # `shell: true` turns the safe argv-array APIs back into a shell.
+      - pattern: "spawn($CMD, ..., {..., shell: true, ...})"
+      - pattern: "spawnSync($CMD, ..., {..., shell: true, ...})"
+      - pattern: "execFile($CMD, ..., {..., shell: true, ...})"
+      - pattern: "execFileSync($CMD, ..., {..., shell: true, ...})"
+      # Bun's shell tag, which this repository has available everywhere.
+      - pattern: Bun.$`...`
+      # `promisify(exec)` is the common way the callback form gets laundered.
+      - pattern: promisify(exec)(...)
 
   - id: loopworks-no-raw-sql
     message: >-
@@ -74,24 +83,62 @@ rules:
       cwe: "CWE-208: Observable Timing Discrepancy"
       invariant: src/AGENTS.md
     pattern-either:
+      # Inline comparison.
       - pattern: createHmac(...).digest(...) == $OTHER
       - pattern: createHmac(...).digest(...) === $OTHER
+      - pattern: createHmac(...).digest(...) != $OTHER
+      - pattern: createHmac(...).digest(...) !== $OTHER
       - pattern: $OTHER == createHmac(...).digest(...)
       - pattern: $OTHER === createHmac(...).digest(...)
+      - pattern: $OTHER != createHmac(...).digest(...)
+      - pattern: $OTHER !== createHmac(...).digest(...)
+      # The shape people actually write: compute into a local, compare later.
+      # Without these the rule only catches a one-liner nobody writes.
+      - patterns:
+          - pattern-either:
+              - pattern: $DIGEST == $OTHER
+              - pattern: $DIGEST === $OTHER
+              - pattern: $DIGEST != $OTHER
+              - pattern: $DIGEST !== $OTHER
+              - pattern: $OTHER == $DIGEST
+              - pattern: $OTHER === $DIGEST
+              - pattern: $OTHER != $DIGEST
+              - pattern: $OTHER !== $DIGEST
+          - pattern-inside: |
+              $DIGEST = createHmac(...).digest(...)
+              ...
 
   - id: loopworks-no-environment-inheritance-into-agent-sandbox
     message: >-
-      Spreading process.env into a child environment hands every credential in
-      the parent process to a stage subagent, which bypasses the approval-gated
-      write path. Pass an explicit allow-list of variables instead.
+      This hands every credential in the parent process to a child. A GitHub
+      token reaching a stage subagent bypasses the approval-gated write path
+      entirely. Pass an explicit allow-list as `env`, and remember that omitting
+      `env` inherits everything by default.
     severity: ERROR
     languages: [typescript, javascript]
     paths:
       include:
-        - agent/
-        - src/lib/loops/
+        - /agent/
+        - /src/lib/loops/
     metadata:
       category: security
       cwe: "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
       invariant: docs/adr/0015-stage-orchestrator-and-isolated-subagent-handoffs.md
-    pattern-regex: 'env\s*:\s*\{\s*\.\.\.process\.env'
+    pattern-either:
+      # Explicit spread, in any of the shapes that reach the same place.
+      - pattern: |
+          {..., env: {..., ...process.env, ...}, ...}
+      - pattern: |
+          {..., env: Object.assign({}, process.env, ...), ...}
+      - pattern: |
+          {..., env: process.env, ...}
+      # Omitting `env` entirely inherits the full parent environment. This is
+      # the more common shape and the original rule missed it, which inverted
+      # the rule against Node's own default.
+      - patterns:
+          - pattern-either:
+              - pattern: spawn($CMD, ...)
+              - pattern: spawnSync($CMD, ...)
+              - pattern: execFile($CMD, ...)
+              - pattern: execFileSync($CMD, ...)
+          - pattern-not: "$F(..., {..., env: $E, ...}, ...)"

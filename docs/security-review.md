@@ -137,6 +137,19 @@ Versions are pinned exactly in `scripts/run-security-scanner.ts` and the runner
 refuses to run against any other version — a mismatched binary is a present
 analyzer applying rules nobody reviewed, so it fails rather than skips.
 
+Integrity in CI is not uniform, and the difference is worth knowing:
+
+- Gitleaks and OSV-Scanner are downloaded and checked against a SHA-256 digest
+  pinned **in `ci.yml` itself**, not against the publisher's manifest — fetching
+  that manifest from the same origin as the binary only proves the transfer was
+  not corrupted. The binaries are deliberately **not cached**: a cache keyed on
+  version alone, with a "skip the download if present" guard, would let anyone
+  who can run a workflow seed it with a stub that prints the pinned version, and
+  the version check would then certify the stub.
+- Semgrep is a Python tool with no single release artifact to digest-pin, so the
+  `==` pin is trust-on-first-use against PyPI and its transitive tree is
+  unpinned. That is weaker, and it is the price of having a SAST lane at all.
+
 Install locally:
 
 ```bash
@@ -183,7 +196,10 @@ asserts it across the whole workflow file.
   never a widened pattern.
 - Each carries a written justification, and an expiry where the scanner supports
   one. `tests/unit/ci/security-scanning.test.ts` fails on a broad or unexplained
-  entry in either TOML baseline.
+  entry — including entries *inside* a multi-line `regexes` or `paths` array,
+  which is the shape every real suppression takes and the one a naive
+  line-oriented check misses. Appending a catch-all pattern to an allowlist
+  array disables Gitleaks entirely, and now fails the build.
 - Baselines are never regenerated or widened in CI.
 - Findings are fixed, or converted into separately prioritized, evidence-backed
   issues. No verified Critical or High finding is silently baselined.
@@ -194,8 +210,14 @@ Current suppressions:
   to the agent output-redaction test, which asserts the redactor strips it.
 - `.gitleaks.toml` — the generated `exampleValue` placeholders from the config
   registry, which `readConfigValue` already rejects at runtime in production;
-  and path exclusions for gitignored build output, which is scope rather than
-  suppression.
+  and path exclusions for build output. Note that Gitleaks applies path
+  exclusions in `git` mode as well as `dir` mode, so an exclusion hides a path
+  from the history gate too. Every entry is checked against `git ls-files` by
+  `tests/unit/ci/security-scanning.test.ts`, which fails if one starts covering
+  tracked files — `bun.lock` and all of `.claude/` were both exactly that
+  before review caught it.
+- `.semgrepignore` — replaces Semgrep's bundled default, which excluded
+  `tests/` and silently took 119 files out of scope.
 - `osv-scanner.toml` — none. The dependency backlog is tracked in #177 rather
   than baselined.
 

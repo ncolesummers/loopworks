@@ -1,0 +1,17 @@
+# Semgrep's bundled default ignore list excludes `tests/`, which silently took
+# the entire test tree out of scope — 0 of 328 files scanned came from `tests/`
+# before this file existed. Test code constructs sandboxes, spawns processes,
+# and handles credentials, so it is exactly where these rules need to look.
+#
+# Declaring this file replaces the bundled default rather than extending it, so
+# the exclusions below are the complete list.
+
+node_modules/
+.next/
+.eve/
+.claude/worktrees/
+coverage/
+storybook-static/
+playwright-report/
+test-results/
+*.min.js

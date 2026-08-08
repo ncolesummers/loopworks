@@ -31,16 +31,22 @@ regexes = [
 
 # Scope, not suppression. `gitleaks dir` has no gitignore support, so without
 # these it walks 1.2 GB of dependencies and build output — three minutes, and
-# 120 findings that are all upstream test fixtures. Every path below is
-# gitignored and therefore cannot hold a committed secret; the history gate
-# (`bun run security:gitleaks:history`) reads commits, so it is unaffected.
-# Each entry is anchored: a stray `node_modules` inside `src/` would still be
-# scanned.
+# 120 findings that are all upstream test fixtures.
+#
+# These apply to the history gate too, not only the working-tree gate, so an
+# entry here hides a path from *both*. Every entry below is therefore checked
+# against `git ls-files` and matches nothing tracked; `tests/unit/ci/
+# security-scanning.test.ts` re-checks that on every run, so an exclusion that
+# starts covering tracked files fails the build rather than going quiet.
+#
+# Each entry is anchored: a stray `node_modules` inside `src/` is still scanned.
 paths = [
   '''^node_modules/''',
   '''^\.next/''',
   '''^\.eve/''',
-  '''^\.claude/''',
+  # Scratch checkouts only. Deliberately not all of `.claude/` — `.claude/
+  # skills/` is tracked and must be scanned.
+  '''^\.claude/worktrees/''',
   # Real local credentials, gitignored, and never committable. `.env.example`
   # is deliberately not matched here — it is tracked, so it must be scanned.
   '''^\.env$''',
@@ -51,5 +57,4 @@ paths = [
   '''^storybook-static/''',
   '''^playwright-report/''',
   '''^test-results/''',
-  '''^bun\.lock$''',
 ]
