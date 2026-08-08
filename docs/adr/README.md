@@ -43,6 +43,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0020](0020-central-validated-configuration-registry.md) | Proposed | Centralize validated environment metadata while preserving injected readers and build-safe startup policy. |
 | [0021](0021-secure-github-app-installation-callback.md) | Proposed | Verify GitHub App installations with one-time actor-bound state, PKCE, and transient user authorization before persistence. |
 | [0022](0022-msw-for-third-party-boundary-tests.md) | Proposed | Intercept HTTP with MSW so tests exercise real third-party client construction instead of injected fakes. |
+| [0023](0023-self-improving-loops-and-approved-memory.md) | Proposed | Derive exact run outcomes, use a sibling retrospector, and inject only approved, in-scope learned memory under deterministic decay and context limits. |
 
 ## Template
 
