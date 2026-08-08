@@ -1,7 +1,14 @@
 import { and, asc, eq, isNull, notExists, or, sql } from "drizzle-orm";
 
 import type { db } from "@/db/client";
-import { githubInstallations, loopRuns, loops, repositories, vercelProjects } from "@/db/schema";
+import {
+  githubInstallations,
+  loopDefinitions,
+  loopRuns,
+  loops,
+  repositories,
+  vercelProjects,
+} from "@/db/schema";
 import type { ConnectedGithubInstallation } from "@/lib/github/repository-selection";
 
 export type GithubRepositorySelectionDatabase = Pick<
@@ -114,8 +121,9 @@ export function createGithubRepositorySelectionStore(
       githubRepoId: number;
       installationId: number;
     }): Promise<RepositoryDeselectionOutcome> {
-      // Deleting `repositories` cascades to loops, runs, and Vercel project links, so the guard and
-      // the delete must be one statement: a separate count would be a time-of-check race.
+      // Deleting `repositories` cascades to loops, registered loop definitions, runs, and Vercel
+      // project links, so the guard and the delete must be one statement: a separate count would be
+      // a time-of-check race.
       const deleted = await database
         .delete(repositories)
         .where(
@@ -127,6 +135,12 @@ export function createGithubRepositorySelectionStore(
                 .select({ present: sql`1` })
                 .from(loops)
                 .where(eq(loops.repositoryId, repositories.id)),
+            ),
+            notExists(
+              database
+                .select({ present: sql`1` })
+                .from(loopDefinitions)
+                .where(eq(loopDefinitions.repositoryId, repositories.id)),
             ),
             notExists(
               database
