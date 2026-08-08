@@ -299,6 +299,22 @@ function setting(
   return { detail, enabled, key, title };
 }
 
+/**
+ * Every GitHub setting key a successful read projects, and the single source of
+ * truth for both `mapSettings` and `hasPortalProjectionIntegrity`.
+ *
+ * The `satisfies` clause requires one entry per `GitHubSettingKey`, so adding a
+ * setting key without listing it here fails to compile.
+ */
+const githubSettingKeys = Object.keys({
+  "issue-sync": true,
+  "label-mapping": true,
+  "pr-sync": true,
+  "secret-redaction": true,
+  sso: true,
+  webhooks: true,
+} satisfies Record<GitHubSettingKey, true>) as GitHubSettingKey[];
+
 function mapSettings(input: {
   approvals: ApprovalRow[];
   installations: GithubInstallationRow[];
@@ -310,56 +326,61 @@ function mapSettings(input: {
   );
   const hasPrArtifacts = input.runArtifacts.some((artifact) => artifact.label.includes("PR"));
 
-  return [
-    setting(
-      "sso",
-      "GitHub SSO",
-      input.installations.length > 0
-        ? `${input.installations.length} GitHub App installation${input.installations.length === 1 ? " is" : "s are"} connected.`
-        : "No GitHub App installation is connected yet.",
-      input.installations.length > 0,
-    ),
-    setting(
-      "webhooks",
-      "Webhooks",
-      input.loops.length > 0
-        ? "Loop rows are available from issue synchronization."
-        : "Webhook issue synchronization has not populated loops yet.",
-      input.loops.length > 0,
-    ),
-    setting(
-      "issue-sync",
-      "Issue sync",
-      input.loops.length > 0
-        ? `${input.loops.length} synced issue loops are visible.`
-        : "No issue loops are synced yet.",
-      input.loops.length > 0,
-    ),
-    setting(
-      "pr-sync",
-      "PR sync",
-      hasPrArtifacts
-        ? "PR intent artifacts are available from completed runs."
-        : "No PR intent artifacts are available yet.",
-      hasPrArtifacts,
-    ),
-    setting(
-      "label-mapping",
-      "Label mapping",
-      hasLabels
+  // Keyed by GitHubSettingKey so the projection stays exhaustive by construction:
+  // adding a setting key without projecting it fails to compile, and the
+  // projected key set can never drift from `githubSettingKeys` below.
+  const projections: Record<GitHubSettingKey, Omit<GitHubSettingRecord, "key">> = {
+    "issue-sync": {
+      detail:
+        input.loops.length > 0
+          ? `${input.loops.length} synced issue loops are visible.`
+          : "No issue loops are synced yet.",
+      enabled: input.loops.length > 0,
+      title: "Issue sync",
+    },
+    "label-mapping": {
+      detail: hasLabels
         ? "Milestone, area, and priority labels are mapped into loop state."
         : "No milestone, area, or priority labels are mapped yet.",
-      hasLabels,
-    ),
-    setting(
-      "secret-redaction",
-      "Secret redaction",
-      input.approvals.length > 0
-        ? "Approval summaries avoid token and credential material."
-        : "No approval summaries are available to project redaction state yet.",
-      input.approvals.length > 0,
-    ),
-  ];
+      enabled: hasLabels,
+      title: "Label mapping",
+    },
+    "pr-sync": {
+      detail: hasPrArtifacts
+        ? "PR intent artifacts are available from completed runs."
+        : "No PR intent artifacts are available yet.",
+      enabled: hasPrArtifacts,
+      title: "PR sync",
+    },
+    "secret-redaction": {
+      detail:
+        input.approvals.length > 0
+          ? "Approval summaries avoid token and credential material."
+          : "No approval summaries are available to project redaction state yet.",
+      enabled: input.approvals.length > 0,
+      title: "Secret redaction",
+    },
+    sso: {
+      detail:
+        input.installations.length > 0
+          ? `${input.installations.length} GitHub App installation${input.installations.length === 1 ? " is" : "s are"} connected.`
+          : "No GitHub App installation is connected yet.",
+      enabled: input.installations.length > 0,
+      title: "GitHub SSO",
+    },
+    webhooks: {
+      detail:
+        input.loops.length > 0
+          ? "Loop rows are available from issue synchronization."
+          : "Webhook issue synchronization has not populated loops yet.",
+      enabled: input.loops.length > 0,
+      title: "Webhooks",
+    },
+  };
+
+  return githubSettingKeys.map((key) =>
+    setting(key, projections[key].title, projections[key].detail, projections[key].enabled),
+  );
 }
 
 function fixturePortalRecords(): PortalRecords {
