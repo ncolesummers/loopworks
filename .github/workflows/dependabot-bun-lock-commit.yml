@@ -1,0 +1,82 @@
+name: Dependabot Bun lockfile commit
+
+on:
+  workflow_run:
+    workflows: [Dependabot Bun lockfile generation]
+    types: [completed]
+
+# The event is privileged even though the generating PR workflow is not. Deny
+# everything by default and grant only artifact read plus the branch write.
+permissions: {}
+
+jobs:
+  commit:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    permissions:
+      actions: write
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Commit changed bun.lock
+        id: commit
+        env:
+          ARTIFACT_PATH: ${{ runner.temp }}/dependabot-bun-lock
+          EXPECTED_HEAD: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          REPOSITORY_PATH: ${{ runner.temp }}/dependabot-repository
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_PATH"
+          gh run download "$RUN_ID" \
+            --repo "$HEAD_REPOSITORY" \
+            --name dependabot-bun-lock \
+            --dir "$ARTIFACT_PATH"
+
+          test "$(cat "$ARTIFACT_PATH/head-ref")" = "$HEAD_REF"
+          test "$(cat "$ARTIFACT_PATH/head-repository")" = "$HEAD_REPOSITORY"
+          test "$(cat "$ARTIFACT_PATH/head-sha")" = "$EXPECTED_HEAD"
+
+          git init "$REPOSITORY_PATH"
+          cd "$REPOSITORY_PATH"
+          git remote add origin "https://github.com/${HEAD_REPOSITORY}.git"
+          git fetch --no-tags origin "refs/heads/${HEAD_REF}"
+          CURRENT_HEAD="$(git rev-parse FETCH_HEAD)"
+
+          # A retry after a successful push may see the exact repair commit.
+          # Accept only that one-commit, bun.lock-only child; any other newer
+          # head is stale and must be handled by its own generator run.
+          if test "$CURRENT_HEAD" != "$EXPECTED_HEAD"; then
+            test "$(git rev-parse "${CURRENT_HEAD}^")" = "$EXPECTED_HEAD"
+            test "$(git diff --no-ext-diff --name-only "$EXPECTED_HEAD" "$CURRENT_HEAD")" = "bun.lock"
+            git show "${CURRENT_HEAD}:bun.lock" > "$ARTIFACT_PATH/current-bun.lock"
+            cmp --silent "$ARTIFACT_PATH/bun.lock" "$ARTIFACT_PATH/current-bun.lock"
+            gh workflow run ci.yml --repo "$HEAD_REPOSITORY" --ref "$HEAD_REF"
+            exit 0
+          fi
+
+          git checkout --detach "$CURRENT_HEAD"
+
+          cp -- "$ARTIFACT_PATH/bun.lock" bun.lock
+          if git diff --no-ext-diff --quiet -- bun.lock; then
+            exit 0
+          fi
+
+          test "$(git diff --name-only)" = "bun.lock"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- bun.lock
+          test "$(git diff --cached --name-only)" = "bun.lock"
+          git commit --no-verify -m "chore(deps): update bun.lock"
+          git push \
+            --force-with-lease="refs/heads/${HEAD_REF}:${EXPECTED_HEAD}" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${HEAD_REF}"
+          gh workflow run ci.yml --repo "$HEAD_REPOSITORY" --ref "$HEAD_REF"

@@ -3,7 +3,8 @@
 Status: Proposed
 Date: 2026-08-08
 Issue: [#175](https://github.com/ncolesummers/loopworks/issues/175)
-Updated by: [#177](https://github.com/ncolesummers/loopworks/issues/177)
+Updated by: [#177](https://github.com/ncolesummers/loopworks/issues/177),
+[#184](https://github.com/ncolesummers/loopworks/issues/184)
 
 ## Context
 
@@ -84,6 +85,18 @@ blocking source of truth. Routine non-major changes may be grouped; Eve,
 Next.js, Auth.js, OpenTelemetry, and the Vercel OTel integration remain isolated
 because their migrations require focused review.
 
+**Dependabot lockfile repair uses a two-stage privilege boundary.** GitHub gives
+Dependabot-authored `pull_request` and `pull_request_target` runs a read-only
+token even when a job requests write access, and privileged PR-target workflows
+must not execute PR code. A read-only `pull_request` workflow therefore runs
+`bun install --ignore-scripts` and uploads only `bun.lock` plus immutable head
+metadata. A default-branch `workflow_run` workflow validates that metadata,
+rejects a stale head, and commits only `bun.lock` with job-scoped
+`actions: write` and `contents: write`. It has one fixed shell step and no
+third-party actions, never runs code from the PR checkout, and explicitly
+dispatches CI because GitHub suppresses ordinary workflow events caused by its
+repository token.
+
 ## Consequences
 
 The pre-k → precommit → validate chain now reaches the scanners, so a secret
@@ -108,6 +121,12 @@ Pinning means a scanner upgrade is a deliberate change touching the registry,
 the CI install step, and the cache key together — more friction than a floating
 tag, and the point.
 
+Dependabot PRs from package-manager ecosystems that do not understand Bun no
+longer stop at the frozen-lockfile install. The repair adds an extra workflow
+run and artifact handoff, but preserves the read-only boundary of PR execution,
+creates no empty commit when the generated lock is unchanged, and leaves the
+normal frozen install as the gate that verifies the committed result.
+
 ## Validation
 
 - `tests/unit/scripts/run-security-scanner.test.ts` — the enforcement policy as
@@ -124,6 +143,9 @@ tag, and the point.
   scanners.
 - `tests/unit/ci/dependabot.test.ts` — the Bun and GitHub Actions schedules,
   grouping policy, and isolated runtime migrations remain explicit.
+- `tests/unit/ci/dependabot-lockfile.test.ts` — the PR actor/repository guard,
+  read-only generator, scripts-disabled install, immutable artifact binding,
+  minimal privileged permissions, stale-head guard, and changed-only commit.
 - All three scanners run against this repository at their pinned versions;
   Gitleaks (tree and history), Semgrep, and blocking OSV are clean after the
   exact expiring OSV exceptions are applied.
