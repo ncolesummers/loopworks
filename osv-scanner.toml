@@ -1,0 +1,12 @@
+# OSV-Scanner configuration for the blocking `bun run security:osv` gate.
+#
+# Ownership, update cadence, and triage guidance: docs/security-review.md.
+#
+# `IgnoredVulns` entries are suppressions. Each one must name an exact
+# advisory ID, carry a `reason` explaining why it does not apply here, and
+# carry an `ignoreUntil` date so it expires into a re-review rather than
+# becoming permanent. Never widen an entry or regenerate this file in CI;
+# fix the finding or open a separately prioritized issue instead.
+#
+# There are deliberately no entries today. An empty baseline is the goal
+# state, not an oversight.

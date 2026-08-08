@@ -44,6 +44,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0021](0021-secure-github-app-installation-callback.md) | Proposed | Verify GitHub App installations with one-time actor-bound state, PKCE, and transient user authorization before persistence. |
 | [0022](0022-msw-for-third-party-boundary-tests.md) | Proposed | Intercept HTTP with MSW so tests exercise real third-party client construction instead of injected fakes. |
 | [0023](0023-self-improving-loops-and-approved-memory.md) | Proposed | Derive exact run outcomes, use a sibling retrospector, and inject only approved, in-scope learned memory under deterministic decay and context limits. |
+| [0024](0024-phased-security-scanning-in-the-validation-chain.md) | Proposed | Run pinned security scanners through repository-owned commands in the existing validation chain, separating where a scanner runs from what its findings do. |
 
 ## Template
 

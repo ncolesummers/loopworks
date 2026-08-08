@@ -13,8 +13,13 @@ jobs:
     # hung step fails in minutes rather than burning GitHub's six-hour default.
     timeout-minutes: 30
     steps:
+      # Full history: the committed-history secret scan below reads every
+      # commit, and at the default depth of 1 it would scan one commit and pass
+      # without ever looking at the history it exists to cover.
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -59,6 +64,58 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
+      # Deliberately NOT cached. A cache keyed on the version alone, with an
+      # "already present, skip the download" guard, would let anyone who can run
+      # a workflow seed it with a stub that prints the pinned version and exits
+      # 0 — and the runner's version check would then certify the stub. Every
+      # gate would pass forever. Downloading and verifying takes a few seconds;
+      # a bypassable checksum is worth nothing.
+      #
+      # The digests below are pinned in-repo rather than taken from the
+      # publisher's manifest. Fetching the manifest from the same origin as the
+      # binary only proves the download was not corrupted in transit; pinning
+      # here means a changed artifact fails until a human updates this file.
+      - name: Install pinned scanners
+        env:
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          OSV_SCANNER_SHA256: edcfc41d257db36148f065055655fe3fcfc434b0b423ea67468a84c207524e0c
+        run: |
+          set -euo pipefail
+          bin="$HOME/.local/share/loopworks-security-bin"
+          mkdir -p "$bin"
+          echo "$bin" >> "$GITHUB_PATH"
+          cd "$(mktemp -d)"
+
+          curl -fsSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          printf '%s  gitleaks.tar.gz\n' "$GITLEAKS_SHA256" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          install -m 0755 gitleaks "$bin/gitleaks"
+
+          curl -fsSL -o osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v2.5.0/osv-scanner_linux_amd64"
+          printf '%s  osv-scanner\n' "$OSV_SCANNER_SHA256" | sha256sum -c -
+          install -m 0755 osv-scanner "$bin/osv-scanner"
+
+      # uv comes from its publisher's own action rather than a piped installer
+      # script, which has no published checksum to verify. Pinned to an exact
+      # tag rather than a floating major — note that a tag is still mutable, so
+      # this is weaker than the digest pinning above and is tracked as such in
+      # docs/security-review.md.
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      # Semgrep is a Python tool with no single release binary to digest-pin, so
+      # the `==` pin is trust-on-first-use against PyPI and its transitive tree
+      # is unpinned. That is weaker than the two scanners above; it is the
+      # trade-off for having a SAST lane at all, and it is recorded rather than
+      # dressed up as verification.
+      - name: Install pinned Semgrep
+        run: |
+          set -euo pipefail
+          uv tool install semgrep==1.172.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       # `check` is formatter + linter + assists in one pass. The narrower
       # `format:check` and `lint` scripts skip assists entirely, so
       # `assist/source/organizeImports` violations used to clear every gate.
@@ -73,6 +130,29 @@ jobs:
 
       - name: Env access check
         run: bun run config:access-check
+
+      # Deliberately ahead of the Storybook build and the Playwright suite, the
+      # two multi-minute gates. They still run after dependency and browser
+      # installation, so this is "earlier than it would otherwise be", not
+      # "within seconds of the push".
+      #
+      # None of the three carry `continue-on-error`. OSV is advisory today, but
+      # that decision lives in `scripts/run-security-scanner.ts`, which still
+      # fails the job if the scanner crashes, times out, or is the wrong
+      # version. `continue-on-error` would swallow those too.
+      - name: Dependency vulnerabilities (advisory)
+        run: bun run security:osv
+
+      - name: Secret scan
+        run: bun run security:gitleaks
+
+      # The local gate scans the working tree; history is CI-only. Reproduce a
+      # failure here locally with the identical command.
+      - name: Secret scan (committed history)
+        run: bun run security:gitleaks:history
+
+      - name: Curated static analysis
+        run: bun run security:semgrep
 
       - name: Markdownlint
         run: bun run markdownlint

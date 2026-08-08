@@ -162,7 +162,8 @@ describe("implementer write and execution policy", () => {
     const redacted = redactImplementationOutput(
       [
         "authorization: Bearer abc API_TOKEN=secret ghp_abcdefghijklmnopqrstuvwxyz",
-        "AKIAABCDEFGHIJKLMNOP",
+        // Synthetic, and the assertions below prove it is redacted rather than emitted.
+        "AKIAABCDEFGHIJKLMNOP", // gitleaks:allow
         "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature",
         "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----",
       ].join("\n"),

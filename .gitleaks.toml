@@ -1,0 +1,60 @@
+# Gitleaks configuration for the blocking `bun run security:gitleaks` gate
+# (working tree) and the CI-only `bun run security:gitleaks:history` gate
+# (every commit on every ref).
+#
+# Ownership, update cadence, and triage guidance: docs/security-review.md.
+
+# Start from the upstream ruleset rather than restating it. Extending keeps us
+# on the maintained detectors; a hand-rolled rule list would silently stop
+# covering new providers.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed non-secrets. Every entry is exact and expires into a re-review."
+
+# Generated placeholders from `bun run config:sync`. These are the literal
+# strings the config registry emits as `exampleValue`, and `readConfigValue`
+# already rejects each of them at runtime in production
+# (src/lib/config/registry.ts, "generated example value is forbidden").
+regexes = [
+  '''replace-with-auth-secret''',
+  '''replace-with-github-oauth-client-id''',
+  '''replace-with-github-oauth-client-secret''',
+  '''replace-with-github-app-client-id''',
+  '''replace-with-github-app-client-secret''',
+  '''replace-with-github-app-slug''',
+  '''replace-with-test-receipt-secret''',
+  '''loopworks-local-development-secret''',
+  '''dev-webhook-secret''',
+]
+
+# Scope, not suppression. `gitleaks dir` has no gitignore support, so without
+# these it walks 1.2 GB of dependencies and build output — three minutes, and
+# 120 findings that are all upstream test fixtures.
+#
+# These apply to the history gate too, not only the working-tree gate, so an
+# entry here hides a path from *both*. Every entry below is therefore checked
+# against `git ls-files` and matches nothing tracked; `tests/unit/ci/
+# security-scanning.test.ts` re-checks that on every run, so an exclusion that
+# starts covering tracked files fails the build rather than going quiet.
+#
+# Each entry is anchored: a stray `node_modules` inside `src/` is still scanned.
+paths = [
+  '''^node_modules/''',
+  '''^\.next/''',
+  '''^\.eve/''',
+  # Scratch checkouts only. Deliberately not all of `.claude/` — `.claude/
+  # skills/` is tracked and must be scanned.
+  '''^\.claude/worktrees/''',
+  # Real local credentials, gitignored, and never committable. `.env.example`
+  # is deliberately not matched here — it is tracked, so it must be scanned.
+  '''^\.env$''',
+  '''^\.env\.local$''',
+  '''^\.env\.[^/]+\.local$''',
+  '''^prod-env\.local$''',
+  '''^coverage/''',
+  '''^storybook-static/''',
+  '''^playwright-report/''',
+  '''^test-results/''',
+]

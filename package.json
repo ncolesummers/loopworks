@@ -41,7 +41,12 @@
     "db:seed": "bun run scripts/seed-demo-data.ts",
     "db:seed:reset": "bun run scripts/seed-demo-data.ts --reset",
     "github:webhook-fixture": "bun run scripts/github-webhook-fixture.ts",
-    "validate": "bun run check && bun run agent-docs:check && bun run config:check && bun run config:access-check && bun run markdownlint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
+    "security:osv": "bun run scripts/run-security-scanner.ts osv",
+    "security:gitleaks": "bun run scripts/run-security-scanner.ts gitleaks",
+    "security:gitleaks:history": "bun run scripts/run-security-scanner.ts gitleaks-history",
+    "security:semgrep": "bun run scripts/run-security-scanner.ts semgrep",
+    "security:scan": "bun run security:osv && bun run security:gitleaks && bun run security:semgrep",
+    "validate": "bun run check && bun run agent-docs:check && bun run config:check && bun run config:access-check && bun run security:osv && bun run security:gitleaks && bun run security:semgrep && bun run markdownlint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
