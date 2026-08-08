@@ -18,7 +18,7 @@ jobs:
       # commit, and at the default depth of 1 it would scan one commit and pass
       # without ever looking at the history it exists to cover.
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -32,7 +32,7 @@ jobs:
       # a partial restore would re-save the union of old and new tarballs on
       # every lockfile bump, so the archive would grow without bound.
       - name: Cache Bun install store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-store-${{ runner.os }}-bun1.3.14-${{ hashFiles('bun.lock') }}
@@ -51,7 +51,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
@@ -189,7 +189,7 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -197,7 +197,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Cache Bun install store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-store-${{ runner.os }}-bun1.3.14-${{ hashFiles('bun.lock') }}
@@ -214,7 +214,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
