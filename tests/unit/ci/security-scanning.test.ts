@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parse as parseToml } from "smol-toml";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
@@ -24,8 +25,12 @@ const workflowSource = readFileSync(path.join(repoRoot, ".github/workflows/ci.ym
 const workflow = parse(workflowSource) as Workflow;
 
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+  overrides?: Record<string, string>;
   scripts: Record<string, string>;
 };
+const securityReviewSource = readFileSync(path.join(repoRoot, "docs/security-review.md"), "utf8");
 
 const chainedCommands = (script: string) =>
   script
@@ -108,6 +113,11 @@ describe("security scanning gates", () => {
     const escaped = allSteps.filter((step) => step["continue-on-error"] !== undefined);
     expect(escaped.map((step) => step.name ?? step.run ?? step.uses)).toEqual([]);
   });
+
+  it("names the OSV workflow step as a blocking dependency gate", () => {
+    const osv = validateSteps.find((step) => step.run === "bun run security:osv");
+    expect(osv?.name).toBe("Dependency vulnerabilities");
+  });
 });
 
 describe("scanner rulesets", () => {
@@ -183,6 +193,89 @@ describe("scanner installation", () => {
  * suppressions, so the same shape would flag every rule we add.
  */
 const suppressionKey = /^\s*(id|paths?|regexes?|commits?|stopwords|fingerprints?)\s*=/;
+
+type OsvIgnore = {
+  id: string;
+  ignoreUntil: string;
+  reason: string;
+};
+
+const expectedOsvIgnoreIds = [
+  "GHSA-5p2g-fcmc-qvqq",
+  "GHSA-67mh-4wv8-2f99",
+  "GHSA-8988-4f7v-96qf",
+  "GHSA-w3rx-r6r6-pgpr",
+];
+
+function parseOsvIgnores(content: string): { entries: OsvIgnore[]; problems: string[] } {
+  const problems: string[] = [];
+  let config: Record<string, unknown>;
+  try {
+    config = parseToml(content) as Record<string, unknown>;
+  } catch (error) {
+    return { entries: [], problems: [`invalid TOML: ${String(error)}`] };
+  }
+
+  for (const key of Object.keys(config)) {
+    if (key !== "IgnoredVulns") problems.push(`forbidden top-level OSV config: ${key}`);
+  }
+
+  const rawEntries = config.IgnoredVulns;
+  if (rawEntries !== undefined && !Array.isArray(rawEntries)) {
+    problems.push("IgnoredVulns must be an array of exact entries");
+  }
+  const entries = (Array.isArray(rawEntries) ? rawEntries : []).flatMap((rawEntry, index) => {
+    if (typeof rawEntry !== "object" || rawEntry === null || Array.isArray(rawEntry)) {
+      problems.push(`entry ${index + 1} is not a TOML table`);
+      return [];
+    }
+    const values = rawEntry as Record<string, unknown>;
+    const unknownKeys = Object.keys(values).filter(
+      (key) => !["id", "ignoreUntil", "reason"].includes(key),
+    );
+    for (const key of unknownKeys)
+      problems.push(`entry ${index + 1} contains unknown field ${key}`);
+
+    const id = typeof values.id === "string" ? values.id : "";
+    const reason = typeof values.reason === "string" ? values.reason : "";
+    const ignoreUntil =
+      typeof values.ignoreUntil === "string"
+        ? values.ignoreUntil
+        : values.ignoreUntil instanceof Date
+          ? values.ignoreUntil.toISOString().slice(0, 10)
+          : "";
+    if (!/^(?:GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}|CVE-\d{4}-\d{4,})$/.test(id)) {
+      problems.push(`entry ${index + 1} does not name one exact advisory ID`);
+    }
+    if (reason.trim().length === 0) problems.push(`entry ${index + 1} has no reason`);
+    if (!/(?:#\d+|https:\/\/)/.test(reason)) {
+      problems.push(`entry ${index + 1} has no durable tracking reference`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ignoreUntil)) {
+      problems.push(`entry ${index + 1} has no TOML local-date expiry`);
+    }
+    return [{ id, ignoreUntil, reason }];
+  });
+
+  const duplicateIds = entries
+    .map((entry) => entry.id)
+    .filter((id, index, ids) => id.length > 0 && ids.indexOf(id) !== index);
+  if (duplicateIds.length > 0) problems.push(`duplicate advisory IDs: ${duplicateIds.join(", ")}`);
+
+  return { entries, problems };
+}
+
+function expiryProblems(entries: OsvIgnore[], today = new Date()): string[] {
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const maximumExpiry = todayUtc + 90 * 24 * 60 * 60 * 1000;
+  return entries.flatMap((entry) => {
+    const parsed = Date.parse(`${entry.ignoreUntil}T00:00:00Z`);
+    if (!Number.isFinite(parsed)) return [`${entry.id} has an invalid expiry`];
+    if (parsed <= todayUtc) return [`${entry.id} is expired`];
+    if (parsed > maximumExpiry) return [`${entry.id} expires more than 90 days from review`];
+    return [];
+  });
+}
 
 /**
  * A pattern that matches everything, or nearly everything. `'''.*'''` inside a
@@ -302,12 +395,67 @@ describe("baseline hygiene", () => {
     expect(unjustifiedSuppressions(sound)).toHaveLength(0);
   });
 
-  it.each([
-    ".gitleaks.toml",
-    "osv-scanner.toml",
-  ])("keeps %s free of broad or unexplained suppressions", (relativePath) => {
+  it("keeps .gitleaks.toml free of broad or unexplained suppressions", () => {
+    const relativePath = ".gitleaks.toml";
     const content = readFileSync(path.join(repoRoot, relativePath), "utf8");
     expect(unjustifiedSuppressions(content)).toEqual([]);
+  });
+
+  it("rejects malformed, broad, permanent, or untracked OSV suppressions", () => {
+    const valid = [
+      "[[IgnoredVulns]]",
+      'id = "GHSA-aaaa-bbbb-cccc"',
+      "ignoreUntil = 2026-09-01",
+      'reason = "Tracked by #177."',
+    ].join("\n");
+    expect(parseOsvIgnores(valid).problems).toEqual([]);
+    expect(
+      expiryProblems(parseOsvIgnores(valid).entries, new Date("2026-08-08T00:00:00Z")),
+    ).toEqual([]);
+
+    for (const invalid of [
+      valid.replace("GHSA-aaaa-bbbb-cccc", "*"),
+      valid.replace('reason = "Tracked by #177."', 'reason = ""'),
+      valid.replace("Tracked by #177.", "No tracking reference."),
+      valid.replace("ignoreUntil = 2026-09-01\n", ""),
+      `${valid}\nunknown = true`,
+      '[[PackageOverrides]]\nname = "image-size"\nignore = true',
+      '[[ PackageOverrides ]]\nname = "image-size"\nignore = true',
+      'PackageOverrides = [{ name = "image-size", ignore = true }]',
+      `${valid}\n${valid}`,
+    ]) {
+      expect(parseOsvIgnores(invalid).problems.length, invalid).toBeGreaterThan(0);
+    }
+    expect(
+      expiryProblems(parseOsvIgnores(valid).entries, new Date("2026-09-01T00:00:00Z")),
+    ).toEqual(["GHSA-aaaa-bbbb-cccc is expired"]);
+  });
+
+  it("keeps every residual OSV suppression exact, expiring, and documented", () => {
+    const content = readFileSync(path.join(repoRoot, "osv-scanner.toml"), "utf8");
+    const parsed = parseOsvIgnores(content);
+    expect(parsed.problems).toEqual([]);
+    expect(expiryProblems(parsed.entries)).toEqual([]);
+    expect(parsed.entries.map((entry) => entry.id).sort()).toEqual(expectedOsvIgnoreIds);
+
+    for (const entry of parsed.entries) {
+      const rows = securityReviewSource
+        .split("\n")
+        .filter((line) => line.startsWith("|") && line.includes(entry.id));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toContain(entry.ignoreUntil);
+      expect(rows[0]).toContain(entry.reason.match(/#\d+|https:\/\/[^ )]+/)?.[0]);
+      if (["GHSA-5p2g-fcmc-qvqq", "GHSA-w3rx-r6r6-pgpr"].includes(entry.id)) {
+        expect(entry.reason).toMatch(/repository patch/i);
+        expect(rows[0]).toContain("locally fixed");
+      }
+    }
+  });
+
+  it("does not configure an OSV ignore flag outside the reviewed TOML baseline", () => {
+    expect(scannerRegistry.find((scanner) => scanner.id === "osv")?.scanArgs.join(" ")).not.toMatch(
+      /--ignore|--config-override/,
+    );
   });
 
   it("keeps every .gitleaksignore fingerprint exact and explained", () => {

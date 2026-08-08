@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 import { portalFixture } from "@/lib/fixtures";

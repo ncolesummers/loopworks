@@ -3,6 +3,7 @@
 Status: Proposed
 Date: 2026-08-08
 Issue: [#175](https://github.com/ncolesummers/loopworks/issues/175)
+Updated by: [#177](https://github.com/ncolesummers/loopworks/issues/177)
 
 ## Context
 
@@ -55,14 +56,14 @@ timeout, a partial result, and a missing binary. An advisory scanner here still
 fails the build if it did not run. No step in `ci.yml` carries
 `continue-on-error`, and a test asserts that across the whole file.
 
-**Initial configuration:**
+**Current configuration after #177:**
 
 | Scanner | Lane | Enforcement |
 | --- | --- | --- |
 | Gitleaks (working tree) | `validate` | Blocking |
 | Gitleaks (committed history) | `ci-only` | Blocking |
 | Curated Semgrep ruleset | `validate` | Blocking |
-| OSV-Scanner | `validate` | Advisory until [#177](https://github.com/ncolesummers/loopworks/issues/177) |
+| OSV-Scanner | `validate` | Blocking |
 
 **A missing binary is skipped locally and fails in CI.** This is the one
 concession to the chain's uniformity, and it is narrow: it covers absence only,
@@ -75,6 +76,14 @@ negative fixture before being added. Broad upstream rulesets and ZAP are a
 separate advisory lane, deferred until their false-positive and runtime
 baselines have been reviewed.
 
+**Dependabot supplies update intake, not the security verdict.** Weekly Bun and
+GitHub Actions version updates are configured in the repository, and repository
+vulnerability alerts plus automated security fixes are enabled. GitHub does not
+support Dependabot security updates for the Bun ecosystem, so OSV remains the
+blocking source of truth. Routine non-major changes may be grouped; Eve,
+Next.js, Auth.js, OpenTelemetry, and the Vercel OTel integration remain isolated
+because their migrations require focused review.
+
 ## Consequences
 
 The pre-k → precommit → validate chain now reaches the scanners, so a secret
@@ -82,11 +91,14 @@ fails at commit time rather than at review time. Because `validate` gates are
 mirrored one-to-one into CI and that mirroring is test-enforced, a scanner
 cannot be quietly dropped from one side.
 
-Advisory OSV is an honest partial: the SCA half of #175 is wired, pinned, and
-reporting, but is not yet a gate. The risk is that "temporary" becomes
-permanent. Three things push against that: #177 carries the remediation as a
-p0, the registry comment names it, and a unit test pins OSV as the *only*
-advisory lane — so a second advisory scanner, or a silent flip, fails a test.
+OSV became blocking in #177 after targeted parent upgrades, a Storybook adapter
+migration, removal of the unused repository-local Vercel CLI, and six
+same-major-safe overrides. Two Moderate findings without compatible fixes have
+exact, documented exceptions expiring 2026-11-06. The two unpatched High
+`image-size` defects are fixed with a Bun-managed repository patch and
+timeout-bounded regression tests; exact OSV entries filter the unchanged
+upstream version metadata. Tests require every entry's ID, reason, tracking
+issue, expiry, and documentation row to agree.
 
 Contributors now need three binaries for the full local gate. Without them the
 run is still green but weaker, which is a real gap for anyone who never installs
@@ -99,9 +111,9 @@ tag, and the point.
 ## Validation
 
 - `tests/unit/scripts/run-security-scanner.test.ts` — the enforcement policy as
-  a pure decision table: skip vs fail on a missing binary, fail on a version
-  mismatch, advisory vs blocking findings, and fail on a crash or timeout for
-  advisory scanners too.
+  a pure decision table: all configured scanners are blocking, missing binary
+  behavior remains explicit, and a synthetic advisory scanner still fails on a
+  crash or timeout.
 - `tests/unit/ci/security-scanning.test.ts` — scanner commands exist, are
   reached by `validate`, appear as unconditional CI steps, are installed at the
   pinned version with checksum verification, and no step anywhere is
@@ -110,14 +122,18 @@ tag, and the point.
 - `tests/unit/ci/validation-chain.test.ts` — the prek hook still reaches
   `precommit`, which still delegates to `validate`, which still reaches the
   scanners.
+- `tests/unit/ci/dependabot.test.ts` — the Bun and GitHub Actions schedules,
+  grouping policy, and isolated runtime migrations remain explicit.
 - All three scanners run against this repository at their pinned versions;
-  Gitleaks (tree and history) and Semgrep are clean, OSV reports the backlog
-  tracked in #177.
+  Gitleaks (tree and history), Semgrep, and blocking OSV are clean after the
+  exact expiring OSV exceptions are applied.
 
 ## Follow-ups
 
-- [#177](https://github.com/ncolesummers/loopworks/issues/177) — clear the
-  dependency backlog and flip OSV to blocking.
+- [#177](https://github.com/ncolesummers/loopworks/issues/177) — completed the
+  dependency remediation and blocking OSV transition.
+- [#180](https://github.com/ncolesummers/loopworks/issues/180) — remove or
+  re-review the four residual exceptions before 2026-11-06.
 - Advisory broad-Semgrep and ZAP lanes, deferred from #175.
 - Revisit whether the committed-history scan should move into `validate`; at
   205 commits it takes about 0.8s, so the CI-only split is currently a division

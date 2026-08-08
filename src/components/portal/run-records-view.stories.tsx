@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { RunRecordsView } from "@/components/portal/run-records-view";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";

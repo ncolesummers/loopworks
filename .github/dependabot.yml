@@ -1,0 +1,46 @@
+version: 2
+
+updates:
+  - package-ecosystem: bun
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      production-non-major:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+        exclude-patterns:
+          - eve
+          - next
+          - next-auth
+          - "@auth/*"
+          - "@opentelemetry/*"
+          - "@vercel/otel"
+      development-non-major:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:15"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions:
+        patterns:
+          - "*"
