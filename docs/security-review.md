@@ -150,6 +150,30 @@ excluded from the production group so their migrations arrive as isolated pull
 requests with focused evidence. Every Dependabot pull request still traverses
 the same blocking CI and scanner chain shown above.
 
+Package security updates can still arrive through an ecosystem that updates
+`package.json` without understanding Bun's text lockfile. Lockfile repair is
+split across two workflows so that limitation does not weaken the PR trust
+boundary:
+
+1. `dependabot-bun-lock.yml` runs on package-manifest PRs with `contents: read`,
+   requires the actor, PR author, and same-repository head to identify
+   Dependabot, and runs `bun install --ignore-scripts`. It uploads only the
+   generated `bun.lock` and immutable head metadata.
+2. `dependabot-bun-lock-commit.yml` runs from the trusted default branch after a
+   successful generator run. Its single fixed shell step grants only
+   `actions: write` and `contents: write`, validates the run/artifact/head
+   binding, never executes PR code, commits only a changed `bun.lock` using an
+   exact-head lease, and explicitly dispatches CI for the repaired head.
+
+This split is required because GitHub forces Dependabot-authored
+`pull_request` and `pull_request_target` runs to a read-only token regardless of
+a workflow's requested write scope. The generated lock remains untrusted data:
+the privileged stage verifies the repository's `image-size@2.0.2` patch entry
+before committing it, and the ordinary frozen-lockfile CI jobs validate the
+result from scratch. The explicit dispatch is necessary because GitHub does not
+emit ordinary workflow events for a push authenticated by the repository
+`GITHUB_TOKEN`.
+
 Integrity in CI is not uniform, and the difference is worth knowing:
 
 - Gitleaks and OSV-Scanner are downloaded and checked against a SHA-256 digest

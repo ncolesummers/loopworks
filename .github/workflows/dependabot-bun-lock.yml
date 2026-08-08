@@ -1,0 +1,67 @@
+name: Dependabot Bun lockfile generation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - package.json
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the immutable pull-request head
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # The manifest and lockfile are PR-controlled data. Lifecycle scripts are
+      # executable PR code, so this unprivileged stage disables them explicitly.
+      - name: Regenerate bun.lock
+        run: bun install --ignore-scripts
+
+      - name: Stage lockfile artifact
+        id: stage
+        env:
+          ARTIFACT_PATH: ${{ runner.temp }}/dependabot-bun-lock
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bun --eval '
+            const lock = Bun.JSONC.parse(await Bun.file("bun.lock").text());
+            if (lock.patchedDependencies?.["image-size@2.0.2"] !== "patches/image-size@2.0.2.patch") {
+              throw new Error("bun.lock lost the image-size@2.0.2 patch");
+            }
+          '
+          mkdir -p "$ARTIFACT_PATH"
+          cp -- bun.lock "$ARTIFACT_PATH/bun.lock"
+          printf "%s\n" "$HEAD_REF" > "$ARTIFACT_PATH/head-ref"
+          printf "%s\n" "$HEAD_REPOSITORY" > "$ARTIFACT_PATH/head-repository"
+          printf "%s\n" "$HEAD_SHA" > "$ARTIFACT_PATH/head-sha"
+
+      # Artifacts cross the privilege boundary as inert data. The privileged
+      # workflow below validates every metadata field before creating a commit.
+      - name: Upload lockfile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependabot-bun-lock
+          path: ${{ runner.temp }}/dependabot-bun-lock
+          if-no-files-found: error
+          retention-days: 1
