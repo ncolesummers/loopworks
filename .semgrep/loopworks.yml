@@ -1,0 +1,144 @@
+# Curated, blocking LoopWorks Semgrep ruleset for `bun run security:semgrep`.
+#
+# Deliberately small. Every rule here is high-confidence and grounded in an
+# existing repository invariant. Broad upstream/community rulesets are a
+# separate, advisory lane and are not enabled here.
+#
+# Each rule was verified against a positive and a negative fixture before being
+# added; docs/security-review.md records how to reproduce that check. The
+# fixtures live outside the repository on purpose — committing code that
+# deliberately trips these rules would fail the gate it is meant to prove.
+#
+# Ownership, update cadence, and triage guidance: docs/security-review.md.
+
+rules:
+  - id: loopworks-no-dangerously-set-inner-html
+    message: >-
+      dangerouslySetInnerHTML renders unescaped markup. Render text as children,
+      or sanitize on the server and document why the sink is safe.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: security
+      cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation"
+      invariant: src/AGENTS.md
+    pattern-either:
+      - pattern: <$EL dangerouslySetInnerHTML={...} />
+      - pattern: <$EL dangerouslySetInnerHTML={...}>...</$EL>
+
+  - id: loopworks-no-shell-exec
+    message: >-
+      This runs the argument through a shell, so any interpolated value becomes
+      shell syntax. Use execFile/execFileSync with an argument array, as
+      src/lib/loops/validation-runner.ts does.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: security
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+    pattern-either:
+      # `execSync` is unambiguous, so the bare form is safe to match.
+      - pattern: execSync(...)
+      - pattern: $CP.execSync(...)
+      # `exec` is not: `RegExp.prototype.exec` is a member call with the same
+      # name and is everywhere. Excluding a receiver leaves the imported
+      # `child_process` binding, which is how this repository calls it.
+      # `pattern-not: $RECEIVER.exec(...)` cannot be used here — it discards the
+      # bare call too, silently reducing the rule to `execSync` only.
+      - patterns:
+          - pattern: exec($CMD, ...)
+          - pattern-not-regex: '\.\s*exec\s*\('
+      # `shell: true` turns the safe argv-array APIs back into a shell.
+      - pattern: "spawn($CMD, ..., {..., shell: true, ...})"
+      - pattern: "spawnSync($CMD, ..., {..., shell: true, ...})"
+      - pattern: "execFile($CMD, ..., {..., shell: true, ...})"
+      - pattern: "execFileSync($CMD, ..., {..., shell: true, ...})"
+      # Bun's shell tag, which this repository has available everywhere.
+      - pattern: Bun.$`...`
+      # `promisify(exec)` is the common way the callback form gets laundered.
+      - pattern: promisify(exec)(...)
+
+  - id: loopworks-no-raw-sql
+    message: >-
+      Raw SQL bypasses Drizzle's parameterization. Build the query with Drizzle,
+      or use the `sql` tagged template so values are bound rather than spliced.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: security
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      invariant: src/AGENTS.md
+    pattern-either:
+      - pattern: sql.raw(...)
+      - pattern: $DB.execute(`...`)
+
+  - id: loopworks-constant-time-signature-comparison
+    message: >-
+      Comparing an HMAC digest with == or === leaks the digest through timing.
+      Use crypto.timingSafeEqual, as src/lib/github/webhooks.ts does.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      category: security
+      cwe: "CWE-208: Observable Timing Discrepancy"
+      invariant: src/AGENTS.md
+    pattern-either:
+      # Inline comparison.
+      - pattern: createHmac(...).digest(...) == $OTHER
+      - pattern: createHmac(...).digest(...) === $OTHER
+      - pattern: createHmac(...).digest(...) != $OTHER
+      - pattern: createHmac(...).digest(...) !== $OTHER
+      - pattern: $OTHER == createHmac(...).digest(...)
+      - pattern: $OTHER === createHmac(...).digest(...)
+      - pattern: $OTHER != createHmac(...).digest(...)
+      - pattern: $OTHER !== createHmac(...).digest(...)
+      # The shape people actually write: compute into a local, compare later.
+      # Without these the rule only catches a one-liner nobody writes.
+      - patterns:
+          - pattern-either:
+              - pattern: $DIGEST == $OTHER
+              - pattern: $DIGEST === $OTHER
+              - pattern: $DIGEST != $OTHER
+              - pattern: $DIGEST !== $OTHER
+              - pattern: $OTHER == $DIGEST
+              - pattern: $OTHER === $DIGEST
+              - pattern: $OTHER != $DIGEST
+              - pattern: $OTHER !== $DIGEST
+          - pattern-inside: |
+              $DIGEST = createHmac(...).digest(...)
+              ...
+
+  - id: loopworks-no-environment-inheritance-into-agent-sandbox
+    message: >-
+      This hands every credential in the parent process to a child. A GitHub
+      token reaching a stage subagent bypasses the approval-gated write path
+      entirely. Pass an explicit allow-list as `env`, and remember that omitting
+      `env` inherits everything by default.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      include:
+        - /agent/
+        - /src/lib/loops/
+    metadata:
+      category: security
+      cwe: "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+      invariant: docs/adr/0015-stage-orchestrator-and-isolated-subagent-handoffs.md
+    pattern-either:
+      # Explicit spread, in any of the shapes that reach the same place.
+      - pattern: |
+          {..., env: {..., ...process.env, ...}, ...}
+      - pattern: |
+          {..., env: Object.assign({}, process.env, ...), ...}
+      - pattern: |
+          {..., env: process.env, ...}
+      # Omitting `env` entirely inherits the full parent environment. This is
+      # the more common shape and the original rule missed it, which inverted
+      # the rule against Node's own default.
+      - patterns:
+          - pattern-either:
+              - pattern: spawn($CMD, ...)
+              - pattern: spawnSync($CMD, ...)
+              - pattern: execFile($CMD, ...)
+              - pattern: execFileSync($CMD, ...)
+          - pattern-not: "$F(..., {..., env: $E, ...}, ...)"

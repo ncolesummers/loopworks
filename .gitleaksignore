@@ -1,0 +1,15 @@
+# Findings in committed history that have been reviewed and are not secrets.
+#
+# Entries are exact fingerprints — commit SHA, path, rule, line — so an entry
+# can never widen to cover a different finding. History is immutable, so these
+# do not expire; a real secret found here would be rotated and the history
+# rewritten, not ignored.
+#
+# Reviewed by: #175. Triage guidance: docs/security-review.md.
+
+# Synthetic AWS key used as *input* to the agent output-redaction test. The
+# same test asserts the redactor strips it, so committing it proves the
+# redaction works rather than leaking a credential. The current working-tree
+# copy carries an inline `gitleaks:allow`; this entry covers the commit that
+# introduced it.
+76b86c169bb9bc05a7a932af10db7102a057a523:tests/unit/agent/implementation-tools.test.ts:aws-access-token:108

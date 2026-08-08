@@ -211,6 +211,18 @@ export const configRegistry = defineRegistry([
     exampleValue: "",
   },
   {
+    name: "LOOPWORKS_SECURITY_REQUIRE_SCANNERS",
+    schema: truthySchema,
+    group: "runtime",
+    description:
+      "Fail `bun run validate` when a pinned security scanner is missing, as CI always does.",
+    requiredIn: notRequired,
+    secret: false,
+    readOnly: false,
+    defaults: { build: false, development: false, test: false, production: false },
+    exampleValue: "false",
+  },
+  {
     name: "LOOPWORKS_EVE_TEST_RECEIPT_SECRET",
     schema: stringSchema,
     group: "agents",
