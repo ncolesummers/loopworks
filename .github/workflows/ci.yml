@@ -136,11 +136,9 @@ jobs:
       # installation, so this is "earlier than it would otherwise be", not
       # "within seconds of the push".
       #
-      # None of the three carry `continue-on-error`. OSV is advisory today, but
-      # that decision lives in `scripts/run-security-scanner.ts`, which still
-      # fails the job if the scanner crashes, times out, or is the wrong
-      # version. `continue-on-error` would swallow those too.
-      - name: Dependency vulnerabilities (advisory)
+      # None of the three carry `continue-on-error`; findings, scanner crashes,
+      # timeouts, and version mismatches all fail the job.
+      - name: Dependency vulnerabilities
         run: bun run security:osv
 
       - name: Secret scan

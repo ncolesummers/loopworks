@@ -98,7 +98,7 @@ flowchart TD
 
     subgraph sec["security scanners"]
         direction LR
-        osv["security:osv<br/>advisory · #177"]
+        osv["security:osv<br/>blocking"]
         gl["security:gitleaks<br/>blocking"]
         sg["security:semgrep<br/>blocking"]
     end
@@ -107,9 +107,7 @@ flowchart TD
     pgJob --> pg["test:integration:postgres<br/>test:e2e:seeded"]
 
     classDef blocking fill:#1f2937,stroke:#f87171,color:#f9fafb
-    classDef advisory fill:#1f2937,stroke:#fbbf24,color:#f9fafb
-    class gl,sg,hist blocking
-    class osv advisory
+    class osv,gl,sg,hist blocking
 ```
 
 Two properties hold the chain together, and both are enforced by tests rather
@@ -126,7 +124,7 @@ than by convention:
 
 | Scanner | Version | Command | Covers | Enforcement |
 | --- | --- | --- | --- | --- |
-| OSV-Scanner | 2.5.0 | `bun run security:osv` | Dependency vulnerabilities | Advisory until #177 |
+| OSV-Scanner | 2.5.0 | `bun run security:osv` | Dependency vulnerabilities | Blocking |
 | Gitleaks | 8.30.1 | `bun run security:gitleaks` | Secrets in the working tree | Blocking |
 | Gitleaks | 8.30.1 | `bun run security:gitleaks:history` | Secrets in committed history | Blocking, CI only |
 | Semgrep | 1.172.0 | `bun run security:semgrep` | Curated LoopWorks rules | Blocking |
@@ -136,6 +134,21 @@ than by convention:
 Versions are pinned exactly in `scripts/run-security-scanner.ts` and the runner
 refuses to run against any other version — a mismatched binary is a present
 analyzer applying rules nobody reviewed, so it fails rather than skips.
+
+### Dependabot update intake
+
+Dependabot vulnerability alerts and automated security-fix pull requests are
+enabled for the public repository. `.github/dependabot.yml` also requests
+weekly version updates for the Bun lockfile and GitHub Actions. GitHub's Bun
+integration supports the text `bun.lock` for version updates but not security
+updates, so the blocking OSV gate remains the dependency-vulnerability source
+of truth.
+
+Routine production and development minor/patch updates are grouped separately.
+Eve, Next.js, Auth.js, OpenTelemetry, and the Vercel OTel integration are
+excluded from the production group so their migrations arrive as isolated pull
+requests with focused evidence. Every Dependabot pull request still traverses
+the same blocking CI and scanner chain shown above.
 
 Integrity in CI is not uniform, and the difference is worth knowing:
 
@@ -170,12 +183,12 @@ uv tool install semgrep==1.172.0
 Set `LOOPWORKS_SECURITY_REQUIRE_SCANNERS=true` to make a local run behave
 exactly like CI.
 
-Advisory is a property of the *finding*, decided in
+Advisory remains a supported property of a *finding*, decided in
 `scripts/run-security-scanner.ts` and covered by unit tests. It is deliberately
 not `continue-on-error` in the workflow, which would also swallow a scanner
 crash, a timeout, and a missing binary — the failure mode this work exists to
-prevent. No CI step in this repository carries `continue-on-error`, and a test
-asserts it across the whole workflow file.
+prevent. No configured scanner is advisory today, no CI step in this repository
+carries `continue-on-error`, and tests assert both facts.
 
 ### Documented local/CI divergences
 
@@ -194,12 +207,12 @@ asserts it across the whole workflow file.
 
 - Suppressions are exact — an advisory ID, or a commit/path/rule fingerprint —
   never a widened pattern.
-- Each carries a written justification, and an expiry where the scanner supports
-  one. `tests/unit/ci/security-scanning.test.ts` fails on a broad or unexplained
-  entry — including entries *inside* a multi-line `regexes` or `paths` array,
-  which is the shape every real suppression takes and the one a naive
-  line-oriented check misses. Appending a catch-all pattern to an allowlist
-  array disables Gitleaks entirely, and now fails the build.
+- Each carries a written justification, a durable tracking issue, and an expiry
+  where the scanner supports one. `tests/unit/ci/security-scanning.test.ts`
+  parses OSV exception blocks structurally and fails on duplicate, broad,
+  permanent, undocumented, or package-wide exceptions. It separately checks
+  Gitleaks array elements, where appending one catch-all pattern would disable
+  the scanner.
 - Baselines are never regenerated or widened in CI.
 - Findings are fixed, or converted into separately prioritized, evidence-backed
   issues. No verified Critical or High finding is silently baselined.
@@ -218,8 +231,31 @@ Current suppressions:
   before review caught it.
 - `.semgrepignore` — replaces Semgrep's bundled default, which excluded
   `tests/` and silently took 119 files out of scope.
-- `osv-scanner.toml` — none. The dependency backlog is tracked in #177 rather
-  than baselined.
+- `osv-scanner.toml` — four exceptions reviewed on 2026-08-08:
+
+| Advisory | Severity | Package / dependency path | Reachability / justification | Tracking | Expires |
+| --- | --- | --- | --- | --- | --- |
+| `GHSA-8988-4f7v-96qf` | Moderate | `@opentelemetry/core@1.30.1` through the OTel 0.57/1.x runtime stack | The only published fix requires the separately reviewed OTel 2.x migration. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
+| `GHSA-67mh-4wv8-2f99` | Moderate | `esbuild@0.18.20` through development-only `drizzle-kit` → `@esbuild-kit/esm-loader` | Application and production build paths use patched esbuild versions; remove this exception when Drizzle Kit drops the legacy loader. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
+| `GHSA-5p2g-fcmc-qvqq` | High, locally fixed | `image-size@2.0.2` through `@storybook/nextjs-vite` | No upstream patched release exists. `patches/image-size@2.0.2.patch` rejects undersized JXL and HEIF boxes, and child-process regression tests prove crafted inputs terminate. The OSV entry filters version-only metadata after the vulnerable behavior is fixed. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
+| `GHSA-w3rx-r6r6-pgpr` | High, locally fixed | `image-size@2.0.2` through `@storybook/nextjs-vite` | No upstream patched release exists. `patches/image-size@2.0.2.patch` rejects undersized ICNS entries, and a child-process regression test proves crafted input terminates. The OSV entry filters version-only metadata after the vulnerable behavior is fixed. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
+
+The two High advisories are fixed in the installed package with a Bun-managed
+repository patch because upstream has not published a release. Their OSV
+entries do not accept vulnerable behavior: OSV keys only on the unchanged
+upstream version and cannot observe the patch. Tests execute each published
+zero-length-box failure mode in a timeout-bounded child process, so either an
+absent patch or a regression fails without hanging the validation runner.
+
+### OSV remediation evidence
+
+The fresh 2026-08-08 baseline with OSV-Scanner 2.5.0 was 98 vulnerabilities
+across 32 packages: 5 Critical, 45 High, 40 Moderate, 6 Low, and 2 Unknown.
+Targeted parent upgrades, the Storybook Vite migration, removal of the unused
+repository-local Vercel CLI, same-major overrides, and the reviewed
+`image-size` patch reduced that to two unresolved Moderate exceptions plus two
+locally fixed High advisories that OSV still matches by version. With those
+exact entries applied, the blocking scan reports zero unhandled findings.
 
 ### Triage
 
@@ -230,8 +266,11 @@ Current suppressions:
    inline `gitleaks:allow`, a fingerprint, an advisory ID — with a comment
    saying why.
 4. If it is real but cannot be fixed now, open an issue with the evidence and
-   reference it from the suppression. Critical and High findings do not get a
-   suppression without an issue.
+   reference it from the suppression. Verified production-reachable Critical
+   and High findings are never suppressed; update, override, remove, or patch
+   the dependency before OSV can pass. When a repository patch fixes an
+   unpatched upstream High, its version-only OSV entry must reference the patch
+   and timeout-bounded regression coverage.
 
 ### Ownership and cadence
 

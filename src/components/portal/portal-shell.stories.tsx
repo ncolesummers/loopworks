@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { DashboardView } from "@/components/portal/dashboard-view";
 import { PortalShell } from "@/components/portal/portal-shell";

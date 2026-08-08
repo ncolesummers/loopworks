@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
 import { portalFixture } from "@/lib/fixtures";

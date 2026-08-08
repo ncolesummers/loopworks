@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
 import type { ValidationGateSummaryRecord } from "@/lib/types";
