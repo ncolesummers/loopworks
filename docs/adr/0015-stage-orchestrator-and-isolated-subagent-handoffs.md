@@ -47,8 +47,17 @@ search, and line-range read tools against their isolated commit-pinned
 checkouts. The tools
 exclude secret, generated, dependency, and traversal paths; bound queries and
 outputs; reject symlink escape; and return commit/path/line provenance. The
-framework's permissive filesystem tools remain disabled. Planner web access is
-a separate guarded capability tracked by issue #68.
+framework's permissive filesystem and `bash` tools remain disabled. The planner
+receives issue context from the host and has no model-visible CLI override. Its
+typed GitHub backlog tools accept only bounded filters or an issue number. The
+host, not the model, supplies the active Loop run UUID from the initiating
+authenticated Eve principal's `loopworks.run_id` claim, which declared
+subagents inherit and later callers cannot replace. Host code resolves
+repository and installation identity, uses fixed GET routes, projects returned
+fields, caps and redacts text, and marks provider prose as untrusted evidence.
+Azure and Projects V2 inspection remain separate scope-and-permission contracts
+in issues #173 and #174. Planner web access is a separate guarded capability
+tracked by issue #68.
 
 Stage subagents do not mutate GitHub or durable workflow state. They communicate
 through versioned artifacts. Because declared subagent sandboxes are isolated,
@@ -126,21 +135,24 @@ deterministic control-plane behavior rather than model judgment.
 1. Eve discovery reports the root plus declared `planner`, `test-writer`,
    `implementer`, `validation-reviewer`, and `pr-preparer` subagents without
    diagnostics.
-2. Unit tests cover tool allowlists, fixture fail-closed behavior, patch safety,
-   AC coverage, red-evidence classification, and sanitized telemetry.
-3. PGlite tests prove exact plan approval, two-artifact persistence, idempotency,
+2. Unit tests cover tool allowlists, absence of planner CLI authority, fixed
+   GitHub routes and output projection, fixture fail-closed behavior, patch
+   safety, AC coverage, red-evidence classification, and sanitized telemetry.
+3. PGlite tests prove planner GitHub provider identity is resolved from the
+   durable run and fails closed for missing or inconsistent bindings.
+4. PGlite tests prove exact plan approval, two-artifact persistence, idempotency,
    and advancement only for complete expected-red evidence.
-4. Eve eval discovery includes planner, test-writing, implementation,
+5. Eve eval discovery includes planner, test-writing, implementation,
    validation-review, and PR-preparation routing scenarios.
-5. Validation-review transition tests cover forward routing, both backward
+6. Validation-review transition tests cover forward routing, both backward
    cycles, retry bounds, claims, artifact reset, stale bindings, and replay.
-6. Screenshot tests cover deterministic UI classification, three required
+7. Screenshot tests cover deterministic UI classification, three required
    viewports, digest-bound writer output, non-UI manifests, and incomplete
    evidence.
-7. PR-preparation tests cover exact evidence binding, non-UI empty manifests,
+8. PR-preparation tests cover exact evidence binding, non-UI empty manifests,
    idempotent persistence, conflicting replay, and guarded-writer approval.
-8. `bun run validate` and `bun run build` pass before review.
-9. Research-routing discovery proves `loopKey` is returned, the root fails
+9. `bun run validate` and `bun run build` pass before review.
+10. Research-routing discovery proves `loopKey` is returned, the root fails
    closed for undeclared research siblings, and no research subagent directories
    or versioned research payload schemas are introduced by #43.
 

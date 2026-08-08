@@ -22,6 +22,8 @@ import {
   recordGithubInstallationFlowOutcomeMetric,
   recordGithubWebhookOutcomeMetric,
   recordLockContentionMetric,
+  recordPlanningToolDurationMetric,
+  recordPlanningToolOutcomeMetric,
   recordResearchLoopRunCreatedObservability,
   registerControlPlaneGaugeMetrics,
   researchLoopRunCreatedDurableMetricName,
@@ -73,6 +75,8 @@ describe("ADR 0012 observability metric contract", () => {
       "loopworks.validation.duration",
       "loopworks.webhook.outcome",
       "loopworks.github.installation.outcome",
+      "loopworks.agent.tool.outcome",
+      "loopworks.agent.tool.duration",
       "loopworks.deployment.observed",
       "loopworks.approval.wait_time",
       "loopworks.approval.pending",
@@ -82,6 +86,53 @@ describe("ADR 0012 observability metric contract", () => {
       "loopworks.model.tokens",
       "loopworks.model.cost",
     ]);
+  });
+
+  it("records planner tool outcomes and duration with low-cardinality metadata only", () => {
+    const recordings: Array<{
+      attributes?: Record<string, unknown>;
+      name: string;
+      value: number;
+    }> = [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+      createHistogram(name: string) {
+        return {
+          record(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+    };
+
+    const metadata = {
+      agent: "planner",
+      outcome: "success" as const,
+      provider: "github",
+      tool: "read_github_backlog_item",
+    };
+    recordPlanningToolOutcomeMetric(metadata, meter);
+    recordPlanningToolDurationMetric({ ...metadata, durationSeconds: 0.25 }, meter);
+
+    expect(recordings).toEqual([
+      {
+        attributes: metadata,
+        name: "loopworks.agent.tool.outcome",
+        value: 1,
+      },
+      {
+        attributes: metadata,
+        name: "loopworks.agent.tool.duration",
+        value: 0.25,
+      },
+    ]);
+    expect(JSON.stringify(recordings)).not.toContain("body");
   });
 
   it("records GitHub installation outcomes without sensitive callback attributes", () => {
@@ -837,7 +888,7 @@ describe("ADR 0012 observability metric contract", () => {
     const observabilityRoot = path.join(sourceRoot, "lib/observability");
     const schemaFile = path.join(sourceRoot, "db/schema.ts");
     const metricNamespacePattern =
-      /^loopworks\.(run|step|validation|webhook|deployment|approval|queue|lock|model)\./;
+      /^loopworks\.(run|step|validation|webhook|deployment|approval|queue|lock|model|agent)\./;
     const forbiddenMetricLiterals = new Set([
       ...observabilityMetricNames,
       developmentLoopRunCompletedDurableMetricName,

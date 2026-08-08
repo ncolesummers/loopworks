@@ -24,11 +24,31 @@ summary. The selected planning model is `openai/gpt-5.6-sol` with OpenAI
 reasoning effort `xhigh`, reported in artifacts as
 `openai/gpt-5.6-sol-xhigh`.
 
-The model-visible CLI surface is a guarded `bash` replacement for read-only
-inspection through tools such as `gh`, `az`, and read-only `git` commands.
-Repository writes, file writes, branch changes, pull request changes, issue
-mutation, deployment changes, and SaaS mutation verbs are blocked. The only
-write-like planning contract is emitting the validated plan artifact.
+The planner has no model-visible CLI or general shell. The neutral root's
+disabled `bash` contract remains authoritative, and the planner does not
+override it. Issue context is supplied by the host, while repository discovery,
+search, and line-range reads use bounded tools against the isolated,
+commit-pinned checkout defined by ADR 0015. The only write-like planning
+contract is emitting the validated plan artifact.
+
+Three typed, host-owned GitHub tools preserve planning-critical backlog access:
+bounded issue listing, one-item detail with comments and relationships, and
+label/milestone taxonomy. They accept only bounded filters or an issue number,
+never repository, installation, run, route, method, page, or credential input.
+The host derives the durable run ID from the initiating authenticated Eve
+principal's `loopworks.run_id` claim. Declared subagents inherit that initiator
+authority, while later callers and model input cannot replace it. Host code
+then resolves the run's repository and GitHub App installation, calls fixed GET
+routes, projects explicit returned fields, redacts and caps text, reports
+truncation, and maps provider failures to stable errors. GitHub prose is
+untrusted external evidence, not instruction authority.
+
+Azure inventory and GitHub Projects V2 remain separately issue-backed because
+they need different durable scope bindings and provider permissions; issues
+[#173](https://github.com/ncolesummers/loopworks/issues/173) and
+[#174](https://github.com/ncolesummers/loopworks/issues/174) own those contracts.
+A command denylist is not an acceptable substitute because child processes can
+inherit host credentials and read-only commands can return secrets.
 
 Production structured logs stay enabled and carry sanitized metadata and
 correlation fields. Raw input/output capture is disabled in production until the
@@ -41,10 +61,11 @@ Fixture mode is explicit and local-only. It requires
 
 ## Consequences
 
-Planning can use SaaS CLIs for context gathering without granting a generic
-shell or source mutation surface. The first agent contract is testable through
-deterministic golden fixtures and Eve eval discovery before broader model,
-prompt, or tool changes.
+Planning uses supplied issue context, adaptive run-bound GitHub backlog reads,
+and commit-pinned repository inspection without a child-process credential or
+raw CLI-output boundary. The additional host/provider boundary and untrusted
+prose increase schema, redaction, and truncation work, but preserve the backlog
+context needed for accurate plans.
 
 The planner no longer owns the root Eve runtime. It is a sibling of other stage
 subagents and cannot invoke them or transition durable run state.
@@ -55,13 +76,16 @@ masking policy, metrics backend activation, and trace collector setup to ADR
 
 ## Validation
 
-1. Unit tests cover the plan artifact schema, CLI guard, fixture fail-closed
-   behavior, and sanitized telemetry policy.
-2. Development-loop persistence stores the rich plan artifact in
+1. Unit tests cover the plan artifact schema, absence of planner CLI authority,
+   fixed GitHub routes, returned-field projection, redaction, truncation,
+   fixture fail-closed behavior, and sanitized telemetry policy.
+2. PGlite tests prove repository, installation, and current-issue identity come
+   from the durable run binding and fail closed when incomplete or inconsistent.
+3. Development-loop persistence stores the rich plan artifact in
    `agent_plans.plan`.
-3. `bunx eve eval --list` discovers the planning eval harness without requiring
+4. `bunx eve eval --list` discovers the planning eval harness without requiring
    a live model call.
-4. Aggregate validation and build pass before review.
+5. Aggregate validation and build pass before review.
 
 ## Follow-Ups
 
@@ -69,3 +93,6 @@ masking policy, metrics backend activation, and trace collector setup to ADR
    architecture decision.
 2. ADR 0012 implementation work will wire backend/exporter topology and
    production filtering or masking policy.
+3. Issue #172 removed the planner CLI override on 2026-08-07 and replaced its
+   GitHub backlog capability with run-bound typed host-owned adapters.
+4. Issues #173 and #174 own Azure inventory and GitHub Projects V2 inspection.

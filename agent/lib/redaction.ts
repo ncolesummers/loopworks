@@ -2,6 +2,8 @@
 // use this one implementation so a new token pattern lands everywhere at once.
 export function redactSecrets(value: string): string {
   return value
+    .replace(/(authorization\s*:\s*)[^\r\n]*/gi, "$1[REDACTED]")
+    .replace(/((?:cookie|set-cookie)\s*:\s*)[^\r\n]*/gi, "$1[REDACTED]")
     .replace(/(authorization:\s*bearer\s+)\S+/gi, "$1[REDACTED]")
     .replace(/\b(?:gh[pousr]_|sk-)[A-Za-z0-9_-]+\b/g, "[REDACTED]")
     .replace(/\bgithub_pat_[A-Za-z0-9_]+\b/g, "[REDACTED]")

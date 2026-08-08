@@ -57,16 +57,19 @@ describe("Eve stage orchestrator discovery", () => {
     );
     expect(plannerTools).toEqual(
       expect.arrayContaining([
-        "bash.ts",
         "emit_plan_artifact.ts",
+        "list_github_backlog.ts",
+        "list_github_backlog_taxonomy.ts",
         "list_repository_files.ts",
         "prepare_repository_context.ts",
+        "read_github_backlog_item.ts",
         "read_repository_files.ts",
         "read_issue_context.ts",
         "search_repository.ts",
         "summarize_validation_requirements.ts",
       ]),
     );
+    expect(plannerTools).not.toContain("bash.ts");
     expect(testWriterTools).toEqual(
       expect.arrayContaining([
         "emit_test_writing_artifacts.ts",

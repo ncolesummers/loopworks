@@ -1,12 +1,6 @@
 /** @vitest-environment node */
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-
-import {
-  cliInspectionToolContract,
-  evaluateCliInspectionCommand,
-  parseCliInspectionCommand,
-} from "@agent/lib/cli-inspection";
 
 const eveFrameworkToolNames = new Set([
   "agent",
@@ -22,86 +16,63 @@ const eveFrameworkToolNames = new Set([
   "write_file",
 ]);
 
-describe("Planning agent CLI inspection guard", () => {
-  it("allows read-only SaaS inspection commands with auditable metadata", () => {
-    const decision = evaluateCliInspectionCommand(
-      "gh issue view 13 --repo ncolesummers/loopworks --json number,title,body",
+describe("Planning agent tool boundary", () => {
+  it("does not expose a planner bash override and keeps root bash disabled", async () => {
+    const plannerToolsDirectory = join(process.cwd(), "agent", "subagents", "planner", "tools");
+    const plannerTools = await readdir(plannerToolsDirectory);
+    const rootBashSource = await readFile(join(process.cwd(), "agent", "tools", "bash.ts"), "utf8");
+
+    expect(plannerTools).not.toContain("bash.ts");
+    expect(plannerTools).toEqual(
+      expect.arrayContaining([
+        "list_github_backlog.ts",
+        "list_github_backlog_taxonomy.ts",
+        "read_github_backlog_item.ts",
+      ]),
+    );
+    expect(rootBashSource).toContain("disableTool");
+    expect(rootBashSource).not.toContain("defineTool");
+  });
+
+  it("binds GitHub backlog tools to the initiating host principal", async () => {
+    const toolsDirectory = join(process.cwd(), "agent", "subagents", "planner", "tools");
+
+    for (const file of [
+      "list_github_backlog.ts",
+      "read_github_backlog_item.ts",
+      "list_github_backlog_taxonomy.ts",
+    ]) {
+      const source = await readFile(join(toolsDirectory, file), "utf8");
+      expect(source).toContain("ctx.session.auth");
+      expect(source).toContain("readActiveLoopRunId");
+      expect(source).not.toMatch(/input\.runId|runId:\s*z\./);
+    }
+  });
+
+  it("has no planner-owned CLI inspection implementation", async () => {
+    const plannerSources = [
+      join(process.cwd(), "agent", "planning-agent.ts"),
+      join(process.cwd(), "agent", "subagents", "planner", "agent.ts"),
+      join(process.cwd(), "agent", "subagents", "planner", "instructions.md"),
+    ];
+    const plannerToolFiles = await readdir(
+      join(process.cwd(), "agent", "subagents", "planner", "tools"),
     );
 
-    expect(decision).toMatchObject({
-      allowed: true,
-      audit: {
-        commandFamily: "gh",
-        mutates: false,
-      },
-    });
-    if (!decision.allowed) {
-      throw new Error("Expected command to be allowed.");
+    plannerSources.push(
+      ...plannerToolFiles
+        .filter((file) => file.endsWith(".ts"))
+        .map((file) => join(process.cwd(), "agent", "subagents", "planner", "tools", file)),
+    );
+
+    for (const sourcePath of plannerSources) {
+      const source = await readFile(sourcePath, "utf8");
+      expect(source).not.toMatch(/execFile|cli-inspection/);
     }
-    expect(decision.audit.sanitizedArgs).toEqual([
-      "issue",
-      "view",
-      "13",
-      "--repo",
-      "ncolesummers/loopworks",
-      "--json",
-      "number,title,body",
-    ]);
-  });
 
-  it("allows selected Azure read commands", () => {
-    expect(evaluateCliInspectionCommand("az account show --output json")).toMatchObject({
-      allowed: true,
-      audit: {
-        commandFamily: "az",
-        mutates: false,
-      },
-    });
-  });
-
-  it("rejects shell constructs that can write or hide side effects", () => {
-    for (const command of [
-      "gh issue view 13 > /tmp/issue.json",
-      "gh issue view 13 && gh issue edit 13 --add-label done",
-      "gh issue view 13 | tee issue.json",
-      "gh issue view 13; rm -rf .next",
-    ]) {
-      expect(evaluateCliInspectionCommand(command)).toMatchObject({
-        allowed: false,
-        reason: expect.stringContaining("shell"),
-      });
-    }
-  });
-
-  it("rejects repo, file, and SaaS mutations", () => {
-    for (const command of [
-      "git commit -am plan",
-      "git branch -D stale-branch",
-      "git diff --output plan.patch",
-      "gh issue edit 13 --add-label status:ready",
-      "gh api repos/ncolesummers/loopworks/issues/13/comments -f body=hello",
-      "gh pr merge 42",
-      "az deployment group create --resource-group rg --template-file main.bicep",
-      "rm -rf .next",
-    ]) {
-      expect(evaluateCliInspectionCommand(command)).toMatchObject({
-        allowed: false,
-      });
-    }
-  });
-
-  it("keeps the model-visible contract planning-only", () => {
-    expect(cliInspectionToolContract).toMatchObject({
-      name: "bash",
-      mutates: false,
-      requiresApprovalForMutation: true,
-    });
-    expect(parseCliInspectionCommand("gh issue view 13").argv).toEqual([
-      "gh",
-      "issue",
-      "view",
-      "13",
-    ]);
+    await expect(
+      access(join(process.cwd(), "agent", "lib", "cli-inspection.ts")),
+    ).rejects.toThrow();
   });
 
   it("only disables Eve framework tools that exist at runtime", async () => {

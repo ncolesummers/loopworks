@@ -117,11 +117,6 @@ describe("Planning agent artifact contract", () => {
     expect(plan.toolContractSummary.allowedTools).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: "bash",
-          mutates: false,
-          capability: expect.stringContaining("read-only"),
-        }),
-        expect.objectContaining({
           name: "emit_plan_artifact",
           mutates: true,
           capability: expect.stringContaining("plan artifact"),
@@ -130,7 +125,14 @@ describe("Planning agent artifact contract", () => {
         expect.objectContaining({ name: "list_repository_files", mutates: false }),
         expect.objectContaining({ name: "search_repository", mutates: false }),
         expect.objectContaining({ name: "read_repository_files", mutates: false }),
+        expect.objectContaining({ name: "read_issue_context", mutates: false }),
+        expect.objectContaining({ name: "list_github_backlog", mutates: false }),
+        expect.objectContaining({ name: "read_github_backlog_item", mutates: false }),
+        expect.objectContaining({ name: "list_github_backlog_taxonomy", mutates: false }),
       ]),
+    );
+    expect(plan.toolContractSummary.allowedTools).not.toContainEqual(
+      expect.objectContaining({ name: "bash" }),
     );
     expect(plan.fixtureMode).toMatchObject({
       activationEnv: "LOOPWORKS_EVE_FIXTURE_MODE",
@@ -142,5 +144,26 @@ describe("Planning agent artifact contract", () => {
         mechanism: "eve-eval",
       }),
     );
+  });
+
+  it("rejects model-forged tool authority in an otherwise valid pinned artifact", () => {
+    const plan = createPlanningAgentSeedPlan(issue13Input);
+    const forged = {
+      ...plan,
+      toolContractSummary: {
+        ...plan.toolContractSummary,
+        allowedTools: [
+          ...plan.toolContractSummary.allowedTools,
+          {
+            auditFields: ["agent"],
+            capability: "Execute arbitrary host commands.",
+            mutates: false,
+            name: "bash",
+          },
+        ],
+      },
+    };
+
+    expect(pinnedPlanningAgentOutputSchema.safeParse(forged).success).toBe(false);
   });
 });
