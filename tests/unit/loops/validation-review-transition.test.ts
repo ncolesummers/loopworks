@@ -561,59 +561,62 @@ describe("validation review transition", () => {
   it.each([
     ["development" as const, ["development", "validation", "code-review"]],
     ["test-writing" as const, ["test-writing", "development", "validation", "code-review"]],
-  ])("atomically rewinds to %s and clears invalidated claims and artifacts", async (route, resetStages) => {
-    const prepared = await prepare();
-    await applyDevelopmentLoopValidationReviewResult({
-      database: context.db as unknown as DevelopmentLoopTransitionDatabase,
-      output: prepared.result(route),
-      runId: prepared.runId,
-    });
-
-    const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, prepared.runId));
-    const steps = await context.db
-      .select()
-      .from(runSteps)
-      .where(and(eq(runSteps.runId, prepared.runId), inArray(runSteps.stage, resetStages)));
-    expect(run).toMatchObject({ currentStage: route, status: "queued" });
-    expect(run?.metadata).toMatchObject({
-      validationReviewHistory: [
-        expect.objectContaining({
-          attempt: 1,
-          route,
-          digest: expect.stringMatching(/^[a-f0-9]{64}$/),
-        }),
-      ],
-    });
-    expect(JSON.stringify(run?.metadata)).not.toContain("bounded stage attempt");
-    for (const step of steps) {
-      expect(step).toMatchObject({
-        attempt: 2,
-        status: "queued",
-        startedAt: null,
-        completedAt: null,
+  ])(
+    "atomically rewinds to %s and clears invalidated claims and artifacts",
+    async (route, resetStages) => {
+      const prepared = await prepare();
+      await applyDevelopmentLoopValidationReviewResult({
+        database: context.db as unknown as DevelopmentLoopTransitionDatabase,
+        output: prepared.result(route),
+        runId: prepared.runId,
       });
-      expect(step.metadata).not.toHaveProperty("implementationClaim");
-      expect(step.metadata).not.toHaveProperty("testWritingClaim");
-      expect(step.metadata).not.toHaveProperty("validationReviewClaim");
-    }
-    const resetArtifacts = await context.db
-      .select()
-      .from(artifacts)
-      .where(
-        inArray(
-          artifacts.stepId,
-          steps.map(({ id }) => id),
-        ),
-      );
-    expect(resetArtifacts.every(({ sha256 }) => sha256 === null)).toBe(true);
-    if (route === "development") {
-      const [testStep] = await context.db
+
+      const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, prepared.runId));
+      const steps = await context.db
         .select()
         .from(runSteps)
-        .where(and(eq(runSteps.runId, prepared.runId), eq(runSteps.stage, "test-writing")));
-      expect(testStep).toMatchObject({ attempt: 1, status: "succeeded" });
-    }
-  });
+        .where(and(eq(runSteps.runId, prepared.runId), inArray(runSteps.stage, resetStages)));
+      expect(run).toMatchObject({ currentStage: route, status: "queued" });
+      expect(run?.metadata).toMatchObject({
+        validationReviewHistory: [
+          expect.objectContaining({
+            attempt: 1,
+            route,
+            digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+          }),
+        ],
+      });
+      expect(JSON.stringify(run?.metadata)).not.toContain("bounded stage attempt");
+      for (const step of steps) {
+        expect(step).toMatchObject({
+          attempt: 2,
+          status: "queued",
+          startedAt: null,
+          completedAt: null,
+        });
+        expect(step.metadata).not.toHaveProperty("implementationClaim");
+        expect(step.metadata).not.toHaveProperty("testWritingClaim");
+        expect(step.metadata).not.toHaveProperty("validationReviewClaim");
+      }
+      const resetArtifacts = await context.db
+        .select()
+        .from(artifacts)
+        .where(
+          inArray(
+            artifacts.stepId,
+            steps.map(({ id }) => id),
+          ),
+        );
+      expect(resetArtifacts.every(({ sha256 }) => sha256 === null)).toBe(true);
+      if (route === "development") {
+        const [testStep] = await context.db
+          .select()
+          .from(runSteps)
+          .where(and(eq(runSteps.runId, prepared.runId), eq(runSteps.stage, "test-writing")));
+        expect(testStep).toMatchObject({ attempt: 1, status: "succeeded" });
+      }
+    },
+  );
 
   it("accepts exact replay idempotently and rejects conflicting replay", async () => {
     const prepared = await prepare();

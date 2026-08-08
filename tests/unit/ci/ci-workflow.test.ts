@@ -115,8 +115,8 @@ function indexOfStep(
 function cacheIndexFor(jobName: string, cachedPath: string): number {
   return indexOfStep(
     jobName,
-    (step) => step.uses === "actions/cache@v4" && step.with?.path?.trim() === cachedPath,
-    `actions/cache@v4 step for \`${cachedPath}\``,
+    (step) => step.uses === "actions/cache@v6" && step.with?.path?.trim() === cachedPath,
+    `actions/cache@v6 step for \`${cachedPath}\``,
   );
 }
 

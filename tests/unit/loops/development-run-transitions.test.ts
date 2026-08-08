@@ -602,70 +602,70 @@ describe("development-loop run transitions", () => {
     { expectedMetricStatus: "succeeded", status: "succeeded" },
     { expectedMetricStatus: "failed", status: "failed" },
     { expectedMetricStatus: "cancelled", status: "canceled" },
-  ] as const)("completes a run as $status and emits run lifecycle metrics", async ({
-    expectedMetricStatus,
-    status,
-  }) => {
-    const runId = await createRun(context);
-    const metrics = createMetricRecorder();
-    await context.db
-      .update(loopRuns)
-      .set({
-        currentStage: "done",
-        startedAt: new Date("2026-07-08T16:00:00.000Z"),
-        status: "running",
-      })
-      .where(eq(loopRuns.id, runId));
+  ] as const)(
+    "completes a run as $status and emits run lifecycle metrics",
+    async ({ expectedMetricStatus, status }) => {
+      const runId = await createRun(context);
+      const metrics = createMetricRecorder();
+      await context.db
+        .update(loopRuns)
+        .set({
+          currentStage: "done",
+          startedAt: new Date("2026-07-08T16:00:00.000Z"),
+          status: "running",
+        })
+        .where(eq(loopRuns.id, runId));
 
-    await completeDevelopmentLoopRun({
-      database: transitionDatabase(context),
-      metrics,
-      occurredAt: new Date("2026-07-08T16:10:00.000Z"),
-      ...(status === "canceled" ? { reason: "canceled_by_reconciliation" as const } : {}),
-      runId,
-      status,
-    });
-    await completeDevelopmentLoopRun({
-      database: transitionDatabase(context),
-      metrics,
-      occurredAt: new Date("2026-07-08T16:10:00.000Z"),
-      ...(status === "canceled" ? { reason: "canceled_by_reconciliation" as const } : {}),
-      runId,
-      status,
-    });
+      await completeDevelopmentLoopRun({
+        database: transitionDatabase(context),
+        metrics,
+        occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+        ...(status === "canceled" ? { reason: "canceled_by_reconciliation" as const } : {}),
+        runId,
+        status,
+      });
+      await completeDevelopmentLoopRun({
+        database: transitionDatabase(context),
+        metrics,
+        occurredAt: new Date("2026-07-08T16:10:00.000Z"),
+        ...(status === "canceled" ? { reason: "canceled_by_reconciliation" as const } : {}),
+        runId,
+        status,
+      });
 
-    const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, runId));
-    const [lease] = await context.db
-      .select()
-      .from(idempotencyLocks)
-      .where(eq(idempotencyLocks.runId, runId));
+      const [run] = await context.db.select().from(loopRuns).where(eq(loopRuns.id, runId));
+      const [lease] = await context.db
+        .select()
+        .from(idempotencyLocks)
+        .where(eq(idempotencyLocks.runId, runId));
 
-    expect(run).toMatchObject({
-      status,
-      completedAt: new Date("2026-07-08T16:10:00.000Z"),
-    });
-    if (status === "canceled") {
-      expect(run.canceledAt).toEqual(new Date("2026-07-08T16:10:00.000Z"));
-    }
-    expect(lease).toMatchObject({
-      owner: runId,
-      releasedAt: new Date("2026-07-08T16:10:00.000Z"),
-      status: "released",
-    });
-    expect(metrics.runCompleted).toHaveBeenCalledWith({
-      loopKey: "development-loop",
-      repository: "ncolesummers/loopworks",
-      status,
-    });
-    expect(metrics.runDuration).toHaveBeenCalledWith({
-      durationSeconds: 600,
-      loopKey: "development-loop",
-      status,
-    });
-    expect(metrics.runCompleted).toHaveBeenCalledTimes(1);
-    expect(metrics.runDuration).toHaveBeenCalledTimes(1);
-    expect(expectedMetricStatus).toBe(status === "canceled" ? "cancelled" : status);
-  });
+      expect(run).toMatchObject({
+        status,
+        completedAt: new Date("2026-07-08T16:10:00.000Z"),
+      });
+      if (status === "canceled") {
+        expect(run.canceledAt).toEqual(new Date("2026-07-08T16:10:00.000Z"));
+      }
+      expect(lease).toMatchObject({
+        owner: runId,
+        releasedAt: new Date("2026-07-08T16:10:00.000Z"),
+        status: "released",
+      });
+      expect(metrics.runCompleted).toHaveBeenCalledWith({
+        loopKey: "development-loop",
+        repository: "ncolesummers/loopworks",
+        status,
+      });
+      expect(metrics.runDuration).toHaveBeenCalledWith({
+        durationSeconds: 600,
+        loopKey: "development-loop",
+        status,
+      });
+      expect(metrics.runCompleted).toHaveBeenCalledTimes(1);
+      expect(metrics.runDuration).toHaveBeenCalledTimes(1);
+      expect(expectedMetricStatus).toBe(status === "canceled" ? "cancelled" : status);
+    },
+  );
 
   it("persists a typed terminal reason and emits completion observability once", async () => {
     const runId = await createRun(context);

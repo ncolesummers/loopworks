@@ -1,0 +1,92 @@
+# Development
+
+This guide is the canonical local-development entry point. Configuration names
+and defaults live in the generated [`.env.example`](../.env.example); update the
+configuration registry rather than maintaining another variable list here.
+
+## Fixture Mode
+
+The quickest path needs no GitHub or database credentials:
+
+```bash
+bun install
+LOOPWORKS_PORTAL_DATA_MODE=fixtures bun run dev:fixture
+```
+
+Open <http://127.0.0.1:3000>. Both fixture data and auth bypass are ignored in
+production.
+
+## Local Integrations
+
+Copy `.env.example` to the untracked `.env.local`, replace only the values your
+workflow needs, and keep Postgres on a loopback host. Then run migrations before
+starting the ordinary server:
+
+```bash
+bun run db:migrate
+bun run dev
+```
+
+For hosted Preview and Production configuration, use the
+[Vercel and Neon runbook](runbooks/vercel-neon-deployment.md).
+
+## Webhook Fixtures
+
+Inspect a signed issue webhook without sending it:
+
+```bash
+bun run github:webhook-fixture -- --kind agent-ready
+bun run github:webhook-fixture -- --kind spike-agent-ready
+```
+
+Add `--send` to post to the local webhook route. The script refuses non-loopback
+targets.
+
+## Local Database Data
+
+After migrations, seed the fixed demo rows with `bun run db:seed`. Use
+`bun run db:seed:reset` to replace only those owned rows, or add `-- --dry-run`
+to either command to inspect its plan. ADR 0007 requires both commands to reject
+production runtimes, remote hosts, and non-Postgres URLs.
+
+The browser and native concurrency lanes use a dedicated local database:
+
+```bash
+createdb --host 127.0.0.1 --username loopworks loopworks_e2e
+DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
+  bun run test:e2e:seeded
+DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
+  bun run test:integration:postgres
+```
+
+The seeded lane proves live database behavior. The native lane uses independent
+Postgres sessions for lock-scheduling evidence that PGlite cannot provide.
+**The native lane truncates every table in the `public` schema of
+`loopworks_e2e` with identity restart and cascading cleanup.** Run the seeded
+lane again afterward if you need its demo rows.
+
+### Recreating the test database
+
+**Destructive: the following commands delete the entire local `loopworks_e2e`
+database.** Use them only for the named loopback test database, such as after a
+pre-production migration baseline changes:
+
+```bash
+dropdb --host 127.0.0.1 --username loopworks loopworks_e2e
+createdb --host 127.0.0.1 --username loopworks loopworks_e2e
+```
+
+Recreate any remote non-production database through its provider. Never point
+these commands at a hosted database.
+
+## Git Hooks
+
+Install and run the repository hooks with:
+
+```bash
+bun run precommit:install
+bun run precommit:run
+```
+
+The hook invokes the same `bun run precommit` aggregate gate contributors run
+before review.

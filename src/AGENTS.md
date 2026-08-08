@@ -24,6 +24,8 @@ state, GitHub/Vercel integrations, approvals, and shared app contracts under
    Auth.js provider, adapter, callback, and session orchestration.
 10. Cache authorization results only for successful decisions unless tests prove
     denied or missing-evidence states still fail closed.
+11. For UI changes, follow ADR 0009 and `docs/design-review-checklist.md`;
+    reusable components also follow `src/components/AGENTS.md`.
 
 ## Tests
 

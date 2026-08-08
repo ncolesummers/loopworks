@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 const repoRoot = path.resolve(__dirname, "../../..");
 
@@ -66,6 +67,13 @@ describe("patched image-size parsers", () => {
     expect(patch).toContain("Invalid ICNS entry length");
     expect(patch).toContain("Invalid JXL box size");
     expect(patch).toContain("Invalid HEIF ispe box size");
+
+    const lockfile = parse(readFileSync(path.join(repoRoot, "bun.lock"), "utf8")) as {
+      patchedDependencies?: Record<string, string>;
+    };
+    expect(lockfile.patchedDependencies?.["image-size@2.0.2"]).toBe(
+      "patches/image-size@2.0.2.patch",
+    );
   });
 
   it.each([

@@ -296,52 +296,9 @@ Manifest changes must be reviewable before rollout:
 6. Record rollout notes that identify the manifest version, affected loop keys,
    validation evidence, reviewer approval, and rollback or disable path.
 
-## Milestone Contract
+## Roadmap
 
-### M0 Project Foundation
-
-Define the operational baseline, repo conventions, docs, and data model.
-Persona test IDs: P01, P03, R02, S04.
-
-### M1 Design System Direction + App Shell
-
-Establish the UI vocabulary before the app becomes too broad.
-Persona test IDs: P01, P04, M01, A02, R02.
-
-### M2 GitHub + Vercel Source Systems
-
-Wire the external systems that supply truth about work and deployment state.
-Persona test IDs: P02, M01, M03, R01, S01, S02, S03.
-
-### M3 Durable Loop MVP
-
-Ship the first end-to-end loop with persisted history.
-Persona test IDs: M02, A01, A02, A03, R01.
-
-### M4 Operator Onboarding
-
-Make the machine reachable: first-run activation from installation to a first registered loop.
-Persona test IDs: P05, M04, M05.
-
-### M5 MVP Close: Security, Design, and Coverage Gates
-
-Add release confidence, review visibility, and security signoff. Runs after M4.
-Persona test IDs: A03, R01, R02, S01, S02, S03, S04.
-
-## Post-MVP Milestone Contract
-
-The MVP closes at M5. The milestones below are sequenced but sit outside it.
-
-### M6 Observability + Alerting
-
-Make the running machine legible: instrumentation, log shipping, dashboards, and alerts.
-Persona test IDs: not yet assigned.
-
-### M7 Agent Governance + Evals
-
-Add guardrails and scenario coverage for agent behavior.
-Persona test IDs: P03, A02, A03, R02, S04.
-
-### M8-M11
-
-M8 Agent Extensibility (Tools, MCP, Skills), M9 Post-MVP Loop Extensions, M10 Multi-Platform Chat Integration, and M11 Docs Site are sequenced in the GitHub backlog and are not yet specified here.
+The manifest defines loop behavior, not backlog sequence.
+[GitHub milestones](https://github.com/ncolesummers/loopworks/milestones) are
+the canonical roadmap; `docs/prd.md` records the product requirements they
+implement.
