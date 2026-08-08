@@ -1,5 +1,8 @@
 /** @vitest-environment node */
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { configRegistry } from "@/lib/config/registry";
 import {
   createValidationReportArtifactMetadata,
   evaluateValidationCommand,
@@ -254,6 +257,105 @@ describe("deterministic validation runner", () => {
     expect(source).not.toContain("@/lib/observability");
     expect(source).not.toContain("loopRuns");
     expect(source).not.toContain("runSteps");
+    expect(source).not.toContain(
+      "nosemgrep: loopworks-no-environment-inheritance-into-agent-sandbox",
+    );
+  });
+
+  it("runs a real validation gate without exposing parent secrets", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "loopworks-validation-env-"));
+    const secretNames = configRegistry.filter((entry) => entry.secret).map((entry) => entry.name);
+    const requiredSecretNames = ["AUTH_SECRET", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"];
+    const originalPath = process.env.PATH;
+    const parentEnvironment = process.env as Record<string, string | undefined>;
+    const mutatedNames = [
+      ...secretNames,
+      "HOME",
+      "CI",
+      "NODE_ENV",
+      "LOOPWORKS_SECURITY_REQUIRE_SCANNERS",
+      "UNREGISTERED_ENV_SENTINEL",
+    ];
+    const originalEnvironment = new Map(
+      mutatedNames.map((name) => [name, parentEnvironment[name]] as const),
+    );
+
+    expect(secretNames).toEqual(expect.arrayContaining(requiredSecretNames));
+    expect(originalPath).toBeTruthy();
+
+    try {
+      for (const name of secretNames) {
+        parentEnvironment[name] = `issue-178-${name.toLowerCase()}`;
+      }
+      parentEnvironment.HOME = fixtureRoot;
+      parentEnvironment.CI = "true";
+      parentEnvironment.NODE_ENV = "production";
+      parentEnvironment.LOOPWORKS_SECURITY_REQUIRE_SCANNERS = "true";
+      parentEnvironment.UNREGISTERED_ENV_SENTINEL = "must-not-cross";
+
+      const expectedEnvironment = {
+        CI: "true",
+        HOME: fixtureRoot,
+        LOOPWORKS_SECURITY_REQUIRE_SCANNERS: "true",
+        PATH: originalPath,
+      };
+      const probeSource = `
+const secretNames = ${JSON.stringify(secretNames)};
+const expectedEnvironment = ${JSON.stringify(expectedEnvironment)};
+const leakedNames = secretNames.filter((name) => process.env[name] !== undefined);
+const allowedEnvironmentMatches = Object.entries(expectedEnvironment).every(
+  ([name, value]) =>
+    name === "PATH" ? process.env.PATH?.includes(value) === true : process.env[name] === value,
+);
+const productionModeLeaked = process.env.NODE_ENV === "production";
+const unknownEnvironmentLeaked = process.env.UNREGISTERED_ENV_SENTINEL !== undefined;
+if (
+  leakedNames.length > 0 ||
+  !allowedEnvironmentMatches ||
+  productionModeLeaked ||
+  unknownEnvironmentLeaked
+) {
+  console.error(
+    JSON.stringify({
+      allowedEnvironmentMatches,
+      leakedNames,
+      productionModeLeaked,
+      unknownEnvironmentLeaked,
+    }),
+  );
+  process.exit(1);
+}
+`;
+
+      await writeFile(
+        path.join(fixtureRoot, "package.json"),
+        `${JSON.stringify({ scripts: { check: "bun run probe.ts" } }, null, 2)}\n`,
+      );
+      await writeFile(path.join(fixtureRoot, "probe.ts"), probeSource);
+
+      let commandOutput: { stderr: string; stdout: string } | undefined;
+      const report = await runValidationGates({
+        cwd: fixtureRoot,
+        gates: [fixtureGates[0]],
+        now: createSteppedClock(),
+        outputWriter: ({ stderr, stdout }) => {
+          commandOutput = { stderr, stdout };
+          return { uri: "artifact://validation/environment-probe.log" };
+        },
+      });
+
+      expect(report, JSON.stringify(commandOutput)).toMatchObject({
+        counts: { failed: 0, passed: 1, skipped: 0, total: 1 },
+        overallOutcome: "pass",
+        results: [{ exitCode: 0, outcome: "pass" }],
+      });
+    } finally {
+      for (const [name, value] of originalEnvironment) {
+        if (value === undefined) delete parentEnvironment[name];
+        else parentEnvironment[name] = value;
+      }
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
   });
 
   it("runs validation-owned screenshot capture only after deterministic gates pass", async () => {

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createValidationSubprocessEnvironment } from "../config/registry";
 import {
   type CaptureValidationScreenshotsInput,
   captureValidationScreenshots,
@@ -446,17 +447,14 @@ export async function executeValidationCommand(
   input: ValidationCommandExecutionInput,
 ): Promise<ValidationCommandExecutionResult> {
   return new Promise((resolve) => {
-    // Real finding, tracked in #178: with no `env` this child inherits every
-    // credential in the parent process, which defeats the guarded write path in
-    // ADR 0014. Fixing it means deriving the allow-list a validation gate
-    // actually needs, which is its own change with its own regression surface —
-    // not something to smuggle into the commit that added the scanner.
-    // nosemgrep: loopworks-no-environment-inheritance-into-agent-sandbox
     execFile(
       input.file,
       input.args,
       {
         cwd: input.cwd,
+        // Next.js narrows NodeJS.ProcessEnv to require NODE_ENV, while Node's
+        // child-process API accepts a partial string map and omits absent keys.
+        env: createValidationSubprocessEnvironment() as NodeJS.ProcessEnv,
         maxBuffer: input.maxOutputBytes,
         timeout: input.timeoutMs,
       },
