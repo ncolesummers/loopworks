@@ -89,18 +89,19 @@ describe("Neon migration configuration", () => {
     ).rejects.toThrow("same Neon branch and database");
   });
 
-  it.each([
-    "production",
-    "preview",
-  ])("rejects non-Neon database URLs in Vercel %s", async (vercelEnvironment) => {
-    await expect(
-      loadMigrationUrl({
-        DATABASE_URL: "postgres://user:runtime-secret@runtime.example.com/loopworks",
-        DATABASE_URL_UNPOOLED: "postgres://user:migration-secret@migrations.example.com/loopworks",
-        VERCEL_ENV: vercelEnvironment,
-      }),
-    ).rejects.toThrow("Neon");
-  });
+  it.each(["production", "preview"])(
+    "rejects non-Neon database URLs in Vercel %s",
+    async (vercelEnvironment) => {
+      await expect(
+        loadMigrationUrl({
+          DATABASE_URL: "postgres://user:runtime-secret@runtime.example.com/loopworks",
+          DATABASE_URL_UNPOOLED:
+            "postgres://user:migration-secret@migrations.example.com/loopworks",
+          VERCEL_ENV: vercelEnvironment,
+        }),
+      ).rejects.toThrow("Neon");
+    },
+  );
 
   it("fails closed when a hosted migration has no pooled runtime URL", async () => {
     await expect(
@@ -124,20 +125,20 @@ describe("Neon migration configuration", () => {
     await expect(migrationUrl).rejects.not.toThrow("postgres://");
   });
 
-  it.each([
-    "production",
-    "preview",
-  ])("fails closed in the Vercel %s environment when the direct URL is missing", async (vercelEnvironment) => {
-    const migrationUrl = loadMigrationUrl({
-      DATABASE_URL: "postgres://pooled-user:super-secret@pooler.neon.tech/loopworks",
-      DATABASE_URL_UNPOOLED: "   ",
-      VERCEL_ENV: vercelEnvironment,
-    });
+  it.each(["production", "preview"])(
+    "fails closed in the Vercel %s environment when the direct URL is missing",
+    async (vercelEnvironment) => {
+      const migrationUrl = loadMigrationUrl({
+        DATABASE_URL: "postgres://pooled-user:super-secret@pooler.neon.tech/loopworks",
+        DATABASE_URL_UNPOOLED: "   ",
+        VERCEL_ENV: vercelEnvironment,
+      });
 
-    await expect(migrationUrl).rejects.toThrow("DATABASE_URL_UNPOOLED");
-    await expect(migrationUrl).rejects.not.toThrow("super-secret");
-    await expect(migrationUrl).rejects.not.toThrow("postgres://");
-  });
+      await expect(migrationUrl).rejects.toThrow("DATABASE_URL_UNPOOLED");
+      await expect(migrationUrl).rejects.not.toThrow("super-secret");
+      await expect(migrationUrl).rejects.not.toThrow("postgres://");
+    },
+  );
 
   it.each([
     ["NEON_PROJECT_ID", "project-id"],

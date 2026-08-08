@@ -70,90 +70,90 @@ describe("development-loop automatic retries", () => {
     ).toEqual([30, 60, 120, 240, 300, 300]);
   });
 
-  it.each([
-    "stalled",
-    "timed_out",
-  ] as const)("preserves a terminal %s run and creates one trace-linked retry from planning", async (reason) => {
-    const source = await dispatchDevelopmentLoopRun({
-      clock: () => new Date("2026-07-24T16:00:00.000Z"),
-      database: runDatabase(context),
-      manifest: defaultLoopManifest,
-      traceId,
-      trigger: {
-        body: "## Acceptance Criteria\n- Preserve this exact trigger.",
-        deliveryId: `delivery-${reason}`,
-        issueNumber: 96,
-        issueUrl: "https://github.com/ncolesummers/loopworks/issues/96",
-        labels: ["agent-ready"],
-        milestone: "M3 Durable Loop MVP",
-        repositoryFullName: "ncolesummers/loopworks",
-        repositoryRevision: { commitSha: "a".repeat(40), ref: "main" },
-        title: "Durable dispatch",
-      },
-    });
-    expect(source.mode).toBe("dispatched");
-
-    await finalizeDevelopmentLoopRun({
-      database: transitionDatabase(context),
-      manifest: defaultLoopManifest,
-      occurredAt: new Date("2026-07-24T16:05:00.000Z"),
-      reason,
-      runId: source.runId,
-    });
-
-    const runs = await context.db.select().from(loopRuns);
-    expect(runs).toHaveLength(2);
-    const terminal = runs.find(({ id }) => id === source.runId);
-    const retry = runs.find(({ id }) => id !== source.runId);
-    expect(terminal).toMatchObject({ completedAt: new Date("2026-07-24T16:05:00.000Z") });
-    expect(retry).toMatchObject({
-      currentStage: "planning",
-      queuedAt: new Date("2026-07-24T16:05:30.000Z"),
-      status: "queued",
-      traceId,
-    });
-    expect(
-      (
-        await context.db
-          .select()
-          .from(runSteps)
-          .where(eq(runSteps.runId, retry?.id ?? ""))
-      ).find(({ stage }) => stage === "planning")?.queuedAt,
-    ).toEqual(new Date("2026-07-24T16:05:00.000Z"));
-    expect(retry?.metadata).toMatchObject({
-      dispatchAttempt: 2,
-      retryOfRunId: source.runId,
-      triggerSnapshot: { body: "## Acceptance Criteria\n- Preserve this exact trigger." },
-    });
-    expect(
-      await context.db
-        .select()
-        .from(idempotencyLocks)
-        .where(eq(idempotencyLocks.status, "acquired")),
-    ).toEqual([]);
-
-    expect(
-      await runDevelopmentLoopRetrySupervisorTick({
-        clock: () => new Date("2026-07-24T16:05:29.999Z"),
+  it.each(["stalled", "timed_out"] as const)(
+    "preserves a terminal %s run and creates one trace-linked retry from planning",
+    async (reason) => {
+      const source = await dispatchDevelopmentLoopRun({
+        clock: () => new Date("2026-07-24T16:00:00.000Z"),
         database: runDatabase(context),
         manifest: defaultLoopManifest,
-      }),
-    ).toEqual([]);
-    const due = await runDevelopmentLoopRetrySupervisorTick({
-      clock: () => new Date("2026-07-24T16:05:30.000Z"),
-      database: runDatabase(context),
-      manifest: defaultLoopManifest,
-    });
-    expect(due).toEqual([expect.objectContaining({ runId: retry?.id })]);
-    expect(
-      (
+        traceId,
+        trigger: {
+          body: "## Acceptance Criteria\n- Preserve this exact trigger.",
+          deliveryId: `delivery-${reason}`,
+          issueNumber: 96,
+          issueUrl: "https://github.com/ncolesummers/loopworks/issues/96",
+          labels: ["agent-ready"],
+          milestone: "M3 Durable Loop MVP",
+          repositoryFullName: "ncolesummers/loopworks",
+          repositoryRevision: { commitSha: "a".repeat(40), ref: "main" },
+          title: "Durable dispatch",
+        },
+      });
+      expect(source.mode).toBe("dispatched");
+
+      await finalizeDevelopmentLoopRun({
+        database: transitionDatabase(context),
+        manifest: defaultLoopManifest,
+        occurredAt: new Date("2026-07-24T16:05:00.000Z"),
+        reason,
+        runId: source.runId,
+      });
+
+      const runs = await context.db.select().from(loopRuns);
+      expect(runs).toHaveLength(2);
+      const terminal = runs.find(({ id }) => id === source.runId);
+      const retry = runs.find(({ id }) => id !== source.runId);
+      expect(terminal).toMatchObject({ completedAt: new Date("2026-07-24T16:05:00.000Z") });
+      expect(retry).toMatchObject({
+        currentStage: "planning",
+        queuedAt: new Date("2026-07-24T16:05:30.000Z"),
+        status: "queued",
+        traceId,
+      });
+      expect(
+        (
+          await context.db
+            .select()
+            .from(runSteps)
+            .where(eq(runSteps.runId, retry?.id ?? ""))
+        ).find(({ stage }) => stage === "planning")?.queuedAt,
+      ).toEqual(new Date("2026-07-24T16:05:00.000Z"));
+      expect(retry?.metadata).toMatchObject({
+        dispatchAttempt: 2,
+        retryOfRunId: source.runId,
+        triggerSnapshot: { body: "## Acceptance Criteria\n- Preserve this exact trigger." },
+      });
+      expect(
         await context.db
           .select()
-          .from(runSteps)
-          .where(eq(runSteps.runId, retry?.id ?? ""))
-      ).every((step) => step.traceId === traceId),
-    ).toBe(true);
-  });
+          .from(idempotencyLocks)
+          .where(eq(idempotencyLocks.status, "acquired")),
+      ).toEqual([]);
+
+      expect(
+        await runDevelopmentLoopRetrySupervisorTick({
+          clock: () => new Date("2026-07-24T16:05:29.999Z"),
+          database: runDatabase(context),
+          manifest: defaultLoopManifest,
+        }),
+      ).toEqual([]);
+      const due = await runDevelopmentLoopRetrySupervisorTick({
+        clock: () => new Date("2026-07-24T16:05:30.000Z"),
+        database: runDatabase(context),
+        manifest: defaultLoopManifest,
+      });
+      expect(due).toEqual([expect.objectContaining({ runId: retry?.id })]);
+      expect(
+        (
+          await context.db
+            .select()
+            .from(runSteps)
+            .where(eq(runSteps.runId, retry?.id ?? ""))
+        ).every((step) => step.traceId === traceId),
+      ).toBe(true);
+    },
+  );
 
   it("never links a retry for cancellation", async () => {
     const source = await dispatchDevelopmentLoopRun({

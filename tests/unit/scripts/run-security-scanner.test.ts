@@ -29,21 +29,22 @@ describe("security scanner registry", () => {
     expect(scannerRegistry.length).toBeGreaterThan(0);
   });
 
-  it.each(
-    scannerRegistry.map((scanner) => [scanner.id, scanner] as const),
-  )("pins `%s` to an exact version with an install instruction", (_id, scanner: ScannerDefinition) => {
-    // A range or a floating tag would let CI and a developer machine run
-    // different analyzers while both reported the gate as passing.
-    expect(scanner.version, `\`${scanner.id}\` is not pinned to an exact version`).toMatch(
-      /^\d+\.\d+\.\d+$/,
-    );
-    // The skip path is only defensible if it tells the developer how to stop
-    // skipping. Without this, a silent skip is indistinguishable from a pass.
-    expect(scanner.installInstruction.trim().length).toBeGreaterThan(0);
-    expect(scanner.script).toMatch(/^security:/);
-    expect(scanner.scanArgs.length).toBeGreaterThan(0);
-    expect(scanner.timeoutMs).toBeGreaterThan(0);
-  });
+  it.each(scannerRegistry.map((scanner) => [scanner.id, scanner] as const))(
+    "pins `%s` to an exact version with an install instruction",
+    (_id, scanner: ScannerDefinition) => {
+      // A range or a floating tag would let CI and a developer machine run
+      // different analyzers while both reported the gate as passing.
+      expect(scanner.version, `\`${scanner.id}\` is not pinned to an exact version`).toMatch(
+        /^\d+\.\d+\.\d+$/,
+      );
+      // The skip path is only defensible if it tells the developer how to stop
+      // skipping. Without this, a silent skip is indistinguishable from a pass.
+      expect(scanner.installInstruction.trim().length).toBeGreaterThan(0);
+      expect(scanner.script).toMatch(/^security:/);
+      expect(scanner.scanArgs.length).toBeGreaterThan(0);
+      expect(scanner.timeoutMs).toBeGreaterThan(0);
+    },
+  );
 
   it("gives every scanner a distinct id and script", () => {
     expect(new Set(scannerRegistry.map((scanner) => scanner.id)).size).toBe(scannerRegistry.length);
@@ -114,14 +115,15 @@ describe("security scanner registry", () => {
     expect(advisory).toEqual([]);
   });
 
-  it.each(
-    scannerRegistry.map((scanner) => [scanner.id, scanner] as const),
-  )("distinguishes findings from failures for `%s`", (_id, scanner: ScannerDefinition) => {
-    // Zero can never mean "findings", or a clean scan would be reported as a
-    // finding and every run would fail.
-    expect(scanner.findingExitCodes).not.toContain(0);
-    expect(scanner.findingExitCodes.length).toBeGreaterThan(0);
-  });
+  it.each(scannerRegistry.map((scanner) => [scanner.id, scanner] as const))(
+    "distinguishes findings from failures for `%s`",
+    (_id, scanner: ScannerDefinition) => {
+      // Zero can never mean "findings", or a clean scan would be reported as a
+      // finding and every run would fail.
+      expect(scanner.findingExitCodes).not.toContain(0);
+      expect(scanner.findingExitCodes.length).toBeGreaterThan(0);
+    },
+  );
 
   it("rejects an unknown scanner id", () => {
     expect(() => scannerById("nope")).toThrow(/unknown scanner/i);

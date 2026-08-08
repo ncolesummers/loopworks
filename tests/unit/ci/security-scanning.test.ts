@@ -60,33 +60,36 @@ function expectUnconditionalStep(gate: string) {
 }
 
 describe("security scanning gates", () => {
-  it.each(
-    scannerRegistry.map((scanner) => [scanner.script, scanner] as const),
-  )("defines a repository-owned command for `%s`", (script, scanner) => {
-    const definition = packageJson.scripts[script];
-    expect(definition, `package.json has no \`${script}\` script`).toBeDefined();
-    expect(definition).toContain(scanner.id);
-  });
+  it.each(scannerRegistry.map((scanner) => [scanner.script, scanner] as const))(
+    "defines a repository-owned command for `%s`",
+    (script, scanner) => {
+      const definition = packageJson.scripts[script];
+      expect(definition, `package.json has no \`${script}\` script`).toBeDefined();
+      expect(definition).toContain(scanner.id);
+    },
+  );
 
-  it.each(
-    validateLaneScanners.map((scanner) => [scanner.script] as const),
-  )("runs `%s` from both the local chain and CI", (script) => {
-    const gate = `bun run ${script}`;
-    // The local chain and the CI job must reach the same command. The
-    // byte-identical string is what `ci-workflow.test.ts` keys on too.
-    expect(validateGates, `\`bun run validate\` does not reach \`${script}\``).toContain(gate);
-    expectUnconditionalStep(gate);
-  });
+  it.each(validateLaneScanners.map((scanner) => [scanner.script] as const))(
+    "runs `%s` from both the local chain and CI",
+    (script) => {
+      const gate = `bun run ${script}`;
+      // The local chain and the CI job must reach the same command. The
+      // byte-identical string is what `ci-workflow.test.ts` keys on too.
+      expect(validateGates, `\`bun run validate\` does not reach \`${script}\``).toContain(gate);
+      expectUnconditionalStep(gate);
+    },
+  );
 
-  it.each(
-    ciOnlyScanners.map((scanner) => [scanner.script] as const),
-  )("runs `%s` as a CI-only gate", (script) => {
-    const gate = `bun run ${script}`;
-    // Deliberately outside `validate`: it is the documented local/CI
-    // divergence, so it must be absent locally and unconditional in CI.
-    expect(validateGates, `\`${script}\` is documented as CI-only`).not.toContain(gate);
-    expectUnconditionalStep(gate);
-  });
+  it.each(ciOnlyScanners.map((scanner) => [scanner.script] as const))(
+    "runs `%s` as a CI-only gate",
+    (script) => {
+      const gate = `bun run ${script}`;
+      // Deliberately outside `validate`: it is the documented local/CI
+      // divergence, so it must be absent locally and unconditional in CI.
+      expect(validateGates, `\`${script}\` is documented as CI-only`).not.toContain(gate);
+      expectUnconditionalStep(gate);
+    },
+  );
 
   it("keeps the aggregate scan covering exactly the validate-lane scanners", () => {
     const aggregate = packageJson.scripts["security:scan"];
@@ -160,16 +163,17 @@ describe("scanner rulesets", () => {
 });
 
 describe("scanner installation", () => {
-  it.each(
-    scannerRegistry.map((scanner) => [scanner.id, scanner] as const),
-  )("installs `%s` at the pinned version", (id, scanner) => {
-    // The gate is only as trustworthy as the analyzer CI actually installed.
-    // An unpinned install would silently drift away from the local pin.
-    const installs = validateSteps.some((step) => step.run?.includes(scanner.version) === true);
-    expect(installs, `the validate job does not install \`${id}\` at ${scanner.version}`).toBe(
-      true,
-    );
-  });
+  it.each(scannerRegistry.map((scanner) => [scanner.id, scanner] as const))(
+    "installs `%s` at the pinned version",
+    (id, scanner) => {
+      // The gate is only as trustworthy as the analyzer CI actually installed.
+      // An unpinned install would silently drift away from the local pin.
+      const installs = validateSteps.some((step) => step.run?.includes(scanner.version) === true);
+      expect(installs, `the validate job does not install \`${id}\` at ${scanner.version}`).toBe(
+        true,
+      );
+    },
+  );
 
   it("verifies the integrity of every downloaded artifact", () => {
     const downloads = allSteps.filter((step) => /\b(curl|wget)\b/.test(step.run ?? ""));
@@ -361,18 +365,15 @@ describe("baseline hygiene", () => {
     ).toHaveLength(0);
   });
 
-  it.each([
-    ".*",
-    ".+",
-    "*",
-    "",
-    "^.*$",
-  ])("flags %j as a catch-all however it is justified", (pattern) => {
-    // Justification does not launder a pattern that silences the scanner.
-    expect(unjustifiedSuppressions(`# reviewed\npaths = [\n  '''${pattern}''',\n]\n`)).toHaveLength(
-      1,
-    );
-  });
+  it.each([".*", ".+", "*", "", "^.*$"])(
+    "flags %j as a catch-all however it is justified",
+    (pattern) => {
+      // Justification does not launder a pattern that silences the scanner.
+      expect(
+        unjustifiedSuppressions(`# reviewed\npaths = [\n  '''${pattern}''',\n]\n`),
+      ).toHaveLength(1);
+    },
+  );
 
   it("walks array elements, not just the line that opens the array", () => {
     // The case the first version of this helper missed entirely, and the shape

@@ -201,50 +201,50 @@ describe("approval transition API", () => {
     { action: "reject", decision: "rejected" },
     { action: "bypass", decision: "bypassed" },
     { action: "expire", decision: "expired" },
-  ] as const)("emits approval wait time when an approval is $decision", async ({
-    action,
-    decision,
-  }) => {
-    const { approvalId } = await insertRequestedApproval();
-    const approvalWaitTimeMetrics: {
-      decision: string;
-      durationSeconds: number;
-      gate: string;
-    }[] = [];
-    vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
-    authMock.mockResolvedValue({
-      expires: "2026-06-27T00:00:00.000Z",
-      user: {
-        name: "Nathan Summers",
-        email: "nathan@example.com",
-        githubLogin: "ncolesummers",
-      },
-    });
-
-    const response = await handleApprovalTransitionPost(
-      transitionRequest({
-        approvalId,
-        expectedStatus: "requested",
-        action,
-      }),
-      {
-        database: context.db as unknown as ApprovalTransitionDatabase,
-        now: () => new Date("2026-07-02T16:07:30.000Z"),
-        recordApprovalWaitTimeMetric(input) {
-          approvalWaitTimeMetrics.push(input);
+  ] as const)(
+    "emits approval wait time when an approval is $decision",
+    async ({ action, decision }) => {
+      const { approvalId } = await insertRequestedApproval();
+      const approvalWaitTimeMetrics: {
+        decision: string;
+        durationSeconds: number;
+        gate: string;
+      }[] = [];
+      vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
+      authMock.mockResolvedValue({
+        expires: "2026-06-27T00:00:00.000Z",
+        user: {
+          name: "Nathan Summers",
+          email: "nathan@example.com",
+          githubLogin: "ncolesummers",
         },
-      },
-    );
+      });
 
-    expect(response.status).toBe(200);
-    expect(approvalWaitTimeMetrics).toEqual([
-      {
-        decision,
-        durationSeconds: 450,
-        gate: "pr-write",
-      },
-    ]);
-  });
+      const response = await handleApprovalTransitionPost(
+        transitionRequest({
+          approvalId,
+          expectedStatus: "requested",
+          action,
+        }),
+        {
+          database: context.db as unknown as ApprovalTransitionDatabase,
+          now: () => new Date("2026-07-02T16:07:30.000Z"),
+          recordApprovalWaitTimeMetric(input) {
+            approvalWaitTimeMetrics.push(input);
+          },
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(approvalWaitTimeMetrics).toEqual([
+        {
+          decision,
+          durationSeconds: 450,
+          gate: "pr-write",
+        },
+      ]);
+    },
+  );
 
   it("does not emit approval wait time when the transition transaction rolls back", async () => {
     const approvalWaitTimeMetrics: {

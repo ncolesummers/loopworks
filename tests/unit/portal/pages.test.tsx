@@ -128,23 +128,26 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
     ["Loops", LoopsPageContent],
     ["Approvals", ApprovalsPageContent],
     ["Settings", SettingsPageContent],
-  ] as const)("%s page renders live-data unavailable state instead of the old fixture gate when production DB reads fail", async (_area, PageContent) => {
-    const unavailableDatabase = {
-      select() {
-        throw new Error("database unavailable");
-      },
-    };
+  ] as const)(
+    "%s page renders live-data unavailable state instead of the old fixture gate when production DB reads fail",
+    async (_area, PageContent) => {
+      const unavailableDatabase = {
+        select() {
+          throw new Error("database unavailable");
+        },
+      };
 
-    render(
-      await PageContent({
-        database: unavailableDatabase as never,
-        env: { NODE_ENV: "production" },
-      }),
-    );
+      render(
+        await PageContent({
+          database: unavailableDatabase as never,
+          env: { NODE_ENV: "production" },
+        }),
+      );
 
-    expect(screen.queryByText(/unavailable in production/i)).toBeNull();
-    expect(screen.getAllByText("Portal data store unavailable.").length).toBeGreaterThan(0);
-  });
+      expect(screen.queryByText(/unavailable in production/i)).toBeNull();
+      expect(screen.getAllByText("Portal data store unavailable.").length).toBeGreaterThan(0);
+    },
+  );
 
   it("Runs page renders a degraded live-data notice instead of static fixtures in production", async () => {
     const unavailableDatabase = {
