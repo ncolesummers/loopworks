@@ -110,35 +110,12 @@ Risks:
 | S05 | Security Reviewer | GitHub SSO allowlists reject unauthorized identities and persist the GitHub login used for approval attribution. | Unit, Playwright |
 | S06 | Security Reviewer | GitHub App callbacks reject forged or replayed state and verify the active operator can access the installation before persisting it. | Unit, integration |
 
-## MVP Milestone Map
-
-The MVP spans M0 through M5. M5 is the closing gate.
-
-| Milestone | Persona Test IDs |
-| --- | --- |
-| M0 Project Foundation | P01, P03, R02, S04 |
-| M1 Design System Direction + App Shell | P01, P04, M01, A02, R02 |
-| M2 GitHub + Vercel Source Systems | P02, M01, M03, R01, S01, S02, S03, S05 |
-| M3 Durable Loop MVP | M02, A01, A02, A03, R01 |
-| M4 Operator Onboarding | P05, M04, M05 |
-| M5 MVP Close: Security, Design, and Coverage Gates | A03, R01, R02, S01, S02, S03, S04 |
-
-## Post-MVP Milestone Map
-
-| Milestone | Persona Test IDs |
-| --- | --- |
-| M6 Observability + Alerting | Not yet assigned |
-| M7 Agent Governance + Evals | P03, A02, A03, R02, S04 |
-| M8 Agent Extensibility (Tools, MCP, Skills) | Not yet assigned |
-| M9 Post-MVP Loop Extensions | Not yet assigned |
-| M10 Multi-Platform Chat Integration | Not yet assigned |
-| M11 Docs Site | Not yet assigned |
-
-The original five personas are described mid-workflow, with repos, loops, and runs already present. P05, M04, and M05 above are the day-zero journey that gap left; #128 implements their coverage.
-
 ## How To Use This Matrix
 
-1. New MVP issues should reference the relevant persona test IDs in acceptance criteria.
+[GitHub milestones](https://github.com/ncolesummers/loopworks/milestones) own
+roadmap sequence; this file owns stable persona and test scenario identifiers.
+
+1. New issues should reference the relevant persona test IDs in acceptance criteria.
 2. Playwright specs should cover full-person workflows, not only page loads.
 3. Storybook stories should cover state variations that matter to a persona.
 4. Unit and integration tests should protect risky decision points: auth, triggers, idempotency, validation order, approvals, Vercel mapping, fixture fallback, and logging.
