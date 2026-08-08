@@ -190,50 +190,49 @@ describe("Drizzle GitHub webhook delivery store", () => {
     expect(lockContentionScopes).toEqual(["github:webhook-delivery"]);
   });
 
-  it.each([
-    "processed",
-    "ignored",
-    "failed",
-  ] as const)("records a %s delivery outcome and releases the lock", async (status) => {
-    const fake = createFakeWebhookDatabase();
-    const store = createDrizzleGithubWebhookDeliveryStore(fake.database);
-    const claim = await claimGithubWebhookDelivery({
-      store,
-      deliveryId: `${status}-delivery`,
-      event: "issues",
-      action: "labeled",
-      repositoryFullName: "ncolesummers/loopworks",
-      receivedAt: new Date("2026-06-28T01:00:00.000Z"),
-    });
-
-    await store.complete(claim.key, {
-      deliveryId: claim.deliveryId,
-      metadata: {
-        triggerWorkflow: status === "processed" ? "development" : "none",
-      },
-      processedAt: "2026-06-28T01:00:02.000Z",
-      status,
-    });
-
-    expect(fake.deliveries).toEqual([
-      expect.objectContaining({
+  it.each(["processed", "ignored", "failed"] as const)(
+    "records a %s delivery outcome and releases the lock",
+    async (status) => {
+      const fake = createFakeWebhookDatabase();
+      const store = createDrizzleGithubWebhookDeliveryStore(fake.database);
+      const claim = await claimGithubWebhookDelivery({
+        store,
         deliveryId: `${status}-delivery`,
-        processedAt: new Date("2026-06-28T01:00:02.000Z"),
-        status,
-      }),
-    ]);
-    expect(fake.locks).toEqual([
-      expect.objectContaining({
-        key: `github:${status}-delivery`,
+        event: "issues",
+        action: "labeled",
+        repositoryFullName: "ncolesummers/loopworks",
+        receivedAt: new Date("2026-06-28T01:00:00.000Z"),
+      });
+
+      await store.complete(claim.key, {
+        deliveryId: claim.deliveryId,
         metadata: {
-          deliveryStatus: status,
           triggerWorkflow: status === "processed" ? "development" : "none",
         },
-        releasedAt: new Date("2026-06-28T01:00:02.000Z"),
-        status: "released",
-      }),
-    ]);
-  });
+        processedAt: "2026-06-28T01:00:02.000Z",
+        status,
+      });
+
+      expect(fake.deliveries).toEqual([
+        expect.objectContaining({
+          deliveryId: `${status}-delivery`,
+          processedAt: new Date("2026-06-28T01:00:02.000Z"),
+          status,
+        }),
+      ]);
+      expect(fake.locks).toEqual([
+        expect.objectContaining({
+          key: `github:${status}-delivery`,
+          metadata: {
+            deliveryStatus: status,
+            triggerWorkflow: status === "processed" ? "development" : "none",
+          },
+          releasedAt: new Date("2026-06-28T01:00:02.000Z"),
+          status: "released",
+        }),
+      ]);
+    },
+  );
 
   it("allows a failed GitHub delivery to be claimed again for manual redelivery", async () => {
     const fake = createFakeWebhookDatabase();

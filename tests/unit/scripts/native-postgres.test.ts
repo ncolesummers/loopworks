@@ -50,25 +50,25 @@ describe("native Postgres admission lane orchestration", () => {
         NODE_ENV: "development",
       },
     ],
-  ] satisfies [
-    string,
-    Partial<NodeJS.ProcessEnv>,
-  ][])("fails closed on %s without leaking credentials", async (_label, env) => {
-    const runCommand = vi.fn(async () => 0);
-    const errors: string[] = [];
+  ] satisfies [string, Partial<NodeJS.ProcessEnv>][])(
+    "fails closed on %s without leaking credentials",
+    async (_label, env) => {
+      const runCommand = vi.fn(async () => 0);
+      const errors: string[] = [];
 
-    const exitCode = await runNativePostgresTests({
-      env,
-      error: (m) => errors.push(m),
-      runCommand,
-    });
+      const exitCode = await runNativePostgresTests({
+        env,
+        error: (m) => errors.push(m),
+        runCommand,
+      });
 
-    // Fails closed: a non-zero exit, never a skip and never a PGlite fallback.
-    expect(exitCode).toBe(1);
-    expect(runCommand).not.toHaveBeenCalled();
-    expect(errors.join(" ")).not.toContain("hunter2");
-    expect(errors.join(" ")).not.toContain("admin:");
-  });
+      // Fails closed: a non-zero exit, never a skip and never a PGlite fallback.
+      expect(exitCode).toBe(1);
+      expect(runCommand).not.toHaveBeenCalled();
+      expect(errors.join(" ")).not.toContain("hunter2");
+      expect(errors.join(" ")).not.toContain("admin:");
+    },
+  );
 
   it("reports a failing lane instead of masking it", async () => {
     const errors: string[] = [];

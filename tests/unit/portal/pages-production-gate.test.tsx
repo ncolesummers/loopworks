@@ -44,19 +44,22 @@ describe("portal surfaces through the production data gate", () => {
     ["Loops", LoopsPageContent, "No loops tracked"],
     ["Approvals", ApprovalsPageContent, "No approval gates available"],
     ["Settings", SettingsPageContent, "No installation connected"],
-  ] as const)("%s page renders its own empty state for a reachable empty production database", async (_area, PageContent, emptyCopy) => {
-    const markup = renderToStaticMarkup(
-      await PageContent({
-        database: context.db,
-        env: productionEnv,
-        now: new Date("2026-08-06T12:00:00.000Z"),
-      }),
-    );
+  ] as const)(
+    "%s page renders its own empty state for a reachable empty production database",
+    async (_area, PageContent, emptyCopy) => {
+      const markup = renderToStaticMarkup(
+        await PageContent({
+          database: context.db,
+          env: productionEnv,
+          now: new Date("2026-08-06T12:00:00.000Z"),
+        }),
+      );
 
-    expect(markup).toContain(emptyCopy);
-    expect(markup).not.toContain("Portal data store unavailable.");
-    expect(markup).toContain("Live database");
-  });
+      expect(markup).toContain(emptyCopy);
+      expect(markup).not.toContain("Portal data store unavailable.");
+      expect(markup).toContain("Live database");
+    },
+  );
 
   it("Catalog page lists a selected repository with no loops, deployments, or approvals present", async () => {
     // The shape repository selection actually writes: no Vercel project link, no

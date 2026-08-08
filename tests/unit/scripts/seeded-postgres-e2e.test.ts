@@ -71,24 +71,24 @@ describe("seeded Postgres e2e orchestration", () => {
         NODE_ENV: "development",
       },
     ],
-  ] satisfies [
-    string,
-    Partial<NodeJS.ProcessEnv>,
-  ][])("rejects %s before running commands without leaking credentials", async (_label, env) => {
-    const runCommand = vi.fn(async () => 0);
-    const errors: string[] = [];
+  ] satisfies [string, Partial<NodeJS.ProcessEnv>][])(
+    "rejects %s before running commands without leaking credentials",
+    async (_label, env) => {
+      const runCommand = vi.fn(async () => 0);
+      const errors: string[] = [];
 
-    const exitCode = await runSeededPostgresE2e({
-      env,
-      error: (message) => errors.push(message),
-      runCommand,
-    });
+      const exitCode = await runSeededPostgresE2e({
+        env,
+        error: (message) => errors.push(message),
+        runCommand,
+      });
 
-    expect(exitCode).toBe(1);
-    expect(runCommand).not.toHaveBeenCalled();
-    expect(errors.join(" ")).not.toContain("hunter2");
-    expect(errors.join(" ")).not.toContain("admin:");
-  });
+      expect(exitCode).toBe(1);
+      expect(runCommand).not.toHaveBeenCalled();
+      expect(errors.join(" ")).not.toContain("hunter2");
+      expect(errors.join(" ")).not.toContain("admin:");
+    },
+  );
 
   it.each([
     ["migration", [1], 1],

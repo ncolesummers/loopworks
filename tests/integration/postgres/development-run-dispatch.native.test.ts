@@ -276,73 +276,74 @@ describe("development-loop dispatch admission on native PostgreSQL", () => {
       label: "research wins and development loses",
       winnerLabel: "research" as const,
     },
-  ])("keeps one issue exclusive across development and research when $label", async ({
-    winnerLabel,
-  }) => {
-    const manifest = defaultLoopManifest;
-    const group = resolveDevelopmentLoopConcurrencyGroup({ manifest, repositoryFullName });
-    await seedCommittedGuardRows({ group, issueNumbers: [96] });
-    await assertGuardRowCommitted(`loop:dispatch:issue-guard:${repositoryId}:96`);
+  ])(
+    "keeps one issue exclusive across development and research when $label",
+    async ({ winnerLabel }) => {
+      const manifest = defaultLoopManifest;
+      const group = resolveDevelopmentLoopConcurrencyGroup({ manifest, repositoryFullName });
+      await seedCommittedGuardRows({ group, issueNumbers: [96] });
+      await assertGuardRowCommitted(`loop:dispatch:issue-guard:${repositoryId}:96`);
 
-    const winnerPid = await currentBackendPid(winner);
-    const loserPid = await currentBackendPid(loser);
-    const gate = barrier();
+      const winnerPid = await currentBackendPid(winner);
+      const loserPid = await currentBackendPid(loser);
+      const gate = barrier();
 
-    type AdmissionAttempt = (
-      handle: DevelopmentLoopRunDatabase,
-      at: string,
-    ) => Promise<{ mode: string; runId?: string }>;
+      type AdmissionAttempt = (
+        handle: DevelopmentLoopRunDatabase,
+        at: string,
+      ) => Promise<{ mode: string; runId?: string }>;
 
-    const startDevelopment: AdmissionAttempt = (handle, at) =>
-      dispatchDevelopmentLoopRun({
-        clock: () => new Date(at),
-        database: handle,
-        manifest,
-        traceId,
-        trigger: trigger(96, "development-delivery"),
+      const startDevelopment: AdmissionAttempt = (handle, at) =>
+        dispatchDevelopmentLoopRun({
+          clock: () => new Date(at),
+          database: handle,
+          manifest,
+          traceId,
+          trigger: trigger(96, "development-delivery"),
+        });
+      const startResearch: AdmissionAttempt = (handle, at) =>
+        createResearchLoopRun({
+          database: handle,
+          now: () => new Date(at),
+          trigger: trigger(96, "research-delivery"),
+        });
+
+      const startWinner = winnerLabel === "development" ? startDevelopment : startResearch;
+      const startLoser = winnerLabel === "development" ? startResearch : startDevelopment;
+
+      const winnerPromise = track(
+        startWinner(gatePreCommit(runDatabase(winner), gate), "2026-07-24T16:00:00.000Z"),
+      );
+      await awaitParked(gate, winnerPromise);
+
+      const loserPromise = track(startLoser(runDatabase(loser), "2026-07-24T16:00:01.000Z"));
+      const loserSettlement = trackSettlement(loserPromise);
+
+      const wait = await waitForRowLockWait(observer, {
+        blockedPid: loserPid,
+        expectedBlockerPid: winnerPid,
+        relation: "idempotency_locks",
       });
-    const startResearch: AdmissionAttempt = (handle, at) =>
-      createResearchLoopRun({
-        database: handle,
-        now: () => new Date(at),
-        trigger: trigger(96, "research-delivery"),
+      expect(wait.blockingPids).toContain(winnerPid);
+      expect(loserSettlement.settled()).toBe(false);
+
+      gate.release();
+
+      // AC5: the loser observes typed contention, never a raw unique violation.
+      const [winnerOutcome, loserOutcome] = await Promise.all([winnerPromise, loserPromise]);
+      expect(winnerOutcome.mode).toBe(winnerLabel === "development" ? "dispatched" : "created");
+      expect(loserOutcome).toMatchObject({
+        mode: "lease_contention",
+        runId: winnerOutcome.runId,
       });
 
-    const startWinner = winnerLabel === "development" ? startDevelopment : startResearch;
-    const startLoser = winnerLabel === "development" ? startResearch : startDevelopment;
-
-    const winnerPromise = track(
-      startWinner(gatePreCommit(runDatabase(winner), gate), "2026-07-24T16:00:00.000Z"),
-    );
-    await awaitParked(gate, winnerPromise);
-
-    const loserPromise = track(startLoser(runDatabase(loser), "2026-07-24T16:00:01.000Z"));
-    const loserSettlement = trackSettlement(loserPromise);
-
-    const wait = await waitForRowLockWait(observer, {
-      blockedPid: loserPid,
-      expectedBlockerPid: winnerPid,
-      relation: "idempotency_locks",
-    });
-    expect(wait.blockingPids).toContain(winnerPid);
-    expect(loserSettlement.settled()).toBe(false);
-
-    gate.release();
-
-    // AC5: the loser observes typed contention, never a raw unique violation.
-    const [winnerOutcome, loserOutcome] = await Promise.all([winnerPromise, loserPromise]);
-    expect(winnerOutcome.mode).toBe(winnerLabel === "development" ? "dispatched" : "created");
-    expect(loserOutcome).toMatchObject({
-      mode: "lease_contention",
-      runId: winnerOutcome.runId,
-    });
-
-    // AC6: exactly one nonterminal run owns the issue.
-    const runs = await observer.db
-      .select()
-      .from(loopRuns)
-      .where(inArray(loopRuns.status, [...nonterminalStatuses]));
-    expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ id: winnerOutcome.runId, githubIssueNumber: 96 });
-  });
+      // AC6: exactly one nonterminal run owns the issue.
+      const runs = await observer.db
+        .select()
+        .from(loopRuns)
+        .where(inArray(loopRuns.status, [...nonterminalStatuses]));
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ id: winnerOutcome.runId, githubIssueNumber: 96 });
+    },
+  );
 });
