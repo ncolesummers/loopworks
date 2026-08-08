@@ -7,8 +7,7 @@ under `src/components/`.
 
 ## Rules
 
-1. Use ShadCN/UI as the component foundation until the design-system planning
-   issue says otherwise.
+1. Use ShadCN/UI as the component foundation under ADR 0009.
 2. Keep dashboard surfaces dense, stable, and operational. Avoid
    marketing-style pages inside the app.
 3. Use lucide icons for icon buttons when an appropriate icon exists.
