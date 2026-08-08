@@ -7,8 +7,9 @@ import {
   Clock3,
   Database,
   GitBranch,
-  Github,
+  KeyRound,
   Layers3,
+  Settings2,
   ShieldCheck,
   SquareTerminal,
   Workflow,
@@ -37,7 +38,7 @@ const navigation = [
   { href: "/runs", label: "Runs", icon: Clock3 },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
   { href: "/deployments", label: "Deployments", icon: GitBranch },
-  { href: "/settings", label: "Settings", icon: Github },
+  { href: "/settings", label: "Settings", icon: Settings2 },
 ] as const;
 
 export function PortalShell({
@@ -140,7 +141,7 @@ export function PortalShell({
                   Postgres sync
                 </span>
                 <span className="hidden h-6 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium md:inline-flex">
-                  <Github className="h-3.5 w-3.5" />
+                  <KeyRound className="h-3.5 w-3.5" />
                   GitHub SSO
                 </span>
                 <ModeToggle />
