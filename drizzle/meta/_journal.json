@@ -15,6 +15,13 @@
       "when": 1785726854294,
       "tag": "0001_magenta_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786233234182,
+      "tag": "0002_giant_karnak",
+      "breakpoints": true
     }
   ]
 }

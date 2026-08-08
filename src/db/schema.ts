@@ -15,7 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { approvalStatusValues } from "@/lib/approvals";
 
-import { loopStateValues } from "../../schemas/loop-manifest";
+import { type LoopDefinition, loopStateValues } from "../../schemas/loop-manifest";
 
 export const loopStateEnum = pgEnum("loop_state", loopStateValues);
 export const approvalStatusEnum = pgEnum("approval_status", approvalStatusValues);
@@ -241,6 +241,33 @@ export const loops = pgTable(
     repositoryIssueNumberIndex: uniqueIndex("loops_repository_issue_number_idx").on(
       table.repositoryId,
       table.githubIssueNumber,
+    ),
+  }),
+);
+
+/**
+ * A registered loop *definition*, distinct from the `loops` table above: `loops` mirrors GitHub
+ * issues, while a row here is the operating contract an operator registered for a repository.
+ * `definition` holds the exact `LoopDefinition` that `validateLoopManifest` accepted, so the stored
+ * contract and the schema can never drift into two shapes (#126, ADR 0025).
+ */
+export const loopDefinitions = pgTable(
+  "loop_definitions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    repositoryId: uuid("repository_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    loopKey: text("loop_key").notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    definition: jsonb("definition").$type<LoopDefinition>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    repositoryLoopKeyIndex: uniqueIndex("loop_definitions_repository_loop_key_idx").on(
+      table.repositoryId,
+      table.loopKey,
     ),
   }),
 );
