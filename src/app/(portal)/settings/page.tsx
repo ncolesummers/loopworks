@@ -27,14 +27,16 @@ export async function SettingsPageContent({
   const requestLogger = createRequestLogger({
     route: "portal.settings",
   });
+  // Settings must render the connect-the-App action on an empty install, so it
+  // declares no requirement (#155).
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
-      allowEmpty: true,
       database,
       env,
       logger: requestLogger,
       now,
+      requires: [],
     }));
   const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
 

@@ -47,6 +47,21 @@ export type PortalRecords = {
   validationResults: ValidationResultRecord[];
 };
 
+/**
+ * A collection a portal surface can declare it cannot render without. Surfaces
+ * that have a real empty state declare `[]` and render that state instead.
+ *
+ * `githubSettings` is deliberately absent: `hasPortalProjectionIntegrity`
+ * already guarantees it on every successful production read, so declaring it
+ * could never fail.
+ */
+export type PortalDataRequirement =
+  | "approval"
+  | "deployments"
+  | "githubInstallations"
+  | "loops"
+  | "repos";
+
 export type PortalRecordsResult =
   | {
       records: PortalRecords;
@@ -70,18 +85,6 @@ type LoopRow = typeof loops.$inferSelect;
 type DeploymentRow = typeof deploymentRows.$inferSelect;
 type ApprovalRow = typeof approvals.$inferSelect;
 type GithubInstallationRow = typeof githubInstallations.$inferSelect;
-
-const emptyPortalRecords: PortalRecords = {
-  approval: null,
-  artifacts: [],
-  deployments: [],
-  githubInstallations: [],
-  githubSettings: [],
-  loops: [],
-  repos: [],
-  timeline: [],
-  validationResults: [],
-};
 
 function groupBy<T, K extends string>(items: T[], getKey: (item: T) => K): Map<K, T[]> {
   const grouped = new Map<K, T[]>();
@@ -398,17 +401,61 @@ function fixturePortalRecords(): PortalRecords {
 }
 
 function unavailablePortalRecords(): PortalRecords {
-  return emptyPortalRecords;
+  // A fresh object per call: consumers receive these arrays directly, and the
+  // shared module-level `emptyPortalRecords` would leak mutations across reads.
+  return {
+    approval: null,
+    artifacts: [],
+    deployments: [],
+    githubInstallations: [],
+    githubSettings: [],
+    loops: [],
+    repos: [],
+    timeline: [],
+    validationResults: [],
+  };
 }
 
-function hasRequiredPortalData(records: PortalRecords): boolean {
-  return (
-    records.repos.length > 0 &&
-    records.loops.length > 0 &&
-    records.deployments.length > 0 &&
-    records.approval !== null &&
-    records.githubSettings.length > 0
+/**
+ * Returns the requested collections that a surface declared it cannot render
+ * without and that the store did not supply.
+ *
+ * A single global completeness check made every portal surface report
+ * "Unavailable" on a fresh install, because loop registration (#126) leaves
+ * `loops` empty and one empty collection discarded every record (#155). Each
+ * surface now declares only what it actually needs.
+ */
+export function findUnmetPortalRequirements(
+  records: PortalRecords,
+  requires: readonly PortalDataRequirement[],
+): PortalDataRequirement[] {
+  return requires.filter((requirement) =>
+    requirement === "approval" ? records.approval === null : records[requirement].length === 0,
   );
+}
+
+/**
+ * Asserts the projection contract: a successful read carries a record for every
+ * `githubSettingKeys` entry, because `mapSettings` derives its output from that
+ * list rather than from stored setting rows. Checks key presence, not count —
+ * extra or duplicated entries are not a contract violation.
+ *
+ * Scope, stated honestly: `mapSettings` builds its result by mapping over
+ * `githubSettingKeys`, so a real read cannot fail this check. It is an invariant
+ * assertion that keeps a future projection change from silently shipping a
+ * partial settings surface — *not* an outage detector. What separates
+ * "store unavailable" from "store healthy but empty" is the failed-read path in
+ * `getPortalRecordsForPortal`. A store that answers successfully with data from
+ * the wrong database is not detectable here and is not addressed by #155.
+ */
+export function hasPortalProjectionIntegrity(records: PortalRecords): boolean {
+  return findMissingGithubSettingKeys(records).length === 0;
+}
+
+function findMissingGithubSettingKeys(records: PortalRecords): GitHubSettingKey[] {
+  const projected = new Set(records.githubSettings.map((record) => record.key));
+
+  return githubSettingKeys.filter((key) => !projected.has(key));
 }
 
 function unavailableResult(): PortalRecordsResult {
@@ -502,11 +549,16 @@ export async function readPortalRecords(input: {
 }
 
 export async function getPortalRecordsForPortal(input: {
-  allowEmpty?: boolean;
   database: PortalRecordsDatabase;
   env?: Partial<NodeJS.ProcessEnv>;
   logger?: LoopworksLogger;
   now?: Date;
+  /**
+   * Required, not optional: a surface that omitted it would silently opt out of
+   * failing closed. `[]` is a deliberate declaration that this surface renders
+   * its own empty state.
+   */
+  requires: readonly PortalDataRequirement[];
 }): Promise<PortalRecordsResult> {
   const env = input.env ?? process.env;
   if (
@@ -538,19 +590,40 @@ export async function getPortalRecordsForPortal(input: {
       now: input.now,
     });
 
-    if (isProductionRuntime(env) && !input.allowEmpty && !hasRequiredPortalData(result.records)) {
-      input.logger?.warn(
-        {
-          approvalCount: result.records.approval ? 1 : 0,
-          deploymentCount: result.records.deployments.length,
-          loopCount: result.records.loops.length,
-          repositoryCount: result.records.repos.length,
-          settingsCount: result.records.githubSettings.length,
-        },
-        "portal_records_required_data_missing",
-      );
+    if (isProductionRuntime(env)) {
+      // A short projection means the read itself is broken, not that the install
+      // is new. Rendering it as a normal empty state would hide a real outage.
+      const missingSettingKeys = findMissingGithubSettingKeys(result.records);
 
-      return unavailableResult();
+      if (missingSettingKeys.length > 0) {
+        input.logger?.warn(
+          {
+            missingSettingKeys,
+            settingsCount: result.records.githubSettings.length,
+          },
+          "portal_records_projection_invalid",
+        );
+
+        return unavailableResult();
+      }
+
+      const unmetRequirements = findUnmetPortalRequirements(result.records, input.requires);
+
+      if (unmetRequirements.length > 0) {
+        input.logger?.warn(
+          {
+            approvalCount: result.records.approval ? 1 : 0,
+            deploymentCount: result.records.deployments.length,
+            loopCount: result.records.loops.length,
+            repositoryCount: result.records.repos.length,
+            settingsCount: result.records.githubSettings.length,
+            unmetRequirements,
+          },
+          "portal_records_required_data_missing",
+        );
+
+        return unavailableResult();
+      }
     }
 
     return result;

@@ -22,6 +22,8 @@ export async function ApprovalsPageContent({
   const requestLogger = createRequestLogger({
     route: "portal.approvals",
   });
+  // An install with no approval gate yet is a normal empty state, not an outage
+  // (#155).
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
@@ -29,6 +31,7 @@ export async function ApprovalsPageContent({
       env,
       logger: requestLogger,
       now,
+      requires: [],
     }));
   const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
 
