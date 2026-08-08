@@ -9,13 +9,13 @@ import {
   dispatchDevelopmentLoopRun,
   runDevelopmentLoopRetrySupervisorTick,
 } from "@/lib/loops/development-run";
+import { defaultLoopManifest } from "@/lib/loops/manifest";
 import {
-  type DevelopmentLoopTransitionDatabase,
   finalizeDevelopmentLoopRun,
   retryDevelopmentLoopStep,
   scheduleDevelopmentLoopStageRetry,
-} from "@/lib/loops/development-run-transitions";
-import { defaultLoopManifest } from "@/lib/loops/manifest";
+} from "@/lib/loops/transitions/finalization";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
 import {
   createPgliteTestDatabase,
   type PgliteTestDatabase,

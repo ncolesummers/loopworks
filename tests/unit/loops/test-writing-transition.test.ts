@@ -17,10 +17,10 @@ import {
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import {
-  applyDevelopmentLoopTestWritingResult,
   type DevelopmentLoopTransitionDatabase,
   DevelopmentLoopTransitionError,
-} from "@/lib/loops/development-run-transitions";
+} from "@/lib/loops/transitions/shared";
+import { applyDevelopmentLoopTestWritingResult } from "@/lib/loops/transitions/test-writing";
 import {
   createPgliteTestDatabase,
   type PgliteTestDatabase,

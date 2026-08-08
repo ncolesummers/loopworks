@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { readStringConfig } from "@/lib/config/registry";
-import { applyDevelopmentLoopImplementationResult } from "@/lib/loops/development-run-transitions";
+import { applyDevelopmentLoopImplementationResult } from "@/lib/loops/transitions";
 import { logger } from "@/lib/observability/logger";
 import { computeImplementationDigest, implementationResultSchema } from "../implementation-agent";
 import { createImplementationFixtureHandoff } from "../implementation-fixture";

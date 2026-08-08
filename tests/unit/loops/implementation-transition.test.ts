@@ -22,10 +22,8 @@ import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
-import {
-  applyDevelopmentLoopImplementationResult,
-  type DevelopmentLoopTransitionDatabase,
-} from "@/lib/loops/development-run-transitions";
+import { applyDevelopmentLoopImplementationResult } from "@/lib/loops/transitions/implementation";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
 import {
   createPgliteTestDatabase,
   type PgliteTestDatabase,

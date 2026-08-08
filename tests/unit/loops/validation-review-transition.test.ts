@@ -28,15 +28,13 @@ import {
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import {
-  applyDevelopmentLoopValidationReport,
-  applyDevelopmentLoopValidationReviewResult,
-  type DevelopmentLoopTransitionDatabase,
-} from "@/lib/loops/development-run-transitions";
-import {
   computeScreenshotEvidenceDigest,
   type ScreenshotEvidence,
   screenshotEvidenceSchemaId,
 } from "@/lib/loops/screenshot-evidence";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
+import { applyDevelopmentLoopValidationReport } from "@/lib/loops/transitions/validation";
+import { applyDevelopmentLoopValidationReviewResult } from "@/lib/loops/transitions/validation-review";
 import type { ValidationReportV1 } from "@/lib/loops/validation-report";
 import {
   createPgliteTestDatabase,

@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { db } from "@/db/client";
-import { applyDevelopmentLoopPrPreparationResult } from "@/lib/loops/development-run-transitions";
+import { applyDevelopmentLoopPrPreparationResult } from "@/lib/loops/transitions";
 import { logger } from "@/lib/observability/logger";
 import { computePrPreparationDigest, prPreparationResultSchema } from "../pr-preparation-agent";
 import { createPrPreparationFixtureContext } from "../pr-preparation-fixture";

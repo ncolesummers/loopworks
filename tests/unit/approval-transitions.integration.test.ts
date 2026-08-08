@@ -10,10 +10,8 @@ import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
-import {
-  type DevelopmentLoopTransitionDatabase,
-  recordDevelopmentLoopPlanArtifact,
-} from "@/lib/loops/development-run-transitions";
+import { recordDevelopmentLoopPlanArtifact } from "@/lib/loops/transitions/plan";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
 import {
   createPgliteTestDatabase,
   type PgliteTestDatabase,

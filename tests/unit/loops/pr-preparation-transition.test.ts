@@ -20,12 +20,10 @@ import {
   createDevelopmentLoopRun,
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
-import {
-  applyDevelopmentLoopPrPreparationResult,
-  type DevelopmentLoopTransitionDatabase,
-  executeDevelopmentLoopPrStage,
-} from "@/lib/loops/development-run-transitions";
 import { createScreenshotEvidenceArtifactMetadata } from "@/lib/loops/screenshot-evidence";
+import { applyDevelopmentLoopPrPreparationResult } from "@/lib/loops/transitions/pr-preparation";
+import { executeDevelopmentLoopPrStage } from "@/lib/loops/transitions/pr-stage";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
 import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-report";
 import {
   createPgliteTestDatabase,

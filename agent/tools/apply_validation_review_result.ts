@@ -2,8 +2,8 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { db } from "@/db/client";
-import { applyDevelopmentLoopValidationReviewResult } from "@/lib/loops/development-run-transitions";
 import { computeScreenshotEvidenceDigest } from "@/lib/loops/screenshot-evidence";
+import { applyDevelopmentLoopValidationReviewResult } from "@/lib/loops/transitions";
 import { logger } from "@/lib/observability/logger";
 import { computeImplementationDigest } from "../implementation-agent";
 import { resolveValidationReviewerFixtureMode } from "../subagents/validation-reviewer/lib/fixture-mode";

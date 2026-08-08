@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { artifactTypeEnum } from "@/db/schema";
 import { developmentLoopStages } from "@/lib/loops/development-run";
-import * as developmentLoopTransitions from "@/lib/loops/development-run-transitions";
+import * as developmentLoopTransitions from "@/lib/loops/transitions";
 
 describe("Eve stage orchestrator discovery", () => {
   it("uses a neutral root orchestrator with planner and test-writer siblings", async () => {
