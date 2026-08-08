@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { RepositorySelectionView } from "@/components/portal/repository-selection-view";
 import type { RepositorySelectionEntry } from "@/lib/github/repository-selection";

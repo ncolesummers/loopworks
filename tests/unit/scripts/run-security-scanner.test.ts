@@ -72,7 +72,6 @@ describe("security scanner registry", () => {
   });
 
   it.each([
-    ["osv", "--config=osv-scanner.toml"],
     ["gitleaks", "--exit-code=1"],
     ["gitleaks", "--config=.gitleaks.toml"],
     ["gitleaks", "--redact"],
@@ -88,6 +87,16 @@ describe("security scanner registry", () => {
     expect(scannerById(id).scanArgs).toContain(argument);
   });
 
+  it("pins the complete OSV scan scope", () => {
+    expect(scannerById("osv").scanArgs).toEqual([
+      "scan",
+      "source",
+      "--recursive",
+      "--config=osv-scanner.toml",
+      ".",
+    ]);
+  });
+
   it("keeps `--redact` on every gitleaks invocation", () => {
     // CI logs are far more widely readable than the repository, so a matched
     // secret must never be echoed into one.
@@ -96,14 +105,13 @@ describe("security scanner registry", () => {
     }
   });
 
-  it("enforces secret and code findings, and records dependency findings", () => {
-    // Pinned deliberately: OSV is the one advisory lane, and it is advisory
-    // only until the dependency backlog is cleared. If a second scanner ever
-    // becomes advisory it should be a decision, not a default that slipped in.
+  it("makes every configured scanner blocking", () => {
+    // An advisory scanner is intentionally absent from the shipping registry.
+    // Adding one is a security-policy decision that must update this contract.
     const advisory = scannerRegistry
       .filter((scanner) => scanner.enforcement === "advisory")
       .map((scanner) => scanner.id);
-    expect(advisory).toEqual(["osv"]);
+    expect(advisory).toEqual([]);
   });
 
   it.each(
@@ -208,7 +216,7 @@ describe("resolveScannerOutcome", () => {
     }
   });
 
-  it("records rather than enforces findings from an advisory scanner", () => {
+  it("fails dependency findings", () => {
     const osv = scannerById("osv");
     for (const policy of [permissive, strict]) {
       const outcome = resolveScannerOutcome(
@@ -216,14 +224,14 @@ describe("resolveScannerOutcome", () => {
         { binaryPresent: true, installedVersion: osv.version, exitCode: osv.findingExitCodes[0] },
         policy,
       );
-      expect(outcome.disposition).toBe("advisory");
+      expect(outcome.disposition).toBe("fail");
     }
   });
 
   it("fails an advisory scanner that did not complete", () => {
     // The whole point of separating findings from failures: `advisory` covers
     // what the scanner found, never whether the scanner ran.
-    const osv = scannerById("osv");
+    const osv = { ...scannerById("osv"), enforcement: "advisory" as const };
     const crashed = { binaryPresent: true, installedVersion: osv.version, exitCode: 127 };
     expect(resolveScannerOutcome(osv, crashed, permissive).disposition).toBe("fail");
     expect(

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { portalFixture } from "@/lib/fixtures";

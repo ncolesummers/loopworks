@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";

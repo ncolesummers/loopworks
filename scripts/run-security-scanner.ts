@@ -77,13 +77,7 @@ export const scannerRegistry: readonly ScannerDefinition[] = [
     scanArgs: ["scan", "source", "--recursive", "--config=osv-scanner.toml", "."],
     installInstruction: "brew install osv-scanner (pin 2.5.0)",
     lane: "validate",
-    // Advisory for now, and only for now. The first scan of this repository
-    // reported 98 vulnerabilities across 25 packages, most of them transitive
-    // and not resolvable by a version bump. Blocking on day one would have
-    // meant either a 98-entry baseline or a dependency rewrite smuggled into a
-    // tooling change. The gate is wired, pinned, and reporting; #177
-    // clears the backlog and flips this to `blocking`.
-    enforcement: "advisory",
+    enforcement: "blocking",
     findingExitCodes: [1],
     timeoutMs: 5 * 60_000,
   },

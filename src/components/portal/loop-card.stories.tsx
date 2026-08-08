@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { LoopCard } from "@/components/portal/loop-card";
 import { portalFixture } from "@/lib/fixtures";

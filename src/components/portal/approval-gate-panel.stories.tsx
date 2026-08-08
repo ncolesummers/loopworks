@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs";
+import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { portalFixture } from "@/lib/fixtures";
