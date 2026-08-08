@@ -77,6 +77,18 @@ export const observabilityMetricContract = [
   },
   {
     instrument: "counter",
+    name: "loopworks.agent.tool.outcome",
+    requiredAttributes: ["agent", "tool", "provider", "outcome"],
+    unit: "{request}",
+  },
+  {
+    instrument: "histogram",
+    name: "loopworks.agent.tool.duration",
+    requiredAttributes: ["agent", "tool", "provider", "outcome"],
+    unit: "s",
+  },
+  {
+    instrument: "counter",
     name: "loopworks.deployment.observed",
     requiredAttributes: ["environment", "status"],
     unit: "{deployment}",
@@ -212,6 +224,8 @@ const stepRetryCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const githubInstallationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const planningToolOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const planningToolDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const supportedGithubWebhookMetricEvents = new Set(["issues", "unknown", "unsupported"]);
 const sensitiveMetricCommandPattern =
   /\b(token|secret|password|authorization|credential|api[-_]?key|prompt)\b|Bearer\s+|gh[pousr]_|sk-[A-Za-z0-9_-]+/i;
@@ -244,6 +258,13 @@ export type GithubInstallationFlowOutcomeMetricInput = {
     | "pending-approval"
     | "error";
   phase: "installation" | "authorization";
+};
+
+export type PlanningToolMetricInput = {
+  agent: string;
+  outcome: "error" | "success";
+  provider: string;
+  tool: string;
 };
 
 export type ApprovalWaitTimeMetricInput = {
@@ -466,6 +487,32 @@ function getGithubInstallationOutcomeCounter(meter: CounterMeter): Counter<Metri
   return counter;
 }
 
+function getPlanningToolOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
+  const cached = planningToolOutcomeCounters.get(meter);
+  if (cached) return cached;
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.agent.tool.outcome");
+  const counter = meter.createCounter(metric.name, {
+    description: "Read-only planning tool outcomes.",
+    unit: metric.unit,
+  });
+  planningToolOutcomeCounters.set(meter, counter);
+  return counter;
+}
+
+function getPlanningToolDurationHistogram(meter: HistogramMeter): Histogram<MetricAttributes> {
+  const cached = planningToolDurationHistograms.get(meter);
+  if (cached) return cached;
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.agent.tool.duration");
+  const histogram = meter.createHistogram(metric.name, {
+    description: "Elapsed seconds for read-only planning tools.",
+    unit: metric.unit,
+  });
+  planningToolDurationHistograms.set(meter, histogram);
+  return histogram;
+}
+
 function getApprovalWaitTimeHistogram(meter: HistogramMeter): Histogram<MetricAttributes> {
   const cached = approvalWaitTimeHistograms.get(meter);
   if (cached) {
@@ -596,6 +643,40 @@ export function recordGithubInstallationFlowOutcomeMetric(
     });
   } catch {
     // OTel emission must never affect installation request handling.
+  }
+}
+
+function planningToolMetricAttributes(input: PlanningToolMetricInput): MetricAttributes {
+  return {
+    agent: normalizeMetricAttribute(input.agent, "unknown"),
+    outcome: input.outcome,
+    provider: normalizeMetricAttribute(input.provider, "unknown"),
+    tool: normalizeMetricAttribute(input.tool, "unknown"),
+  };
+}
+
+export function recordPlanningToolOutcomeMetric(
+  input: PlanningToolMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getPlanningToolOutcomeCounter(meter).add(1, planningToolMetricAttributes(input));
+  } catch {
+    // OTel emission must never affect planning tool behavior.
+  }
+}
+
+export function recordPlanningToolDurationMetric(
+  input: PlanningToolMetricInput & { durationSeconds: number },
+  meter: HistogramMeter = getLoopworksMeter(),
+): void {
+  try {
+    getPlanningToolDurationHistogram(meter).record(
+      Math.max(0, input.durationSeconds),
+      planningToolMetricAttributes(input),
+    );
+  } catch {
+    // OTel emission must never affect planning tool behavior.
   }
 }
 

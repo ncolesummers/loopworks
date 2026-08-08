@@ -45,6 +45,8 @@ Research fact sheets with sources are recorded on issue #21.
 | `loopworks.validation.duration` | histogram | `s` | `gate`, `command` |
 | `loopworks.webhook.outcome` | counter | `{delivery}` | `event`, `action`, `outcome` (`accepted`, `rejected`, `duplicate`, `invalid_signature`, `error`) |
 | `loopworks.github.installation.outcome` | counter | `{attempt}` | `phase`, `outcome` |
+| `loopworks.agent.tool.outcome` | counter | `{request}` | `agent`, `tool`, `provider`, `outcome` |
+| `loopworks.agent.tool.duration` | histogram | `s` | `agent`, `tool`, `provider`, `outcome` |
 | `loopworks.deployment.observed` | counter | `{deployment}` | `environment`, `status` |
 | `loopworks.approval.wait_time` | histogram | `s` | `gate`, `decision` (`approved`, `rejected`, `expired`, `bypassed`) |
 | `loopworks.approval.pending` | observable gauge | `{approval}` | `gate` |
@@ -55,6 +57,11 @@ Research fact sheets with sources are recorded on issue #21.
 | `loopworks.model.cost` | counter | `USD` | `model`, `provider`, `agent` |
 
 Run cancellations are counted as `loopworks.run.completed` with `status="cancelled"`, not a separate metric. Agent spans additionally carry OpenTelemetry GenAI semantic-convention attributes (`gen_ai.*`) so backend-native LLM dashboards work without custom mapping.
+
+Planning provider tools record only low-cardinality tool identity, provider, and
+outcome attributes. Repository, run, issue, result count, and truncation remain
+span/log correlation metadata; raw issue bodies, comments, provider output,
+routes, credentials, and error text are never metric attributes.
 
 ### Relationship to `observability_events`
 
