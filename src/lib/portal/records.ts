@@ -47,6 +47,20 @@ export type PortalRecords = {
   validationResults: ValidationResultRecord[];
 };
 
+/**
+ * A collection a portal surface can declare it cannot render without. Surfaces
+ * that have a real empty state declare `[]` and render that state instead.
+ *
+ * `githubSettings` is deliberately absent: `mapSettings` always projects the
+ * full key set, so declaring it could never fail.
+ */
+export type PortalDataRequirement =
+  | "approval"
+  | "deployments"
+  | "githubInstallations"
+  | "loops"
+  | "repos";
+
 export type PortalRecordsResult =
   | {
       records: PortalRecords;
@@ -70,18 +84,6 @@ type LoopRow = typeof loops.$inferSelect;
 type DeploymentRow = typeof deploymentRows.$inferSelect;
 type ApprovalRow = typeof approvals.$inferSelect;
 type GithubInstallationRow = typeof githubInstallations.$inferSelect;
-
-const emptyPortalRecords: PortalRecords = {
-  approval: null,
-  artifacts: [],
-  deployments: [],
-  githubInstallations: [],
-  githubSettings: [],
-  loops: [],
-  repos: [],
-  timeline: [],
-  validationResults: [],
-};
 
 function groupBy<T, K extends string>(items: T[], getKey: (item: T) => K): Map<K, T[]> {
   const grouped = new Map<K, T[]>();
@@ -299,6 +301,22 @@ function setting(
   return { detail, enabled, key, title };
 }
 
+/**
+ * Every GitHub setting key a successful read projects, and the single source of
+ * truth for both `mapSettings` and `hasPortalProjectionIntegrity`.
+ *
+ * The `satisfies` clause requires one entry per `GitHubSettingKey`, so adding a
+ * setting key without listing it here fails to compile.
+ */
+const githubSettingKeys = Object.keys({
+  "issue-sync": true,
+  "label-mapping": true,
+  "pr-sync": true,
+  "secret-redaction": true,
+  sso: true,
+  webhooks: true,
+} satisfies Record<GitHubSettingKey, true>) as GitHubSettingKey[];
+
 function mapSettings(input: {
   approvals: ApprovalRow[];
   installations: GithubInstallationRow[];
@@ -310,56 +328,61 @@ function mapSettings(input: {
   );
   const hasPrArtifacts = input.runArtifacts.some((artifact) => artifact.label.includes("PR"));
 
-  return [
-    setting(
-      "sso",
-      "GitHub SSO",
-      input.installations.length > 0
-        ? `${input.installations.length} GitHub App installation${input.installations.length === 1 ? " is" : "s are"} connected.`
-        : "No GitHub App installation is connected yet.",
-      input.installations.length > 0,
-    ),
-    setting(
-      "webhooks",
-      "Webhooks",
-      input.loops.length > 0
-        ? "Loop rows are available from issue synchronization."
-        : "Webhook issue synchronization has not populated loops yet.",
-      input.loops.length > 0,
-    ),
-    setting(
-      "issue-sync",
-      "Issue sync",
-      input.loops.length > 0
-        ? `${input.loops.length} synced issue loops are visible.`
-        : "No issue loops are synced yet.",
-      input.loops.length > 0,
-    ),
-    setting(
-      "pr-sync",
-      "PR sync",
-      hasPrArtifacts
-        ? "PR intent artifacts are available from completed runs."
-        : "No PR intent artifacts are available yet.",
-      hasPrArtifacts,
-    ),
-    setting(
-      "label-mapping",
-      "Label mapping",
-      hasLabels
+  // Keyed by GitHubSettingKey so the projection stays exhaustive by construction:
+  // adding a setting key without projecting it fails to compile, and the
+  // projected key set can never drift from `githubSettingKeys` below.
+  const projections: Record<GitHubSettingKey, Omit<GitHubSettingRecord, "key">> = {
+    "issue-sync": {
+      detail:
+        input.loops.length > 0
+          ? `${input.loops.length} synced issue loops are visible.`
+          : "No issue loops are synced yet.",
+      enabled: input.loops.length > 0,
+      title: "Issue sync",
+    },
+    "label-mapping": {
+      detail: hasLabels
         ? "Milestone, area, and priority labels are mapped into loop state."
         : "No milestone, area, or priority labels are mapped yet.",
-      hasLabels,
-    ),
-    setting(
-      "secret-redaction",
-      "Secret redaction",
-      input.approvals.length > 0
-        ? "Approval summaries avoid token and credential material."
-        : "No approval summaries are available to project redaction state yet.",
-      input.approvals.length > 0,
-    ),
-  ];
+      enabled: hasLabels,
+      title: "Label mapping",
+    },
+    "pr-sync": {
+      detail: hasPrArtifacts
+        ? "PR intent artifacts are available from completed runs."
+        : "No PR intent artifacts are available yet.",
+      enabled: hasPrArtifacts,
+      title: "PR sync",
+    },
+    "secret-redaction": {
+      detail:
+        input.approvals.length > 0
+          ? "Approval summaries avoid token and credential material."
+          : "No approval summaries are available to project redaction state yet.",
+      enabled: input.approvals.length > 0,
+      title: "Secret redaction",
+    },
+    sso: {
+      detail:
+        input.installations.length > 0
+          ? `${input.installations.length} GitHub App installation${input.installations.length === 1 ? " is" : "s are"} connected.`
+          : "No GitHub App installation is connected yet.",
+      enabled: input.installations.length > 0,
+      title: "GitHub SSO",
+    },
+    webhooks: {
+      detail:
+        input.loops.length > 0
+          ? "Loop rows are available from issue synchronization."
+          : "Webhook issue synchronization has not populated loops yet.",
+      enabled: input.loops.length > 0,
+      title: "Webhooks",
+    },
+  };
+
+  return githubSettingKeys.map((key) =>
+    setting(key, projections[key].title, projections[key].detail, projections[key].enabled),
+  );
 }
 
 function fixturePortalRecords(): PortalRecords {
@@ -377,17 +400,53 @@ function fixturePortalRecords(): PortalRecords {
 }
 
 function unavailablePortalRecords(): PortalRecords {
-  return emptyPortalRecords;
+  // A fresh object per call: consumers receive these arrays directly, and the
+  // shared module-level `emptyPortalRecords` would leak mutations across reads.
+  return {
+    approval: null,
+    artifacts: [],
+    deployments: [],
+    githubInstallations: [],
+    githubSettings: [],
+    loops: [],
+    repos: [],
+    timeline: [],
+    validationResults: [],
+  };
 }
 
-function hasRequiredPortalData(records: PortalRecords): boolean {
-  return (
-    records.repos.length > 0 &&
-    records.loops.length > 0 &&
-    records.deployments.length > 0 &&
-    records.approval !== null &&
-    records.githubSettings.length > 0
+/**
+ * Returns the requested collections that a surface declared it cannot render
+ * without and that the store did not supply.
+ *
+ * A single global completeness check made every portal surface report
+ * "Unavailable" on a fresh install, because loop registration (#126) leaves
+ * `loops` empty and one empty collection discarded every record (#155). Each
+ * surface now declares only what it actually needs.
+ */
+export function findUnmetPortalRequirements(
+  records: PortalRecords,
+  requires: readonly PortalDataRequirement[],
+): PortalDataRequirement[] {
+  return requires.filter((requirement) =>
+    requirement === "approval" ? records.approval === null : records[requirement].length === 0,
   );
+}
+
+/**
+ * The settings projection contract: a successful read carries a record for every
+ * `githubSettingKeys` entry, whatever the database holds. Checks key presence,
+ * not count.
+ *
+ * Asserted by tests over real reads, deliberately not at runtime. `mapSettings`
+ * maps over the same list, so the compiler already guarantees this; a
+ * production-only runtime check would be redundant and could only ever misfire,
+ * reporting a healthy store as unavailable.
+ */
+export function hasPortalProjectionIntegrity(records: PortalRecords): boolean {
+  const projected = new Set(records.githubSettings.map((record) => record.key));
+
+  return githubSettingKeys.every((key) => projected.has(key));
 }
 
 function unavailableResult(): PortalRecordsResult {
@@ -481,11 +540,16 @@ export async function readPortalRecords(input: {
 }
 
 export async function getPortalRecordsForPortal(input: {
-  allowEmpty?: boolean;
   database: PortalRecordsDatabase;
   env?: Partial<NodeJS.ProcessEnv>;
   logger?: LoopworksLogger;
   now?: Date;
+  /**
+   * Required, not optional: a surface that omitted it would silently opt out of
+   * failing closed. `[]` is a deliberate declaration that this surface renders
+   * its own empty state.
+   */
+  requires: readonly PortalDataRequirement[];
 }): Promise<PortalRecordsResult> {
   const env = input.env ?? process.env;
   if (
@@ -517,19 +581,24 @@ export async function getPortalRecordsForPortal(input: {
       now: input.now,
     });
 
-    if (isProductionRuntime(env) && !input.allowEmpty && !hasRequiredPortalData(result.records)) {
-      input.logger?.warn(
-        {
-          approvalCount: result.records.approval ? 1 : 0,
-          deploymentCount: result.records.deployments.length,
-          loopCount: result.records.loops.length,
-          repositoryCount: result.records.repos.length,
-          settingsCount: result.records.githubSettings.length,
-        },
-        "portal_records_required_data_missing",
-      );
+    if (isProductionRuntime(env)) {
+      const unmetRequirements = findUnmetPortalRequirements(result.records, input.requires);
 
-      return unavailableResult();
+      if (unmetRequirements.length > 0) {
+        input.logger?.warn(
+          {
+            approvalCount: result.records.approval ? 1 : 0,
+            deploymentCount: result.records.deployments.length,
+            loopCount: result.records.loops.length,
+            repositoryCount: result.records.repos.length,
+            settingsCount: result.records.githubSettings.length,
+            unmetRequirements,
+          },
+          "portal_records_required_data_missing",
+        );
+
+        return unavailableResult();
+      }
     }
 
     return result;

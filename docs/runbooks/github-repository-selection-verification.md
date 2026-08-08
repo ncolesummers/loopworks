@@ -27,8 +27,9 @@ deployed to production.
 ### Last verified
 
 2026-08-06, against installation `151596823` on `loopworks-sandbox`. Steps 3-5
-and 7-9 passed. Step 6 fails on a separate defect (#155). Step 10 has never been
-run — see "Step 10 costs a reset" below.
+and 7-9 passed. Step 6 failed on a separate defect (#155), fixed since; step 6
+has not been re-run against production. Step 10 has never been run — see
+"Step 10 costs a reset" below.
 
 Merging to `main` deploys production automatically through the Vercel Git
 integration; no manual deploy step is needed for a code change.
@@ -119,7 +120,7 @@ Sign in at <https://loopworks.vercel.app>, then go to `/settings`.
 | 3 | Click "Select repositories" | the 6 granted repos list; `delivery-ops`/`factory-core` show Private, `legacy-runner` shows Archived, `delivery-ops` shows `trunk`, `ops-scripts` shows `develop`; `docs-site` and `spike-notes` are absent |
 | 4 | Type `scripts` in search | list narrows to `ops-scripts`; Save stays disabled until a checkbox actually changes |
 | 5 | Select 2 repos → Save | "2 repositories selected, 0 repositories removed."; Save returns to disabled and the boxes stay checked |
-| 6 | Visit `/catalog` | **blocked by #155** — see below |
+| 6 | Visit `/catalog` | exactly the 2 repos selected in step 5 are listed, with no loops, deployments, or approvals present; the header chip reads "Live database", not "Unavailable" |
 | 7 | Back to selection, deselect 1 → Save | "0 repositories selected, 1 repository removed." |
 | 8 | Deselect the last one → Save | the counter returns to "0 repositories selected" |
 | 9 | On GitHub, remove access to a *selected* repo, then reload the surface | that row shows "Access revoked", no Private/Archived badge, and is still deselectable |
@@ -136,13 +137,19 @@ Search is a substring match over the full name, so `ops` matches both
 Step 5 is the one that proves the fix for the frozen-state bug the reviewers
 found: before it, Save stayed enabled and the same change could be replayed.
 
-Steps 6-8 originally asserted catalog contents. `/catalog` currently renders
-"No repositories tracked" no matter what is selected: in production the portal
-discards every record unless repositories, loops, deployments, an approval, and
-settings are *all* non-empty (`src/lib/portal/records.ts:520`), and loop
-registration is #126. Tracked as **#155**. Until it is fixed, verify steps 5-8
-through the selection counter and `GET /api/github/repositories`, not the
-catalog.
+Step 6 is the only step that asserts catalog contents; steps 7 and 8 assert the
+selection counter. Step 6 was previously unexecutable: `/catalog` rendered "No
+repositories tracked" no matter what was selected, because in production the
+portal discarded every record unless repositories, loops, deployments, an
+approval, and settings were *all* non-empty, and loop registration is #126. #155
+replaced that global gate with per-surface requirements, so the catalog should
+now reflect the selection with loops and deployments still empty. **That
+expectation has not yet been confirmed against production** — it is covered by
+`tests/unit/portal/pages-production-gate.test.tsx`, not by a live run.
+
+If `/catalog` shows "No repositories tracked" while the counter in step 5
+reported a selection, re-check `GET /api/github/repositories` — if it returns the
+rows as `"selected": true`, the read path has regressed, not the write path.
 
 ### Step 10 costs a reset
 
@@ -197,9 +204,9 @@ SELECT id, 1, 'manual in-use probe' FROM repositories LIMIT 1;
 Deselect that repo → expect it kept and the message "still has loop or run
 history". Then delete the probe row.
 
-Do not assert the row in `/catalog` here either — #155 keeps that surface empty,
-and one probe loop is not enough to satisfy its gate. This probe has not been
-run since #152 was fixed.
+This probe's purpose is the deselect refusal, not catalog contents — step 6
+covers those, and the probe adds a *loop* to a repository the catalog already
+lists. This probe has not been run since #152 was fixed.
 
 ## Resetting between runs
 
@@ -254,5 +261,10 @@ To redo step 1, uninstall the App from the org:
 - **Real pagination.** Six repositories fit in one page at `per_page=100`, so no
   step here crosses a page boundary. That path is covered offline instead, by
   the MSW cases in `tests/unit/github/installation-gateway.test.ts` (ADR 0022).
-- **Catalog behavior (#155).** Nothing in this runbook can currently assert
-  catalog contents.
+- **Loop and deployment surfaces.** Step 6 asserts the catalog, but `/loops`
+  and `/approvals` stay legitimately empty until loop registration (#126) lands,
+  so this runbook cannot assert populated content on either.
+- **Multi-installation catalog scope.** `readPortalRecords` reads every
+  `repositories` row without filtering by installation or GitHub App, so step
+  6's "exactly the 2 repos selected" holds only while production has a single
+  installation.

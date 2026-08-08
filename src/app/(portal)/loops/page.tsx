@@ -22,6 +22,8 @@ export async function LoopsPageContent({
   const requestLogger = createRequestLogger({
     route: "portal.loops",
   });
+  // The registry renders its own empty state until loop registration (#126) runs,
+  // so it declares no requirement (#155).
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
@@ -29,6 +31,7 @@ export async function LoopsPageContent({
       env,
       logger: requestLogger,
       now,
+      requires: [],
     }));
   const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
 

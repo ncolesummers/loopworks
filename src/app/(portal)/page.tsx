@@ -22,6 +22,8 @@ export async function DashboardPageContent({
   const requestLogger = createRequestLogger({
     route: "portal.dashboard",
   });
+  // The dashboard renders a per-panel empty state for every collection, so a
+  // fresh install must reach it rather than fail closed (#155).
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
@@ -29,6 +31,7 @@ export async function DashboardPageContent({
       env,
       logger: requestLogger,
       now,
+      requires: [],
     }));
   const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
 

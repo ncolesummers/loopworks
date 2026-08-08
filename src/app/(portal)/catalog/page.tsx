@@ -22,6 +22,8 @@ export async function CatalogPageContent({
   const requestLogger = createRequestLogger({
     route: "portal.catalog",
   });
+  // The catalog renders "No repositories tracked" when nothing is selected, so it
+  // must not require loops, deployments, or an approval to exist (#155).
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
@@ -29,6 +31,7 @@ export async function CatalogPageContent({
       env,
       logger: requestLogger,
       now,
+      requires: [],
     }));
   const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
 

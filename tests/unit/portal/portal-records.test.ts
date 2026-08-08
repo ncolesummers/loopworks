@@ -1,9 +1,12 @@
 /** @vitest-environment node */
 
+import { repositories } from "@/db/schema";
 import { portalFixture } from "@/lib/fixtures";
 import {
+  findUnmetPortalRequirements,
   getPortalRecordsForPortal,
   getPortalSourceLabel,
+  hasPortalProjectionIntegrity,
   readPortalRecords,
 } from "@/lib/portal/records";
 import { type SeedDatabase, seedDemoData } from "@/lib/seed/demo-data";
@@ -32,6 +35,22 @@ describe("portal records (pglite integration)", () => {
   function testDatabase(): SeedDatabase {
     return context.db as unknown as SeedDatabase;
   }
+
+  /**
+   * A fresh install after repository selection: repositories exist, but loop
+   * registration (#126) has not run, so loops, deployments, and approvals are
+   * all legitimately empty.
+   */
+  async function seedSelectedRepositoryOnly() {
+    await context.db.insert(repositories).values({
+      fullName: "loopworks-sandbox/portal-web",
+      githubRepoId: 900_100,
+      name: "portal-web",
+      owner: "loopworks-sandbox",
+    });
+  }
+
+  const productionEnv = { GITHUB_APP_ID: "800000", NODE_ENV: "production" } as const;
 
   it("materializes the five portal page surfaces from seeded database rows", async () => {
     await seedDemoData(testDatabase());
@@ -148,10 +167,10 @@ describe("portal records (pglite integration)", () => {
     await seedDemoData(testDatabase());
 
     const result = await getPortalRecordsForPortal({
-      allowEmpty: true,
       database: context.db,
       env: { NODE_ENV: "development", ...env },
       now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
     });
 
     expect(result.records.githubInstallations).toEqual([]);
@@ -167,9 +186,9 @@ describe("portal records (pglite integration)", () => {
     await seedDemoData(testDatabase());
 
     const result = await getPortalRecordsForPortal({
-      allowEmpty: true,
       database: context.db,
       env: { NODE_ENV: "production", ...env },
+      requires: [],
     });
 
     expect(result).toMatchObject({
@@ -181,11 +200,48 @@ describe("portal records (pglite integration)", () => {
     expect(result.records.githubSettings).toEqual([]);
   });
 
-  it("fails closed for reachable production databases that are missing required portal rows", async () => {
+  it("keeps a selected repository visible in production without loops, deployments, or approvals", async () => {
+    await seedSelectedRepositoryOnly();
+
     const result = await getPortalRecordsForPortal({
       database: context.db,
-      env: { NODE_ENV: "production" },
+      env: productionEnv,
       now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({ source: "db", usedFallback: false });
+    expect(result.records.repos.map((repo) => repo.name)).toEqual(["portal-web"]);
+    expect(result.records.loops).toEqual([]);
+    expect(result.records.deployments).toEqual([]);
+    expect(result.records.approval).toBeNull();
+  });
+
+  it("renders a legitimately empty production database as live empty rather than unavailable", async () => {
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: productionEnv,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({ source: "db", usedFallback: false });
+    expect(getPortalSourceLabel(result)).toBe("Live database");
+    expect(result.records.repos).toEqual([]);
+    expect(result.records.loops).toEqual([]);
+    expect(result.records.deployments).toEqual([]);
+    expect(result.records.approval).toBeNull();
+  });
+
+  it("fails closed and logs the unmet keys when a surface requires data the store does not have", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: productionEnv,
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: ["repos", "loops"],
     });
 
     expect(result).toMatchObject({
@@ -193,28 +249,108 @@ describe("portal records (pglite integration)", () => {
       source: "unavailable",
       usedFallback: false,
     });
-    expect(result.records.repos).toEqual([]);
-    expect(result.records.loops).toEqual([]);
-    expect(result.records.deployments).toEqual([]);
-    expect(result.records.approval).toBeNull();
-    expect(result.records.githubSettings).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalCount: 0,
+        deploymentCount: 0,
+        loopCount: 0,
+        repositoryCount: 0,
+        settingsCount: 6,
+        unmetRequirements: ["repos", "loops"],
+      }),
+      "portal_records_required_data_missing",
+    );
   });
 
-  it("allows Settings to distinguish a reachable empty production database from failure", async () => {
+  it("does not gate a surface whose declared requirement is met", async () => {
+    await seedSelectedRepositoryOnly();
+
     const result = await getPortalRecordsForPortal({
-      allowEmpty: true,
       database: context.db,
-      env: { GITHUB_APP_ID: "800000", NODE_ENV: "production" },
+      env: productionEnv,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: ["repos"],
     });
 
-    expect(result).toMatchObject({
-      source: "db",
-      usedFallback: false,
-      records: {
-        githubInstallations: [],
-        repos: [],
-      },
+    expect(result).toMatchObject({ source: "db", usedFallback: false });
+  });
+
+  it("ignores declared requirements outside production runtime", async () => {
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: { GITHUB_APP_ID: "800000", NODE_ENV: "development" },
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: ["repos"],
     });
+
+    expect(result).toMatchObject({ source: "db", usedFallback: false });
+  });
+
+  it("reports every unmet requirement kind, including the nullable approval", () => {
+    expect(
+      findUnmetPortalRequirements(
+        {
+          approval: null,
+          artifacts: [],
+          deployments: [],
+          githubInstallations: [],
+          githubSettings: [],
+          loops: [],
+          repos: [],
+          timeline: [],
+          validationResults: [],
+        },
+        ["approval", "deployments", "githubInstallations", "loops", "repos"],
+      ),
+    ).toEqual(["approval", "deployments", "githubInstallations", "loops", "repos"]);
+    expect(
+      findUnmetPortalRequirements(
+        {
+          approval: portalFixture.approval,
+          artifacts: [],
+          deployments: portalFixture.deployments,
+          githubInstallations: portalFixture.githubInstallations,
+          githubSettings: portalFixture.githubSettings,
+          loops: portalFixture.loops,
+          repos: portalFixture.repos,
+          timeline: [],
+          validationResults: [],
+        },
+        ["approval", "deployments", "githubInstallations", "loops", "repos"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("holds the settings projection contract for both empty and seeded databases", async () => {
+    const empty = await readPortalRecords({
+      database: context.db,
+      githubAppId: 800_000,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+
+    expect(hasPortalProjectionIntegrity(empty.records)).toBe(true);
+
+    await seedDemoData(testDatabase());
+    const seeded = await readPortalRecords({
+      database: context.db,
+      githubAppId: 800_000,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+    });
+
+    expect(hasPortalProjectionIntegrity(seeded.records)).toBe(true);
+    expect(seeded.records.githubSettings.map((record) => record.key)).toEqual(
+      empty.records.githubSettings.map((record) => record.key),
+    );
+
+    // Dropping any single projected key is a contract violation, not empty data.
+    for (const record of seeded.records.githubSettings) {
+      expect(
+        hasPortalProjectionIntegrity({
+          ...seeded.records,
+          githubSettings: seeded.records.githubSettings.filter((each) => each.key !== record.key),
+        }),
+      ).toBe(false);
+    }
   });
 
   it("keeps non-production database failures explicit and fixture backed", async () => {
@@ -227,6 +363,7 @@ describe("portal records (pglite integration)", () => {
     const result = await getPortalRecordsForPortal({
       database: unavailableDatabase as never,
       env: { NODE_ENV: "development" },
+      requires: [],
     });
 
     expect(result).toMatchObject({
@@ -255,6 +392,7 @@ describe("portal records (pglite integration)", () => {
         NODE_ENV: "development",
       },
       logger: logger as never,
+      requires: [],
     });
 
     expect(database.select).not.toHaveBeenCalled();
@@ -283,6 +421,7 @@ describe("portal records (pglite integration)", () => {
         LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
         NODE_ENV: "production",
       },
+      requires: [],
     });
 
     expect(unavailableDatabase.select).toHaveBeenCalled();
@@ -302,6 +441,7 @@ describe("portal records (pglite integration)", () => {
     const result = await getPortalRecordsForPortal({
       database: unavailableDatabase as never,
       env: { NODE_ENV: "production" },
+      requires: [],
     });
 
     expect(result).toMatchObject({

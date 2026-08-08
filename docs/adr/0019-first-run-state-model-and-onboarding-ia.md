@@ -75,14 +75,53 @@ the supported narrowing API. Consumers must not use property-presence checks
 such as `"reason" in state`, which can be true on an onboarding value carrying
 `reason: undefined`.
 
-Keep the production `hasRequiredPortalData` gate for existing operational
-pages, but let Settings request `allowEmpty: true`. A successful empty database
-read can therefore render the installation action, while a failed read remains
-`source: "unavailable"` and cannot render a connection call to action.
+A successful empty database read must render the installation action, while a
+failed read stays `source: "unavailable"` and cannot render a connection call to
+action. That distinction is the durable decision here, and it holds.
 
-Issue [#127](https://github.com/ncolesummers/loopworks/issues/127) still owns
-the coordinated relaxation and actionable routing for the remaining portal
-empty states.
+The original mechanism does not. This ADR first specified a global
+`hasRequiredPortalData` gate with an `allowEmpty: true` opt-out for Settings.
+Because that gate required repositories, loops, deployments, an approval, and
+settings to *all* be non-empty, and loop registration
+([#126](https://github.com/ncolesummers/loopworks/issues/126)) leaves `loops`
+empty on every fresh install, one empty collection discarded every record — so
+`/`, `/catalog`, `/loops`, and `/approvals` reported "Unavailable" against a
+healthy store. Amended by
+[#155](https://github.com/ncolesummers/loopworks/issues/155):
+
+`getPortalRecordsForPortal` takes a required
+`requires: readonly PortalDataRequirement[]`, replacing `allowEmpty`. In
+production a surface fails closed only for collections it declared it cannot
+render without. The field is mandatory rather than optional so a new caller
+cannot silently opt out of failing closed; `[]` is an explicit declaration that
+the surface renders its own empty state. Every surface declares `[]` today,
+because each has a real empty state.
+
+What separates "store unavailable" from "store healthy but empty" is therefore
+the failed-read path — a throwing or misconfigured read still returns
+`source: "unavailable"` — plus any requirement a surface declares. Nothing else
+gates a production read.
+
+An earlier revision of this work also ran a settings-projection integrity check
+at production runtime. It was removed: `mapSettings` maps over the same key list
+the check validates, so the compiler already guarantees the contract and the
+runtime check could only ever misfire, reporting a healthy store as unavailable
+on every surface at once — the failure #155 exists to fix.
+`hasPortalProjectionIntegrity` remains as a predicate asserted by tests over
+real reads, which catches a projection regression in CI instead of production.
+
+One silent failure remains out of scope and unaddressed: a store that answers
+successfully with data from the wrong or freshly-reset database is
+indistinguishable from a new install, and renders as "Live database" with empty
+collections. The superseded global gate caught that case only incidentally, by
+also breaking every legitimate fresh install — which is the defect #155 exists
+to fix. Detecting it needs store-identity evidence rather than row counts, and
+is not solvable inside this read. Tracked as
+[#158](https://github.com/ncolesummers/loopworks/issues/158).
+
+Issue [#127](https://github.com/ncolesummers/loopworks/issues/127) retains
+actionable routing for the portal empty states this relaxation now makes
+reachable.
 
 All work in epic #122 must obey this routing rule: an actionable empty state
 must route to the step it names.
