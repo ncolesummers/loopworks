@@ -266,21 +266,37 @@ Exit criteria:
 3. Governance policy is visible in the portal and in PR checks.
 4. Persona test IDs P03, A02, A03, R02, and S04 are referenced by the milestone and seeded issues.
 
-### M8 Agent Extensibility (Tools, MCP, Skills)
+### M8 Self-Improving Loops
+
+Close the feedback loop: derive a deterministic per-run outcome ledger, add a retrospective stage that proposes repo-scoped learned memories, and require human approval before learned state can influence a future run.
+
+### M9 Agent Extensibility (Tools, MCP, Skills)
 
 Operator-facing agent customization: custom tools, MCP servers, and agent skills.
 
-### M9 Post-MVP Loop Extensions
+### M10 Post-MVP Loop Extensions
 
 Additional loop stages and subagents, including the research loop and release notes.
 
-### M10 Multi-Platform Chat Integration
+### M11 Multi-Platform Chat Integration
 
 Chat SDK adapters for GitHub, Slack, and Teams as notification and approval surfaces. Sequenced well after M6 so alert monitors exist before they are wired into chat channels.
 
-### M11 Docs Site
+### M12 Docs Site
 
 Public documentation website, portal relocation to `/app`, and generated reference pages.
+
+### M13 Greenfield Project + Backlog Management
+
+Turn an operator's idea into a governed GitHub-backed project through guided product framing, repository bootstrap, an approved initial backlog, and ongoing backlog management.
+
+### M14 GitHub Integration Hardening
+
+Harden the onboarding integration for multiple installations, large repository catalogs, stale installation records, and callback identity binding.
+
+### M15 Type Safety Hardening
+
+Close type-safety gaps that can let production-breaking integration bugs pass `bun run typecheck`.
 
 ## Success Metrics
 
