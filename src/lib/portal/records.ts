@@ -51,9 +51,8 @@ export type PortalRecords = {
  * A collection a portal surface can declare it cannot render without. Surfaces
  * that have a real empty state declare `[]` and render that state instead.
  *
- * `githubSettings` is deliberately absent: `hasPortalProjectionIntegrity`
- * already guarantees it on every successful production read, so declaring it
- * could never fail.
+ * `githubSettings` is deliberately absent: `mapSettings` always projects the
+ * full key set, so declaring it could never fail.
  */
 export type PortalDataRequirement =
   | "approval"
@@ -435,27 +434,19 @@ export function findUnmetPortalRequirements(
 }
 
 /**
- * Asserts the projection contract: a successful read carries a record for every
- * `githubSettingKeys` entry, because `mapSettings` derives its output from that
- * list rather than from stored setting rows. Checks key presence, not count —
- * extra or duplicated entries are not a contract violation.
+ * The settings projection contract: a successful read carries a record for every
+ * `githubSettingKeys` entry, whatever the database holds. Checks key presence,
+ * not count.
  *
- * Scope, stated honestly: `mapSettings` builds its result by mapping over
- * `githubSettingKeys`, so a real read cannot fail this check. It is an invariant
- * assertion that keeps a future projection change from silently shipping a
- * partial settings surface — *not* an outage detector. What separates
- * "store unavailable" from "store healthy but empty" is the failed-read path in
- * `getPortalRecordsForPortal`. A store that answers successfully with data from
- * the wrong database is not detectable here and is not addressed by #155.
+ * Asserted by tests over real reads, deliberately not at runtime. `mapSettings`
+ * maps over the same list, so the compiler already guarantees this; a
+ * production-only runtime check would be redundant and could only ever misfire,
+ * reporting a healthy store as unavailable.
  */
 export function hasPortalProjectionIntegrity(records: PortalRecords): boolean {
-  return findMissingGithubSettingKeys(records).length === 0;
-}
-
-function findMissingGithubSettingKeys(records: PortalRecords): GitHubSettingKey[] {
   const projected = new Set(records.githubSettings.map((record) => record.key));
 
-  return githubSettingKeys.filter((key) => !projected.has(key));
+  return githubSettingKeys.every((key) => projected.has(key));
 }
 
 function unavailableResult(): PortalRecordsResult {
@@ -591,22 +582,6 @@ export async function getPortalRecordsForPortal(input: {
     });
 
     if (isProductionRuntime(env)) {
-      // A short projection means the read itself is broken, not that the install
-      // is new. Rendering it as a normal empty state would hide a real outage.
-      const missingSettingKeys = findMissingGithubSettingKeys(result.records);
-
-      if (missingSettingKeys.length > 0) {
-        input.logger?.warn(
-          {
-            missingSettingKeys,
-            settingsCount: result.records.githubSettings.length,
-          },
-          "portal_records_projection_invalid",
-        );
-
-        return unavailableResult();
-      }
-
       const unmetRequirements = findUnmetPortalRequirements(result.records, input.requires);
 
       if (unmetRequirements.length > 0) {

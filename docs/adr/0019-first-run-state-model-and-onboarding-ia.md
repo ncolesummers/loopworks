@@ -87,30 +87,28 @@ settings to *all* be non-empty, and loop registration
 empty on every fresh install, one empty collection discarded every record — so
 `/`, `/catalog`, `/loops`, and `/approvals` reported "Unavailable" against a
 healthy store. Amended by
-[#155](https://github.com/ncolesummers/loopworks/issues/155) to two separate
-checks:
+[#155](https://github.com/ncolesummers/loopworks/issues/155):
 
-1. **Per-surface requirements.** `getPortalRecordsForPortal` takes a required
-   `requires: readonly PortalDataRequirement[]`, replacing `allowEmpty`. In
-   production a surface fails closed only for collections it declared it cannot
-   render without. The field is mandatory rather than optional so a new caller
-   cannot silently opt out of failing closed; `[]` is an explicit declaration
-   that the surface renders its own empty state. Every surface declares `[]`
-   today, because each has a real empty state.
-2. **Projection integrity.** `mapSettings` derives its output by mapping over
-   `githubSettingKeys`, so a successful read carries a record for every known
-   setting key regardless of how empty the database is.
-   `hasPortalProjectionIntegrity` asserts that key set — presence, not count —
-   on every production read, independent of `requires`.
+`getPortalRecordsForPortal` takes a required
+`requires: readonly PortalDataRequirement[]`, replacing `allowEmpty`. In
+production a surface fails closed only for collections it declared it cannot
+render without. The field is mandatory rather than optional so a new caller
+cannot silently opt out of failing closed; `[]` is an explicit declaration that
+the surface renders its own empty state. Every surface declares `[]` today,
+because each has a real empty state.
 
-State the limits of check 2 plainly, because it is easy to overclaim. Since
-`mapSettings` is built from the same key list the check validates, a real read
-cannot fail it. It is an invariant assertion that stops a future projection
-change from shipping a partial settings surface — **not** an outage detector.
-What actually separates "store unavailable" from "store healthy but empty" is
-the failed-read path: a throwing or misconfigured read still returns
-`source: "unavailable"`. Check 2 applies to Settings too, which previously
-bypassed every check.
+What separates "store unavailable" from "store healthy but empty" is therefore
+the failed-read path — a throwing or misconfigured read still returns
+`source: "unavailable"` — plus any requirement a surface declares. Nothing else
+gates a production read.
+
+An earlier revision of this work also ran a settings-projection integrity check
+at production runtime. It was removed: `mapSettings` maps over the same key list
+the check validates, so the compiler already guarantees the contract and the
+runtime check could only ever misfire, reporting a healthy store as unavailable
+on every surface at once — the failure #155 exists to fix.
+`hasPortalProjectionIntegrity` remains as a predicate asserted by tests over
+real reads, which catches a projection regression in CI instead of production.
 
 One silent failure remains out of scope and unaddressed: a store that answers
 successfully with data from the wrong or freshly-reset database is
