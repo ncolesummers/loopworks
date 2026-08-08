@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { db } from "@/db/client";
-import { recordDevelopmentLoopPlanArtifact } from "@/lib/loops/development-run-transitions";
+import { recordDevelopmentLoopPlanArtifact } from "@/lib/loops/transitions";
 import { pinnedPlanningAgentOutputSchema } from "../planning-agent";
 
 export default defineTool({

@@ -18,11 +18,6 @@ import {
   type DevelopmentLoopRunDatabase,
   runDevelopmentLoopRetrySupervisorTick,
 } from "@/lib/loops/development-run";
-import {
-  applyDevelopmentLoopValidationReport,
-  type DevelopmentLoopTransitionDatabase,
-  executeDevelopmentLoopPrStage,
-} from "@/lib/loops/development-run-transitions";
 import { defaultLoopManifest } from "@/lib/loops/manifest";
 import {
   composePrIntent,
@@ -31,6 +26,9 @@ import {
   prIntentSchemaId,
   prIntentV1Schema,
 } from "@/lib/loops/pr-intent";
+import { executeDevelopmentLoopPrStage } from "@/lib/loops/transitions/pr-stage";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
+import { applyDevelopmentLoopValidationReport } from "@/lib/loops/transitions/validation";
 import {
   type ValidationReportV1,
   validationReportSchemaId,

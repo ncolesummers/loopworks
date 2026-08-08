@@ -13,7 +13,7 @@ import {
   DevelopmentLoopTransitionError,
   type DevelopmentLoopTransitionMetrics,
   finalizeDevelopmentLoopRun,
-} from "@/lib/loops/development-run-transitions";
+} from "@/lib/loops/transitions";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import type { LoopManifest } from "../../../schemas/loop-manifest";
 

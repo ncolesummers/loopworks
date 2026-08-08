@@ -14,12 +14,12 @@ import {
   type DevelopmentLoopRunDatabase,
 } from "@/lib/loops/development-run";
 import {
-  applyDevelopmentLoopValidationReport,
   completeDevelopmentLoopRun,
-  type DevelopmentLoopTransitionDatabase,
   finalizeDevelopmentLoopRun,
   retryDevelopmentLoopStep,
-} from "@/lib/loops/development-run-transitions";
+} from "@/lib/loops/transitions/finalization";
+import type { DevelopmentLoopTransitionDatabase } from "@/lib/loops/transitions/shared";
+import { applyDevelopmentLoopValidationReport } from "@/lib/loops/transitions/validation";
 import {
   type ValidationGateResultV1,
   type ValidationReportV1,

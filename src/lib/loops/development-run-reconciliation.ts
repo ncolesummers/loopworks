@@ -2,7 +2,7 @@ import type { GitHubIssueReader, GitHubIssueSnapshot } from "@/lib/github/issue-
 import type {
   DevelopmentLoopTerminalReason,
   DevelopmentLoopTerminalStatus,
-} from "@/lib/loops/development-run-transitions";
+} from "@/lib/loops/transitions";
 import type { LoopworksLogger } from "@/lib/observability/logger";
 import {
   markLoopworksSpanError,
