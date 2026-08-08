@@ -49,6 +49,14 @@ depend on configuration metadata.
    source roots. Bare `process.env` remains allowed for injected defaults and
    whole-environment handoffs; tests and runner configuration remain outside
    this guard.
+10. Classify validation-subprocess exposure in the registry as an explicit,
+    default-deny capability. The derived child environment copies only present
+    entries that opt in and are non-secret. Issue
+    [#178](https://github.com/ncolesummers/loopworks/issues/178) initially
+    exposes `PATH`, `HOME`, `CI`, and the local strict-scanner flag. `NODE_ENV`
+    remains excluded so a production host cannot force nested test and
+    development servers into production mode after their secrets are removed.
+    Adding another registry entry does not expose it automatically.
 
 ## Consequences
 
@@ -64,6 +72,12 @@ migration topology remain in their domain readers because a flat variable
 schema cannot express those cross-variable invariants without weakening their
 specific diagnostics.
 
+The registry also owns the validation-child environment boundary. This avoids
+duplicated allow-lists while retaining a second `secret === false` check if an
+entry is accidentally marked for subprocess exposure. Non-secret values that
+change authority or runtime behavior remain excluded unless separately
+reviewed and opted in.
+
 ## Validation
 
 1. Unit tests compare `.env.example` assignments with registry declarations,
@@ -74,6 +88,8 @@ specific diagnostics.
 4. Logger tests prove every secret declaration contributes redaction paths.
 5. `bun run validate` includes drift and access checks; `bun run build` proves
    startup validation does not execute at import or build time.
+6. Validation-subprocess tests derive the exposed set from registry metadata,
+   reject every secret entry, and exercise the real default executor.
 
 ## Follow-Ups
 
