@@ -37,6 +37,7 @@ const emptyDashboardRecords: PortalRecords = {
   githubInstallations: [],
   githubSettings: [],
   loops: [],
+  registeredLoops: [],
   repos: [],
   timeline: [],
   validationResults: [],
@@ -69,10 +70,16 @@ function Metric({
 
 export function LoopRegistry({
   emptyDetail = "Loop rows will appear after issue sync writes durable state.",
+  /**
+   * `/loops` renders this beside the registered-loop contracts, where "Loop registry" would be
+   * ambiguous; the dashboard keeps the original heading.
+   */
+  heading = "Loop registry",
   loops: initialLoops = [],
   sourceLabel = "Unavailable",
 }: Readonly<{
   emptyDetail?: string;
+  heading?: string;
   loops?: LoopRegistryItem[];
   sourceLabel?: string;
 }>) {
@@ -83,7 +90,7 @@ export function LoopRegistry({
     <Card className="shadow-none">
       <CardHeader className="flex-row items-end justify-between gap-4">
         <div className="space-y-1">
-          <CardTitle>Loop registry</CardTitle>
+          <CardTitle>{heading}</CardTitle>
           <CardDescription>
             Registry controls drive whether the intake, routing, and review loops are active.
           </CardDescription>

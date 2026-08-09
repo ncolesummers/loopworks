@@ -1,0 +1,117 @@
+import type { LoopDefinition } from "../../../schemas/loop-manifest";
+import {
+  defaultLoopManifest,
+  type LoopManifestValidationError,
+  validateLoopManifest,
+} from "./manifest";
+
+export type LoopRegistrationInput = {
+  defaultBranch: string;
+  description?: string;
+  enabled: boolean;
+  issueLabels: string[];
+  key: string;
+  name: string;
+  repositoryFullName: string;
+};
+
+export type LoopRegistrationValidationResult =
+  | { definition: LoopDefinition; errors?: never; success: true }
+  | { definition?: never; errors: LoopManifestValidationError[]; success: false };
+
+/**
+ * The shipped development loop is the template for a first registration: an operator on day zero
+ * should not have to author budgets, artifact contracts, approval gates, or a retry policy.
+ */
+const developmentLoopTemplate = defaultLoopManifest.loops.find(
+  (loop) => loop.key === "development-loop",
+);
+
+if (!developmentLoopTemplate) {
+  throw new Error("defaultLoopManifest is missing the development-loop template");
+}
+
+const template = developmentLoopTemplate;
+
+/** Prefill for the registration form, so the surface and the composer cannot disagree. */
+export const firstLoopRegistrationDefaults = {
+  issueLabels: [...template.triggers.issueLabels],
+  key: template.key,
+  name: template.name,
+} as const;
+
+/**
+ * Builds the whole manifest rather than a bare loop entry so validation runs through the one
+ * existing `validateLoopManifest` path. The manifest-level fields the operator never authors
+ * (milestones, labels, note, vocabularies) come from the shipped default.
+ */
+function composeFirstLoopManifest(input: LoopRegistrationInput): unknown {
+  const definition: LoopDefinition = {
+    ...structuredClone(template),
+    concurrency: {
+      ...template.concurrency,
+      // Admission rejects an unresolved `{repo}`, so the stored group is already canonical.
+      group: template.concurrency.group.replaceAll("{repo}", input.repositoryFullName),
+    },
+    description: input.description ?? template.description,
+    enabled: input.enabled,
+    key: input.key,
+    name: input.name,
+    repoScope: {
+      ...template.repoScope,
+      branchPatterns: [input.defaultBranch],
+      repositories: [input.repositoryFullName],
+    },
+    triggers: {
+      ...structuredClone(template.triggers),
+      issueLabels: [...input.issueLabels],
+    },
+  };
+
+  return {
+    ...structuredClone(defaultLoopManifest),
+    loops: [definition],
+    repo: input.repositoryFullName,
+  };
+}
+
+/**
+ * Rewrites a manifest field path into the vocabulary of the registration form. The single-loop
+ * index is an artifact of composing a manifest around the operator's one loop, and both
+ * repository-shaped fields are filled from the same input, so they collapse to one field.
+ */
+function toRegistrationPath(path: string): string {
+  if (path === "repo") return "repositoryFullName";
+  if (path.startsWith("loops[0].repoScope.repositories")) return "repositoryFullName";
+  if (path === "loops[0]" || path === "loops") return "loop";
+  return path.startsWith("loops[0].") ? path.slice("loops[0].".length) : path;
+}
+
+export function validateLoopRegistration(
+  input: LoopRegistrationInput,
+): LoopRegistrationValidationResult {
+  const result = validateLoopManifest(composeFirstLoopManifest(input));
+
+  if (result.success) {
+    const definition = result.data.loops[0];
+    if (!definition) {
+      throw new Error("composed manifest validated without a loop definition");
+    }
+    return { definition, success: true };
+  }
+
+  const seen = new Set<string>();
+  const errors: LoopManifestValidationError[] = [];
+
+  for (const error of result.errors) {
+    // The hint is chosen from the manifest path before rewriting, so the existing cascade in
+    // `manifest.ts` stays the single source of hint text.
+    const entry = { ...error, path: toRegistrationPath(error.path) };
+    const identity = `${entry.path}\u0000${entry.message}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    errors.push(entry);
+  }
+
+  return { errors, success: false };
+}

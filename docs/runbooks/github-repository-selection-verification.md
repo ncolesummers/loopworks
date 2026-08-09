@@ -192,21 +192,25 @@ repo → Save — or the next run of step 3 will be one repo short.
 
 ### The in-use refusal
 
-Deselection refuses when a repository still has loops, runs, or a Vercel project
-link. #126 has not built loop registration yet, so force it by writing a probe
-row directly to the production database — delete it as soon as the step passes:
+Deselection refuses when a repository still has synced issue loops, registered
+loop definitions, runs, or a Vercel project link. Register a loop against the
+selected repository through `/loops/register`, then attempt to deselect that
+repository.
+
+Expect the repository to stay selected with the message "still has loop or run
+history". There is no delete-definition surface in #126, so delete the
+verification definition directly after the step passes:
 
 ```sql
-INSERT INTO loops (repository_id, github_issue_number, title)
-SELECT id, 1, 'manual in-use probe' FROM repositories LIMIT 1;
+DELETE FROM loop_definitions
+WHERE repository_id = (
+  SELECT id FROM repositories WHERE full_name = 'owner/repository'
+);
 ```
 
-Deselect that repo → expect it kept and the message "still has loop or run
-history". Then delete the probe row.
-
-This probe's purpose is the deselect refusal, not catalog contents — step 6
-covers those, and the probe adds a *loop* to a repository the catalog already
-lists. This probe has not been run since #152 was fixed.
+Replace `owner/repository` with the exact selected repository. Confirm the row
+you intend to delete before executing the statement. This step's purpose is the
+deselect refusal, not catalog contents; step 6 covers those.
 
 ## Resetting between runs
 
@@ -261,9 +265,10 @@ To redo step 1, uninstall the App from the org:
 - **Real pagination.** Six repositories fit in one page at `per_page=100`, so no
   step here crosses a page boundary. That path is covered offline instead, by
   the MSW cases in `tests/unit/github/installation-gateway.test.ts` (ADR 0022).
-- **Loop and deployment surfaces.** Step 6 asserts the catalog, but `/loops`
-  and `/approvals` stay legitimately empty until loop registration (#126) lands,
-  so this runbook cannot assert populated content on either.
+- **Loop and deployment surfaces.** Step 6 asserts the catalog. Registration
+  can populate `/loops`, but that workflow is covered by #126 rather than this
+  repository-selection runbook. `/approvals` stays legitimately empty until a
+  run requests approval.
 - **Multi-installation catalog scope.** `readPortalRecords` reads every
   `repositories` row without filtering by installation or GitHub App, so step
   6's "exactly the 2 repos selected" holds only while production has a single

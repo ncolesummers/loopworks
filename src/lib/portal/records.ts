@@ -1,10 +1,11 @@
-import { asc, desc } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 
 import type { db } from "@/db/client";
 import {
   approvals,
   deployments as deploymentRows,
   githubInstallations,
+  loopDefinitions,
   loops,
   repositories,
   vercelProjects,
@@ -27,6 +28,7 @@ import type {
   GitHubSettingRecord,
   LoopRegistryItem,
   LoopState,
+  RegisteredLoopItem,
   RepoRecord,
   TimelineEvent,
   ValidationResultRecord,
@@ -42,6 +44,7 @@ export type PortalRecords = {
   githubInstallations: GitHubInstallationRecord[];
   githubSettings: GitHubSettingRecord[];
   loops: LoopRegistryItem[];
+  registeredLoops: RegisteredLoopItem[];
   repos: RepoRecord[];
   timeline: TimelineEvent[];
   validationResults: ValidationResultRecord[];
@@ -81,6 +84,12 @@ export type PortalRecordsResult =
     };
 
 type LoopRow = typeof loops.$inferSelect;
+type LoopDefinitionRow = {
+  definition: typeof loopDefinitions.$inferSelect.definition;
+  enabled: boolean;
+  loopKey: string;
+  repositoryFullName: string;
+};
 type DeploymentRow = typeof deploymentRows.$inferSelect;
 type ApprovalRow = typeof approvals.$inferSelect;
 type GithubInstallationRow = typeof githubInstallations.$inferSelect;
@@ -173,6 +182,28 @@ function mapLoops(loopRows: LoopRow[], runIssueCounts: Map<number, number>): Loo
       state: mapLoopState(loop.state),
     };
   });
+}
+
+/**
+ * Reduces the stored contract to the fields the registry renders (PRD UX requirement 4). The whole
+ * definition stays in the database; the portal projection deliberately carries no budgets, model
+ * policy, or tool policy.
+ */
+function mapRegisteredLoops(rows: LoopDefinitionRow[]): RegisteredLoopItem[] {
+  return rows.map((row) => ({
+    approvalRequirements: [...row.definition.approvals.requiredFor],
+    // The column is the queryable mirror; the definition stays the authority.
+    enabled: row.enabled,
+    key: row.loopKey,
+    name: row.definition.name,
+    repositoryFullName: row.repositoryFullName,
+    triggerLabels: [...row.definition.triggers.issueLabels],
+    validationGates: row.definition.validationGates.map((gate) => ({
+      key: gate.key,
+      name: gate.name,
+      required: gate.required,
+    })),
+  }));
 }
 
 function normalizeDeploymentEnvironment(value: string): DeploymentEnvironment {
@@ -393,6 +424,7 @@ function fixturePortalRecords(): PortalRecords {
     githubInstallations: portalFixture.githubInstallations,
     githubSettings: portalFixture.githubSettings,
     loops: portalFixture.loops,
+    registeredLoops: portalFixture.registeredLoops,
     repos: portalFixture.repos,
     timeline: portalFixture.timeline,
     validationResults: portalFixture.validationResults,
@@ -409,6 +441,7 @@ function unavailablePortalRecords(): PortalRecords {
     githubInstallations: [],
     githubSettings: [],
     loops: [],
+    registeredLoops: [],
     repos: [],
     timeline: [],
     validationResults: [],
@@ -468,6 +501,7 @@ export async function readPortalRecords(input: {
     repositoryRows,
     githubInstallationRows,
     loopRows,
+    loopDefinitionRows,
     vercelProjectRows,
     deploymentRowsResult,
     approvalRows,
@@ -479,6 +513,16 @@ export async function readPortalRecords(input: {
       .from(githubInstallations)
       .orderBy(asc(githubInstallations.accountLogin)),
     input.database.select().from(loops).orderBy(asc(loops.githubIssueNumber)),
+    input.database
+      .select({
+        definition: loopDefinitions.definition,
+        enabled: loopDefinitions.enabled,
+        loopKey: loopDefinitions.loopKey,
+        repositoryFullName: repositories.fullName,
+      })
+      .from(loopDefinitions)
+      .innerJoin(repositories, eq(loopDefinitions.repositoryId, repositories.id))
+      .orderBy(asc(repositories.fullName), asc(loopDefinitions.loopKey)),
     input.database.select().from(vercelProjects).orderBy(asc(vercelProjects.projectName)),
     input.database.select().from(deploymentRows).orderBy(desc(deploymentRows.createdAt)),
     input.database.select().from(approvals).orderBy(asc(approvals.requestedAt)),
@@ -523,6 +567,7 @@ export async function readPortalRecords(input: {
         runArtifacts: artifacts,
       }),
       loops: mapLoops(loopRows, runIssueCounts),
+      registeredLoops: mapRegisteredLoops(loopDefinitionRows),
       repos: repositoryRows.map((repository) =>
         createRepoRecordFromProjection({
           loops: loopsByRepository.get(repository.id) ?? [],
