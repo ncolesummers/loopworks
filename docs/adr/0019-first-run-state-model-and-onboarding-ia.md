@@ -204,9 +204,45 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   mode remains read-only, so PGlite and route tests prove the write and
   transition while Playwright covers the operator surface. Acceptance remains
   pending review and aggregate validation. See ADR 0025.
-- [#127](https://github.com/ncolesummers/loopworks/issues/127): implement
-  actionable empty-state routing and atomically consume the relaxed production
-  gate.
+- [#127](https://github.com/ncolesummers/loopworks/issues/127): implemented
+  actionable empty-state routing, and is the first UI consumer of
+  `deriveFirstRunState`. The portal pages previously collapsed all three sources
+  into one optional `emptyDetail` string, so a healthy-but-empty store and a
+  failed read rendered the same shell and only the registered-loop registry
+  decoded that convention. `/` and `/catalog` now derive the state server-side
+  and pass a typed `firstRun` prop; `/loops` passes it to the registered
+  registry and keeps `emptyDetail` only for the synced-issue mirror, whose
+  emptiness no onboarding stage explains.
+
+  `src/components/portal/empty-states.ts` holds the portal's empty-state
+  inventory. Its `PortalEmptyStateSpec` type makes "neither an action nor a
+  stated terminal reason" unwritable, so the routing rule above is enforced by
+  the compiler rather than by review, and
+  `tests/unit/portal/empty-state-inventory.test.ts` fails any portal component
+  that renders empty-state markup without going through the registry.
+  `resolvePortalEmptyState` composes `source` with the onboarding stage in the
+  order this ADR requires, narrowing on `status` only, and takes the stages a
+  surface can honestly speak to so a stage is never reported as the cause of an
+  emptiness it does not cause — the catalog omits `no-loops`, which implies
+  repositories already exist.
+
+  Two rules fell out of review and are now enforced by the inventory test. An
+  empty state that offers `/api/github/install` must offer
+  `/api/github/install/reconcile` beside it, because GitHub dead-ends the
+  install link for an account that already has the App
+  ([#151](https://github.com/ncolesummers/loopworks/issues/151)) — an install
+  action alone is exactly the dead end this issue removes. And an action that
+  cannot render an affordance — a filter reset with no handler, an external href
+  the allowlist rejects — is not treated as an action, so "actionable" always
+  means an affordance the operator can actually see and use.
+
+  Not covered: the two-theme axe sweep runs against populated fixture routes, so
+  it never has a first-run or unavailable empty state on screen. Fixture mode is
+  fully populated, as this ADR already records, so reaching those states in
+  Playwright needs fixtures that do not exist yet. That belongs to
+  [#128](https://github.com/ncolesummers/loopworks/issues/128).
+
+  Acceptance remains pending review and aggregate validation.
 - [#128](https://github.com/ncolesummers/loopworks/issues/128): validate the
   day-zero journey, including fixture/dev-mode coverage.
 - Revisit `hasRunActivity` when portal records expose an authoritative run
