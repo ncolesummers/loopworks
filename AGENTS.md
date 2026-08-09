@@ -17,6 +17,17 @@ secure, and reviewable.
 6. Delegate with subagents only when tool policy allows it and scopes are
    concrete and disjoint.
 
+## Commit provenance
+
+Publication is contributor-safe and GitHub-authoritative:
+
+- Preserve the actual contributor identity represented by the authorized GitHub account. Never substitute a maintainer identity for a contributor.
+- Never invent, write, or reuse reserved fixture identities or reserved fixture domains such as `example.com`, `.test`, `.invalid`, or `.localhost`.
+- Before any authorized commit, run `bun run commit:preflight`; stop if the effective author/committer identity is malformed, reserved, or unsigned by default.
+- Authorized local commits use `git commit -S` and are checked locally with `git verify-commit` or `git log --show-signature` before publication.
+- Retain the complete `bun run commit:preflight` output and local signature verification as handoff evidence.
+- Push is required before GitHub metadata exists; after pushing, obtain credentials without printing the token (`export GH_TOKEN="$(gh auth token)"` and `export GITHUB_REPOSITORY="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"`), then run `bun run commit:provenance --github <PR>`. Record the GitHub-resolved author and signature result; no user handoff occurs before this GitHub verification passes. Stop on any identity or signature mismatch.
+
 ## Routing
 
 Before changing a scoped area, read its nearest guide:

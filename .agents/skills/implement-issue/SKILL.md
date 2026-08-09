@@ -62,6 +62,29 @@ Validate at the level `AGENTS.md` requires for the change you actually made —
 focused checks while working, escalating only as its Validation section says.
 Then stop and report — do not commit.
 
+### 6. Publish when explicitly authorized
+
+Publication remains authorization-gated. When the user explicitly authorizes a
+commit and PR handoff, use this order and stop on any mismatch:
+
+1. Run `bun run commit:preflight` and confirm the effective author and
+   committer are the actual contributor identity represented by the GitHub
+   account, not a fixture identity. Retain the complete preflight output as
+   handoff evidence.
+2. Create small, atomic commits with `git commit -S`. Do not use `--no-verify`
+   or disable signing to work around a failed preflight.
+3. Inspect the local signature with `git verify-commit <commit>` or
+   `git log --show-signature -1` and retain the result as handoff evidence.
+4. Push the authorized branch and open a draft PR only after the preceding
+   checks pass. Push is required before GitHub metadata exists.
+5. Obtain the token and repository without printing the token (`export
+   GH_TOKEN="$(gh auth token)"` and `export GITHUB_REPOSITORY="$(gh repo view
+   --json nameWithOwner --jq .nameWithOwner)"`), then run `bun run
+   commit:provenance --github <PR>` against the pushed PR. The GitHub-resolved
+   author and verified signer must satisfy the repository policy. No user
+   handoff occurs before this verification passes; retain its output as
+   handoff evidence.
+
 ## Browser validation
 
 Required when the change is user-visible. Run the plan's browser cases with the
