@@ -4,6 +4,7 @@ import {
   projectDevelopmentLoopArtifacts,
   projectDevelopmentLoopTimeline,
 } from "@/lib/loops/development-run";
+import type { LoopRegistrationSnapshot } from "@/lib/loops/loop-registration-flow";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
 import type {
   FixtureState,
@@ -73,6 +74,30 @@ export const repositorySelectionFixture: RepositorySelectionSnapshot = {
       owner: "ncolesummers",
       private: false,
       selected: false,
+    },
+  ],
+  status: "ready",
+};
+
+/**
+ * Development-only snapshot for the loop registration surface. Fixture repository ids are not
+ * database rows, so the surface disables registering rather than attempting a write that would fail.
+ */
+export const loopRegistrationFixture: LoopRegistrationSnapshot = {
+  repositories: [
+    {
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-web",
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "loopworks-web",
+      owner: "ncolesummers",
+    },
+    {
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-agent",
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "loopworks-agent",
+      owner: "ncolesummers",
     },
   ],
   status: "ready",
