@@ -34,13 +34,38 @@ const stages = [
     failure:
       "Seeded Postgres migration stage failed. Confirm local Postgres is running and the loopworks role and loopworks_e2e database exist.",
   },
+  // The day-zero walk (#128) needs the opposite of the demo dataset: a database with no
+  // installation and no repository, since first-run state is derived from their absence. It
+  // therefore runs first, on the empty database migration leaves behind, and its own reset stage
+  // returns the database to that state after the walk so the seeded stage below starts clean.
+  {
+    command: ["bun", "run", "scripts/seed-day-zero.ts", "reset"],
+    failure:
+      "Day-zero reset stage failed. Confirm migrations completed and the local role can write to loopworks_e2e.",
+  },
+  {
+    command: [
+      "bunx",
+      "playwright",
+      "test",
+      "--config=playwright.seeded.config.ts",
+      "--project=day-zero",
+    ],
+    failure: "Day-zero Playwright stage failed. Review the browser assertions above.",
+  },
   {
     command: ["bun", "run", "db:seed:reset"],
     failure:
       "Seeded Postgres seed stage failed. Confirm migrations completed and the local role can write to loopworks_e2e.",
   },
   {
-    command: ["bunx", "playwright", "test", "--config=playwright.seeded.config.ts"],
+    command: [
+      "bunx",
+      "playwright",
+      "test",
+      "--config=playwright.seeded.config.ts",
+      "--project=seeded-postgres",
+    ],
     failure: "Seeded Postgres Playwright stage failed. Review the browser assertions above.",
   },
 ] as const;

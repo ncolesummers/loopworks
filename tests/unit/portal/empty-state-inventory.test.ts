@@ -19,7 +19,14 @@ const appDir = join(repoRoot, "src", "app");
  */
 const componentEmptyStates: Readonly<Record<string, readonly string[]>> = {
   "approval-gate-panel.tsx": ["approval-none"],
-  "dashboard-view.tsx": ["loop-registry-no-loops", "timeline-no-events", "artifacts-none"],
+  "dashboard-view.tsx": [
+    "loop-registry-no-loops",
+    "timeline-no-events",
+    "artifacts-none",
+    // The first-screen activation step (#128). It names whichever onboarding stage is active;
+    // `onboarding-no-loops` is the one it references directly, as the resolver's fallback.
+    "onboarding-no-loops",
+  ],
   "deployment-summary.tsx": ["deployments-none"],
   "fixture-unavailable.tsx": ["fixture-only-surface"],
   "github-settings-view.tsx": ["github-settings-no-installation", "github-settings-none"],

@@ -236,15 +236,45 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   the allowlist rejects — is not treated as an action, so "actionable" always
   means an affordance the operator can actually see and use.
 
-  Not covered: the two-theme axe sweep runs against populated fixture routes, so
-  it never has a first-run or unavailable empty state on screen. Fixture mode is
-  fully populated, as this ADR already records, so reaching those states in
-  Playwright needs fixtures that do not exist yet. That belongs to
-  [#128](https://github.com/ncolesummers/loopworks/issues/128).
+  At the time of #127, the two-theme axe sweep ran against populated fixture
+  routes, so it did not exercise a first-run or unavailable empty state. The
+  seeded day-zero lane delivered by [#128](https://github.com/ncolesummers/loopworks/issues/128)
+  now covers those states; this follow-up remains the owner of the inventory and
+  actionability rules above.
 
   Acceptance remains pending review and aggregate validation.
-- [#128](https://github.com/ncolesummers/loopworks/issues/128): validate the
-  day-zero journey, including fixture/dev-mode coverage.
+- [#128](https://github.com/ncolesummers/loopworks/issues/128): implemented the
+  day-zero walk (persona ids P05, M04, M05) that #127 left uncovered.
+  `tests/e2e/day-zero-activation.spec.ts` runs in the seeded Postgres lane
+  against a database emptied first, advancing one stage at a time through
+  `scripts/seed-day-zero.ts`, so every onboarding stage of this ADR's state
+  model is on screen for the two-theme axe sweep and for a per-step assertion
+  that each rendered empty state's affordances resolve.
+
+  Emptying is a truncate, not a delete of the fixture's own ids. First-run state
+  is derived from whether *any* installation or repository row exists, so a
+  single row left by an earlier run renders the walk's first step as an
+  activated portal — delete-by-id cannot produce day zero. The destructive reset
+  therefore lives in the guarded CLI, behind the same local-database guard the
+  seeded lane already uses, never in `src/`.
+
+  The walk found one gap in the shipped flow. `/` satisfied PRD UX requirement 9
+  at `no-installation` and `no-repositories`, where the catalog panel names the
+  step, but not at `no-loops`: the registered-loop registry that owns
+  registration lives on `/loops`, so the first screen rendered an operational
+  shell naming no next step at all, one step from the end of activation. The
+  dashboard now states that stage itself, and only that stage — repeating a step
+  a panel below already names would put the same landmark on the page twice,
+  which the walk's axe sweep catches as `landmark-unique`. The PRD needed no
+  amendment; the implementation did.
+
+  Not covered: GitHub is stubbed at its boundary. Octokit has no base-URL seam
+  and no test may reach the network, so installation and repository access
+  arrive as fixture rows and `/settings/repositories` renders its unavailable
+  state during the walk — asserted as a *failure*, per this ADR's
+  unavailable-versus-empty distinction, rather than dressed up as a selection.
+  Driving GitHub's own surfaces would need that seam plus a fake GitHub server;
+  it is deliberately not part of this lane.
 - Revisit `hasRunActivity` when portal records expose an authoritative run
   signal.
 - Move this ADR from Proposed to Accepted after review.

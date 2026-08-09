@@ -19,7 +19,7 @@ describe("seeded Postgres e2e orchestration", () => {
     );
   });
 
-  it("runs migration, reset seed, and seeded Playwright in order", async () => {
+  it("walks day zero before seeding, then runs the seeded lane on the demo dataset", async () => {
     const commands: string[][] = [];
 
     const exitCode = await runSeededPostgresE2e({
@@ -31,10 +31,20 @@ describe("seeded Postgres e2e orchestration", () => {
     });
 
     expect(exitCode).toBe(0);
+    // Order is the contract: the day-zero walk derives first-run state from an empty database, so
+    // it cannot run after the demo rows land.
     expect(commands).toEqual([
       ["bun", "run", "db:migrate"],
+      ["bun", "run", "scripts/seed-day-zero.ts", "reset"],
+      ["bunx", "playwright", "test", "--config=playwright.seeded.config.ts", "--project=day-zero"],
       ["bun", "run", "db:seed:reset"],
-      ["bunx", "playwright", "test", "--config=playwright.seeded.config.ts"],
+      [
+        "bunx",
+        "playwright",
+        "test",
+        "--config=playwright.seeded.config.ts",
+        "--project=seeded-postgres",
+      ],
     ]);
   });
 
@@ -92,8 +102,10 @@ describe("seeded Postgres e2e orchestration", () => {
 
   it.each([
     ["migration", [1], 1],
-    ["seed", [0, 1], 2],
-    ["Playwright", [0, 0, 1], 3],
+    ["Day-zero reset", [0, 1], 2],
+    ["Day-zero Playwright", [0, 0, 1], 3],
+    ["seed", [0, 0, 0, 1], 4],
+    ["Seeded Postgres Playwright", [0, 0, 0, 0, 1], 5],
   ])("stops after a %s stage failure", async (stage, results, expectedCalls) => {
     const errors: string[] = [];
     const runCommand = vi.fn(async () => results[runCommand.mock.calls.length - 1] ?? 0);
@@ -134,6 +146,10 @@ describe("seeded Postgres e2e orchestration", () => {
         LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
       },
     });
+    expect(seededPlaywrightConfig.projects?.map((project) => project.name)).toEqual([
+      "day-zero",
+      "seeded-postgres",
+    ]);
     expect(seededServer).toMatchObject({
       reuseExistingServer: false,
       env: {

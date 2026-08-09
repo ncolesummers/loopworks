@@ -61,9 +61,22 @@ DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
 
 The seeded lane proves live database behavior. The native lane uses independent
 Postgres sessions for lock-scheduling evidence that PGlite cannot provide.
-**The native lane truncates every table in the `public` schema of
-`loopworks_e2e` with identity restart and cascading cleanup.** Run the seeded
-lane again afterward if you need its demo rows.
+**Both the native lane and the seeded lane's day-zero stage truncate every table
+in the `public` schema of `loopworks_e2e` with identity restart and cascading
+cleanup.** Run the seeded lane again afterward if you need its demo rows.
+
+`test:e2e:seeded` orchestrates two browser projects in sequence. The `day-zero`
+project walks a brand-new operator from an empty database to a registered loop,
+so it runs first, on the database migration leaves behind;
+`scripts/seed-day-zero.ts` stages it (`reset`, `installation`, `repository`)
+under the same guard, and its reset returns the database to empty before the
+demo rows land for the `seeded-postgres` project. Stage the walk by hand while
+debugging:
+
+```bash
+DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
+  bun run scripts/seed-day-zero.ts installation
+```
 
 ### Recreating the test database
 

@@ -17,6 +17,9 @@ import { createValidationReportArtifactMetadata } from "@/lib/loops/validation-r
 
 export type SeedDatabase = Pick<typeof db, "transaction">;
 
+/** The handle a seed callback writes through, derived from the database so the two cannot drift. */
+export type SeedTransaction = Parameters<Parameters<SeedDatabase["transaction"]>[0]>[0];
+
 export type SeedCounts = {
   githubInstallations: number;
   repositories: number;
