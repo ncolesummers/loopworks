@@ -84,22 +84,39 @@ describe("registered loop registry", () => {
   });
 
   it("renders an explicit empty state that routes to registration", () => {
-    render(<RegisteredLoopRegistry loops={[]} sourceLabel="Live database" />);
+    render(
+      <RegisteredLoopRegistry
+        firstRun={{ stage: "no-loops", status: "onboarding" }}
+        loops={[]}
+        sourceLabel="Live database"
+      />,
+    );
 
     expect(within(registry()).getByText("No loops registered")).toBeTruthy();
-    expect(
-      within(registry()).getByText(
-        "Register a loop against a tracked repository to make its contract visible here.",
-      ),
-    ).toBeTruthy();
     const action = within(registry()).getByRole("link", { name: "Register a loop" });
     expect(action.getAttribute("href")).toBe("/loops/register");
+  });
+
+  it("names the earlier activation step when a loop cannot be registered yet", () => {
+    render(
+      <RegisteredLoopRegistry
+        firstRun={{ stage: "no-repositories", status: "onboarding" }}
+        loops={[]}
+        sourceLabel="Live database"
+      />,
+    );
+
+    // Registration is scoped to a repository, so offering it before one exists would dead-end.
+    expect(within(registry()).queryByRole("link", { name: "Register a loop" })).toBeNull();
+    expect(
+      within(registry()).getByRole("link", { name: "Select repositories" }).getAttribute("href"),
+    ).toBe("/settings/repositories");
   });
 
   it("explains an unavailable store instead of inviting registration into it", () => {
     render(
       <RegisteredLoopRegistry
-        emptyDetail="Portal data store unavailable."
+        firstRun={{ reason: "Portal data store unavailable.", status: "unavailable" }}
         loops={[]}
         sourceLabel="Unavailable"
       />,
@@ -108,6 +125,7 @@ describe("registered loop registry", () => {
     expect(within(registry()).getByText("Portal data store unavailable.")).toBeTruthy();
     // A first-run empty state must never be confused with a failed read (ADR 0019).
     expect(within(registry()).queryByRole("link", { name: "Register a loop" })).toBeNull();
+    expect(within(registry()).queryByRole("link")).toBeNull();
   });
 
   it("keeps a registration route available while loops already exist", () => {

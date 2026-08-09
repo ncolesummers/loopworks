@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useId, useState } from "react";
 
+import { type PortalEmptyStateId, portalEmptyState } from "@/components/portal/empty-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { Status } from "@/components/ui/status-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { firstLoopRegistrationDefaults } from "@/lib/loops/loop-registration";
 import type {
@@ -46,17 +48,25 @@ function SurfaceState({
   action,
   busy = false,
   detail,
+  emptyStateId,
   status,
   title,
 }: Readonly<{
   action?: React.ReactNode;
   busy?: boolean;
   detail: string;
-  status: "empty" | "failed" | "loading";
+  /** Set for zero-data states so the empty-state inventory can find them. */
+  emptyStateId?: PortalEmptyStateId;
+  status: Status;
   title: string;
 }>) {
   return (
-    <section aria-busy={busy} aria-label="Loop registration" className={surfaceClassName}>
+    <section
+      aria-busy={busy}
+      aria-label="Loop registration"
+      className={surfaceClassName}
+      data-empty-state={emptyStateId}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium">{title}</p>
         <StatusBadge status={status} />
@@ -130,6 +140,8 @@ export function LoopRegistrationView({
   }
 
   if (snapshot.status === "no-tracked-repositories") {
+    const spec = portalEmptyState("loop-registration-no-repositories");
+
     return (
       <SurfaceState
         action={
@@ -137,9 +149,10 @@ export function LoopRegistrationView({
             <Link href="/settings/repositories">Select repositories</Link>
           </Button>
         }
-        detail="A loop is scoped to a repository, so select at least one repository from the connected installation first."
-        status="empty"
-        title="No repositories tracked yet"
+        detail={spec.detail}
+        emptyStateId="loop-registration-no-repositories"
+        status={spec.status}
+        title={spec.title}
       />
     );
   }

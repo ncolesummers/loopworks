@@ -40,7 +40,9 @@ describe("portal surfaces through the production data gate", () => {
 
   it.each([
     ["Dashboard", DashboardPageContent, "No loops tracked"],
-    ["Catalog", CatalogPageContent, "No repositories tracked"],
+    // An empty production database is a first-run install, so the catalog names the stage the
+    // operator is actually on rather than reporting a bare absence (#127, ADR 0019).
+    ["Catalog", CatalogPageContent, "No GitHub App installation connected"],
     ["Loops", LoopsPageContent, "No loops tracked"],
     ["Approvals", ApprovalsPageContent, "No approval gates available"],
     ["Settings", SettingsPageContent, "No installation connected"],
@@ -99,7 +101,9 @@ describe("portal surfaces through the production data gate", () => {
     );
 
     expect(markup).toContain("loopworks-sandbox/portal-web");
-    expect(markup).not.toContain("No repositories tracked");
+    // A selected repository must not still read as first-run emptiness.
+    expect(markup).not.toContain("No repositories selected yet");
+    expect(markup).not.toContain("No GitHub App installation connected");
     expect(markup).not.toContain("Portal data store unavailable.");
     expect(markup).toContain("Live database");
   });

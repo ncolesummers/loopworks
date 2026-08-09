@@ -32,10 +32,12 @@ export default async function DeploymentsPage() {
       <h2 className="sr-only">Deployment summary</h2>
       <DeploymentSummary
         deployments={deployments}
+        // A failed Vercel read is the same class of state as a failed portal read: the surface
+        // cannot report an absence of deployments it never managed to see (ADR 0019).
+        {...(result.error === undefined
+          ? {}
+          : { firstRun: { reason: result.error, status: "unavailable" as const } })}
         sourceLabel={getDeploymentSourceLabel(result)}
-        emptyDetail={
-          result.error ?? "Deployment and preview records will appear after Vercel sync."
-        }
       />
     </div>
   );

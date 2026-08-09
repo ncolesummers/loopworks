@@ -16,8 +16,10 @@ import { type ComponentType, useMemo, useState } from "react";
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
+import { resolvePortalEmptyState } from "@/components/portal/empty-states";
 import { LoopCard } from "@/components/portal/loop-card";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { ValidationResultSummary } from "@/components/portal/validation-result-summary";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { evaluateLoopTriggerDecision } from "@/lib/loops/trigger-decision";
+import type { FirstRunState } from "@/lib/onboarding/first-run-state";
 import type { PortalRecords } from "@/lib/portal/records";
 import type { ArtifactRecord, LoopRegistryItem, TimelineEvent } from "@/lib/types";
 
@@ -69,7 +72,8 @@ function Metric({
 }
 
 export function LoopRegistry({
-  emptyDetail = "Loop rows will appear after issue sync writes durable state.",
+  /** A failed read must not be reported as a verified absence of loops (ADR 0019). */
+  firstRun,
   /**
    * `/loops` renders this beside the registered-loop contracts, where "Loop registry" would be
    * ambiguous; the dashboard keeps the original heading.
@@ -78,13 +82,14 @@ export function LoopRegistry({
   loops: initialLoops = [],
   sourceLabel = "Unavailable",
 }: Readonly<{
-  emptyDetail?: string;
+  firstRun?: FirstRunState;
   heading?: string;
   loops?: LoopRegistryItem[];
   sourceLabel?: string;
 }>) {
   const [loops, setLoops] = useState(initialLoops);
   const enabledCount = loops.filter((loop) => loop.enabled).length;
+  const emptyState = resolvePortalEmptyState({ fallback: "loop-registry-no-loops", firstRun });
 
   return (
     <Card className="shadow-none">
@@ -103,10 +108,7 @@ export function LoopRegistry({
       </CardHeader>
       <CardContent className="space-y-3">
         {loops.length === 0 ? (
-          <div className="rounded-md border border-dashed p-6">
-            <div className="text-sm font-medium">No loops tracked</div>
-            <p className="mt-1 text-sm text-muted-foreground">{emptyDetail}</p>
-          </div>
+          <EmptyState spec={emptyState} />
         ) : (
           loops.map((loop, index) => (
             <LoopCard
@@ -145,15 +147,19 @@ export function LoopRegistry({
 
 export function TimelineAndArtifacts({
   artifacts = [],
-  emptyDetail = "Run events and artifacts will appear after loop execution writes durable state.",
+  /** A failed read must not be reported as a verified absence of events (ADR 0019). */
+  firstRun,
   sourceLabel = "Unavailable",
   timeline = [],
 }: Readonly<{
   artifacts?: ArtifactRecord[];
-  emptyDetail?: string;
+  firstRun?: FirstRunState;
   sourceLabel?: string;
   timeline?: TimelineEvent[];
 }>) {
+  const timelineEmptyState = resolvePortalEmptyState({ fallback: "timeline-no-events", firstRun });
+  const artifactsEmptyState = resolvePortalEmptyState({ fallback: "artifacts-none", firstRun });
+
   return (
     <Card className="shadow-none">
       <CardHeader className="flex-row items-end justify-between gap-4">
@@ -176,9 +182,7 @@ export function TimelineAndArtifacts({
               <RunTimelineItem key={`${event.kind}-${event.at}`} event={event} />
             ))
           ) : (
-            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-              No timeline events recorded. {emptyDetail}
-            </div>
+            <EmptyState className="p-4" spec={timelineEmptyState} />
           )}
         </div>
         <div className="space-y-3">
@@ -187,9 +191,7 @@ export function TimelineAndArtifacts({
               <ArtifactListItem key={`${artifact.label}-${artifact.href}`} artifact={artifact} />
             ))
           ) : (
-            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-              No artifacts recorded
-            </div>
+            <EmptyState className="p-4" spec={artifactsEmptyState} />
           )}
         </div>
       </CardContent>
@@ -198,11 +200,15 @@ export function TimelineAndArtifacts({
 }
 
 export function DashboardView({
-  emptyDetail,
+  firstRun,
   records = emptyDashboardRecords,
   sourceLabel = "Unavailable",
 }: Readonly<{
-  emptyDetail?: string;
+  /**
+   * Composes the source state with the onboarding stage. Every panel takes it, so a failed read
+   * is never rendered as a verified absence of records on any of them (ADR 0019).
+   */
+  firstRun?: FirstRunState;
   records?: PortalRecords;
   sourceLabel?: string;
 }>) {
@@ -257,12 +263,12 @@ export function DashboardView({
 
       <section id="repos" className="grid gap-4 xl:grid-cols-2">
         <div className="min-w-0">
-          <RepoCatalog repos={records.repos} sourceLabel={sourceLabel} />
+          <RepoCatalog firstRun={firstRun} repos={records.repos} sourceLabel={sourceLabel} />
         </div>
         <div id="deployments" className="min-w-0">
           <DeploymentSummary
             deployments={records.deployments}
-            emptyDetail={emptyDetail}
+            firstRun={firstRun}
             sourceLabel={sourceLabel}
           />
         </div>
@@ -270,12 +276,12 @@ export function DashboardView({
 
       <section id="loops" className="grid gap-4 xl:grid-cols-2">
         <div className="min-w-0">
-          <LoopRegistry emptyDetail={emptyDetail} loops={records.loops} sourceLabel={sourceLabel} />
+          <LoopRegistry firstRun={firstRun} loops={records.loops} sourceLabel={sourceLabel} />
         </div>
         <div className="min-w-0">
           <TimelineAndArtifacts
             artifacts={records.artifacts}
-            emptyDetail={emptyDetail}
+            firstRun={firstRun}
             sourceLabel={sourceLabel}
             timeline={records.timeline}
           />
@@ -284,12 +290,12 @@ export function DashboardView({
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="min-w-0">
-          <ValidationResultSummary results={records.validationResults} />
+          <ValidationResultSummary firstRun={firstRun} results={records.validationResults} />
         </div>
         <div id="approval" className="min-w-0">
           <ApprovalGatePanel
             approval={records.approval}
-            emptyDetail={emptyDetail}
+            firstRun={firstRun}
             sourceLabel={sourceLabel}
           />
         </div>

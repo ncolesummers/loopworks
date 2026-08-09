@@ -21,9 +21,37 @@ export const SingleLoop: Story = {
 
 export const Empty: Story = { args: { loops: [], sourceLabel: "Live database" } };
 
-export const ErrorPanel: Story = {
+/** First run, no GitHub App yet: the earliest activation step this surface can name. */
+export const FirstRunNoInstallation: Story = {
   args: {
-    emptyDetail: "Portal data store unavailable.",
+    firstRun: { stage: "no-installation", status: "onboarding" },
+    loops: [],
+    sourceLabel: "Live database",
+  },
+};
+
+/** App installed, no repositories selected: a loop cannot be scoped yet. */
+export const FirstRunNoRepositories: Story = {
+  args: {
+    firstRun: { stage: "no-repositories", status: "onboarding" },
+    loops: [],
+    sourceLabel: "Live database",
+  },
+};
+
+/** Repositories tracked, no loop registered: the step this surface exists for. */
+export const FirstRunNoLoops: Story = {
+  args: {
+    firstRun: { stage: "no-loops", status: "onboarding" },
+    loops: [],
+    sourceLabel: "Live database",
+  },
+};
+
+/** A failed read renders no call to action at all (ADR 0019). */
+export const Unavailable: Story = {
+  args: {
+    firstRun: { reason: "Portal data store unavailable.", status: "unavailable" },
     loops: [],
     sourceLabel: "Unavailable",
   },

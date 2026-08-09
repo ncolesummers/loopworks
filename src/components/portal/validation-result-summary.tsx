@@ -1,14 +1,24 @@
 import { ExternalLink } from "lucide-react";
+import { resolvePortalEmptyState } from "@/components/portal/empty-states";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { getValidationResultStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { FirstRunState } from "@/lib/onboarding/first-run-state";
 import type { ValidationResultRecord } from "@/lib/types";
 
 export function ValidationResultSummary({
+  firstRun,
   results,
-}: Readonly<{ results: ValidationResultRecord[] }>) {
+}: Readonly<{
+  /** A failed read must not be reported as a verified absence of results (ADR 0019). */
+  firstRun?: FirstRunState;
+  results: ValidationResultRecord[];
+}>) {
+  const emptyState = resolvePortalEmptyState({ fallback: "validation-results-none", firstRun });
+
   return (
     <Card className="shadow-none">
       <CardHeader>
@@ -19,15 +29,7 @@ export function ValidationResultSummary({
       </CardHeader>
       <CardContent className="space-y-3">
         {results.length === 0 ? (
-          <div className="rounded-md border p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium">No validation results yet</p>
-              <StatusBadge status="empty" />
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Deterministic checks will appear here after the first validation run.
-            </p>
-          </div>
+          <EmptyState spec={emptyState} />
         ) : (
           results.map((result) => {
             const status = getValidationResultStatus(result.status);

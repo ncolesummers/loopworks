@@ -226,7 +226,9 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
       }),
     );
 
-    expect(screen.getByText("No runs available")).toBeTruthy();
+    // A failed read reports as unavailable, not as a verified absence of runs (ADR 0019, #127).
+    expect(screen.getByText("Portal data unavailable")).toBeTruthy();
     expect(screen.getByText("Run data store unavailable.")).toBeTruthy();
+    expect(screen.queryByText("No runs available")).toBeNull();
   });
 });

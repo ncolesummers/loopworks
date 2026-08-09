@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { AlertCircle, FolderOpen } from "lucide-react";
 
+import Link from "next/link";
+
+import { portalEmptyState } from "@/components/portal/empty-states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -34,6 +37,10 @@ function LoadingSkeleton() {
 // ---------------------------------------------------------------------------
 
 function EmptyState() {
+  // The gallery names the same next step the portal routes to, so the pattern it demonstrates
+  // is the one the product actually ships (#127).
+  const spec = portalEmptyState("onboarding-no-loops");
+
   return (
     <Card className="w-[480px]">
       <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
@@ -41,13 +48,11 @@ function EmptyState() {
           <FolderOpen className="h-6 w-6 text-muted-foreground" />
         </div>
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">No loops yet</p>
-          <p className="text-sm text-muted-foreground">
-            Connect a repo to register your first loop.
-          </p>
+          <p className="text-sm font-medium text-foreground">{spec.title}</p>
+          <p className="text-sm text-muted-foreground">{spec.detail}</p>
         </div>
-        <Button variant="outline" size="sm">
-          Connect repository
+        <Button asChild variant="outline" size="sm">
+          <Link href="/loops/register">{spec.action?.label}</Link>
         </Button>
       </CardContent>
     </Card>

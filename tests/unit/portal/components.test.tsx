@@ -3,8 +3,10 @@ import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { LoopRegistry } from "@/components/portal/dashboard-view";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
+import { portalEmptyState } from "@/components/portal/empty-states";
 import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { RunRecordsView } from "@/components/portal/run-records-view";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
@@ -50,7 +52,7 @@ describe("portal reusable components", () => {
 
   it("renders explicit empty states for reusable list summaries", () => {
     render(<RepoCatalog repos={[]} />);
-    expect(screen.getByText("No repositories tracked")).toBeTruthy();
+    expect(screen.getByText("No repositories selected yet")).toBeTruthy();
 
     cleanup();
     render(<DeploymentSummary deployments={[]} />);
@@ -59,6 +61,138 @@ describe("portal reusable components", () => {
     cleanup();
     render(<ValidationResultSummary results={[]} />);
     expect(screen.getByText("No validation results yet")).toBeTruthy();
+  });
+
+  it("routes the catalog's no-repositories state to the activation step it names", () => {
+    render(
+      <RepoCatalog firstRun={{ stage: "no-repositories", status: "onboarding" }} repos={[]} />,
+    );
+
+    expect(screen.getByText("No repositories selected yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Select repositories" }).getAttribute("href")).toBe(
+      "/settings/repositories",
+    );
+  });
+
+  it("routes the catalog to installation when no GitHub App is connected yet", () => {
+    render(
+      <RepoCatalog firstRun={{ stage: "no-installation", status: "onboarding" }} repos={[]} />,
+    );
+
+    expect(screen.getByText("No GitHub App installation connected")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Connect the GitHub App" }).getAttribute("href")).toBe(
+      "/api/github/install",
+    );
+    // GitHub dead-ends the install link for an account that already has the App (#151), so the
+    // install action alone would be the dead end this issue exists to remove.
+    expect(
+      screen.getByRole("link", { name: "Find existing installation" }).getAttribute("href"),
+    ).toBe("/api/github/install/reconcile");
+  });
+
+  it("renders no affordance for a reset empty state with no handler to reset with", () => {
+    // A "Clear filters" button that clears nothing is the same dead end as an unrouted link.
+    render(<EmptyState spec={portalEmptyState("catalog-no-filter-matches")} />);
+
+    expect(screen.getByText("No repositories match the current filters")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
+  });
+
+  it("gives every empty state an accessible name so its action is not orphaned", () => {
+    render(<EmptyState spec={portalEmptyState("onboarding-no-loops")} />);
+
+    const region = screen.getByRole("region", { name: "No loops registered" });
+    expect(region.getAttribute("data-empty-state")).toBe("onboarding-no-loops");
+  });
+
+  it("renders an unavailable catalog read distinctly from first-run emptiness, with no call to action", () => {
+    render(
+      <RepoCatalog
+        firstRun={{ reason: "Portal data store unavailable.", status: "unavailable" }}
+        repos={[]}
+      />,
+    );
+
+    // ADR 0019: a failed read cannot claim the operator has something to connect.
+    expect(screen.getByText("Portal data unavailable")).toBeTruthy();
+    expect(screen.getByText("Portal data store unavailable.")).toBeTruthy();
+    expect(screen.queryByText("No repositories selected yet")).toBeNull();
+    // The whole card, not just the empty state: no route out of a store that could not be read.
+    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(screen.queryAllByRole("button")).toEqual([]);
+  });
+
+  it("offers a filter reset when the operator's own filters emptied a populated catalog", () => {
+    const repo: RepoRecord = {
+      area: "Portal",
+      ciCommands: ["bun run validate"],
+      defaultBranch: "main",
+      description: "Fixture repo",
+      designSystemHref: undefined,
+      docsHref: undefined,
+      enabledLoops: [],
+      framework: "Next.js",
+      githubHref: "https://github.com/ncolesummers/loopworks",
+      health: "healthy",
+      lastSynced: "18m ago",
+      milestone: "M4",
+      name: "loopworks",
+      observabilityHref: undefined,
+      openIssues: 2,
+      owner: "ncolesummers",
+      priority: "P2",
+      staleDays: 5,
+      validationGates: [],
+      vercelProjectHref: undefined,
+      vercelProjectId: undefined,
+    };
+
+    render(<RepoCatalog repos={[repo]} />);
+
+    fireEvent.change(screen.getByLabelText("Search repositories"), {
+      target: { value: "no-such-repository" },
+    });
+
+    // Operator-caused emptiness reads differently from a repository that was never tracked.
+    expect(screen.getByText("No repositories match the current filters")).toBeTruthy();
+    expect(screen.queryByText("No repositories selected yet")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(screen.getByText("ncolesummers/loopworks")).toBeTruthy();
+  });
+
+  /**
+   * jsdom performs no layout, so this cannot measure pixels. What it can prove is that the three
+   * states the catalog swaps between share one shell with the same minimum-height floor, rather
+   * than each rolling its own box - which is the regression that reintroduces layout shift.
+   * The rendered heights themselves are covered by the Playwright layer.
+   */
+  it("renders loading, first-run, and unavailable through one shell with the same height floor", () => {
+    const shellOf = () =>
+      document.querySelector("[data-empty-state], [aria-busy='true']") as HTMLElement;
+
+    render(<RepoCatalog repos={[]} loading />);
+    const loading = shellOf().className;
+
+    cleanup();
+    render(
+      <RepoCatalog firstRun={{ stage: "no-repositories", status: "onboarding" }} repos={[]} />,
+    );
+    const empty = shellOf().className;
+
+    cleanup();
+    render(
+      <RepoCatalog
+        firstRun={{ reason: "Portal data store unavailable.", status: "unavailable" }}
+        repos={[]}
+      />,
+    );
+    const unavailable = shellOf().className;
+
+    // Same shell, not merely each containing the floor somewhere in its own bespoke class list.
+    expect(new Set([loading, empty, unavailable]).size).toBe(1);
+    expect(loading).toContain("min-h-28");
   });
 
   it("declares the enabled Research routing loop registry fixture", () => {
@@ -514,34 +648,25 @@ describe("portal reusable components", () => {
     render(<RepoCatalog repos={[]} loading />);
 
     expect(screen.getByText("Loading repositories")).toBeTruthy();
-    expect(screen.queryByText("No repositories tracked")).toBeNull();
+    expect(screen.queryByText("No repositories selected yet")).toBeNull();
   });
 
   it("renders source labels and explicit empty states for database-backed portal panels", () => {
-    render(
-      <LoopRegistry
-        emptyDetail="Loop rows will appear after issue sync writes durable state."
-        loops={[]}
-        sourceLabel="Live database"
-      />,
-    );
+    render(<LoopRegistry loops={[]} sourceLabel="Live database" />);
     expect(screen.getByText("Live database")).toBeTruthy();
     expect(screen.getByText("No loops tracked")).toBeTruthy();
     expect(
-      screen.getByText("Loop rows will appear after issue sync writes durable state."),
+      screen.getByText(
+        "Loop rows are mirrored from GitHub issue sync and appear once sync writes durable state.",
+      ),
     ).toBeTruthy();
 
     cleanup();
-    render(
-      <ApprovalGatePanel
-        approval={null}
-        emptyDetail="Portal data store unavailable."
-        sourceLabel="Unavailable"
-      />,
-    );
-    expect(screen.getByText("Unavailable")).toBeTruthy();
+    render(<ApprovalGatePanel approval={null} sourceLabel="Live database" />);
     expect(screen.getByText("No approval gates available")).toBeTruthy();
-    expect(screen.getAllByText("Portal data store unavailable.").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Approval gates appear after a loop or run requests review."),
+    ).toBeTruthy();
 
     cleanup();
     render(

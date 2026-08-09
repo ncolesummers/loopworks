@@ -37,10 +37,19 @@ export const ResearchLoop: Story = {
   },
 };
 
+/** A real absence of runs: terminal, because a run is produced by execution, not by the operator. */
 export const Empty: Story = {
   args: {
     runs: [],
+    sourceLabel: "Live database",
+  },
+};
+
+/** A failed read: distinct copy and status from a verified absence (ADR 0019). */
+export const Unavailable: Story = {
+  args: {
+    firstRun: { reason: "Run data store unavailable.", status: "unavailable" },
+    runs: [],
     sourceLabel: "Unavailable",
-    emptyDetail: "Run data store unavailable.",
   },
 };
