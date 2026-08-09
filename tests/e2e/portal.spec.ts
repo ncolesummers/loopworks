@@ -519,6 +519,22 @@ test.describe("Loopworks portal", () => {
     await expect(connection).toHaveAttribute("aria-selected", "true");
   });
 
+  /**
+   * #151 added the `no-installation-found` result. `portalFixture` always has an
+   * installation, so what this mode can prove is the display-only rule: the
+   * result parameter must not contradict the rows. The disconnected affordances
+   * and the notice itself are covered by component tests and Storybook.
+   */
+  test("never lets a result parameter contradict the connected installation rows", async ({
+    page,
+  }) => {
+    await page.goto("/settings?github=no-installation-found");
+
+    await expect(page.getByText("GitHub app connected")).toBeVisible();
+    await expect(page.getByText("No GitHub App installation was visible")).toHaveCount(0);
+    await expect(page.getByRole("status")).toHaveCount(0);
+  });
+
   for (const viewport of [
     { name: "mobile", width: 390, height: 844 },
     { name: "laptop", width: 1280, height: 832 },

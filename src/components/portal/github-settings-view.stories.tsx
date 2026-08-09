@@ -25,3 +25,26 @@ export const Disconnected: Story = {
     installationOutcome: "cancelled",
   },
 };
+
+/**
+ * The operator reconciled, but GitHub reported no installation of this App on
+ * any account they can reach (#151). The notice must name the cause rather than
+ * leaving the surface silently unchanged.
+ */
+export const NoInstallationFound: Story = {
+  args: {
+    githubInstallations: [],
+    installationOutcome: "no-installation-found",
+  },
+};
+
+/** A failed portal read cannot claim a connection state in either direction. */
+export const DataUnavailable: Story = {
+  args: {
+    dataUnavailable: true,
+    emptyDetail: "Portal data store unavailable.",
+    githubInstallations: [],
+    settings: [],
+    sourceLabel: "Unavailable",
+  },
+};

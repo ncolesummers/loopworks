@@ -190,11 +190,18 @@ export function RepositorySelectionView({
     return (
       <SurfaceState
         action={
-          <Button asChild>
-            <a href="/api/github/install">Connect GitHub App</a>
-          </Button>
+          // GitHub dead-ends the install link when the account already has the
+          // App, so this surface offers the reconciliation route too (#151).
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild>
+              <a href="/api/github/install">Connect GitHub App</a>
+            </Button>
+            <Button asChild variant="outline">
+              <a href="/api/github/install/reconcile">Find existing installation</a>
+            </Button>
+          </div>
         }
-        detail="Install the Loopworks GitHub App before selecting repositories for the catalog."
+        detail="Install the Loopworks GitHub App before selecting repositories for the catalog. Already installed it on GitHub? Connect the existing installation instead."
         status="empty"
         title="No GitHub App installation connected"
       />

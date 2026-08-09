@@ -3,6 +3,10 @@
 import { ExternalLink, KeyRound, Link2, Lock, RefreshCcw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import {
+  type GithubInstallationOutcome,
+  githubInstallationOutcomeCopy,
+} from "@/components/portal/github-installation-outcome";
 import { getEnabledStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,22 +17,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { GitHubInstallationRecord, GitHubSettingRecord } from "@/lib/types";
 
-export type GithubInstallationOutcome =
-  | "already-connected"
-  | "cancelled"
-  | "connected"
-  | "error"
-  | "pending-approval";
-
-const installationOutcomeCopy: Record<GithubInstallationOutcome, string> = {
-  "already-connected": "That GitHub App installation is already connected.",
-  cancelled: "GitHub App installation was cancelled. No connection was saved.",
-  connected: "GitHub App installation connected successfully.",
-  error: "GitHub App installation could not be verified. Start a new connection attempt.",
-  "pending-approval": "GitHub is waiting for an organization owner to approve this installation.",
-};
-
 export function GitHubSettingsView({
+  dataUnavailable = false,
   emptyDetail = "GitHub settings will be projected after repository and loop rows exist.",
   githubInstallations = [],
   installationOutcome,
@@ -36,6 +26,7 @@ export function GitHubSettingsView({
   settings: initialSettings = [],
   sourceLabel = "Unavailable",
 }: Readonly<{
+  dataUnavailable?: boolean;
   emptyDetail?: string;
   githubInstallations?: GitHubInstallationRecord[];
   installationOutcome?: GithubInstallationOutcome;
@@ -45,9 +36,14 @@ export function GitHubSettingsView({
 }>) {
   const [settings, setSettings] = useState(initialSettings);
   const hasInstallation = githubInstallations.length > 0;
-  const displayedInstallationOutcome =
-    !hasInstallation &&
-    (installationOutcome === "connected" || installationOutcome === "already-connected")
+  // The result parameter is display-only (ADR 0021): it can never claim a
+  // connection the rows do not show, and it must not claim the absence of one the
+  // rows do show. Either direction would render a self-contradicting page.
+  const displayedInstallationOutcome = hasInstallation
+    ? installationOutcome === "no-installation-found"
+      ? undefined
+      : installationOutcome
+    : installationOutcome === "connected" || installationOutcome === "already-connected"
       ? "error"
       : installationOutcome;
   const showFixtureControls = !readOnly && sourceLabel === "Fixture fallback";
@@ -72,14 +68,23 @@ export function GitHubSettingsView({
           <StatusBadge status={settings.length > 0 ? "ready" : "empty"} label={sourceLabel} />
           <StatusBadge
             status={hasInstallation ? "ready" : "empty"}
-            label={hasInstallation ? "GitHub app connected" : "Not connected"}
+            // A failed read cannot render a connection call to action (ADR 0019),
+            // so it must not claim "Not connected" either — that would be a
+            // dead-end status with no affordance beside it (#151).
+            label={
+              dataUnavailable
+                ? "Connection unknown"
+                : hasInstallation
+                  ? "GitHub app connected"
+                  : "Not connected"
+            }
           />
         </div>
       </section>
 
       {displayedInstallationOutcome ? (
         <div role="status" className="rounded-md border bg-muted/40 px-4 py-3 text-sm">
-          {installationOutcomeCopy[displayedInstallationOutcome]}
+          {githubInstallationOutcomeCopy[displayedInstallationOutcome]}
         </div>
       ) : null}
 
@@ -136,15 +141,29 @@ export function GitHubSettingsView({
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4">
-                        <div>
+                        <div className="space-y-1">
                           <div className="text-sm font-medium">No installation connected</div>
                           <div className="text-sm text-muted-foreground">
                             Install the Loopworks GitHub App before selecting repositories.
                           </div>
+                          {/*
+                           * GitHub sends the operator to its configure page instead of
+                           * the Setup URL when the account already has the App, so the
+                           * install action alone can dead-end (#151).
+                           */}
+                          <div className="text-sm text-muted-foreground">
+                            Already installed the Loopworks GitHub App on GitHub? Connect the
+                            existing installation instead.
+                          </div>
                         </div>
-                        <Button asChild>
-                          <a href="/api/github/install">Connect GitHub App</a>
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button asChild>
+                            <a href="/api/github/install">Connect GitHub App</a>
+                          </Button>
+                          <Button asChild variant="outline">
+                            <a href="/api/github/install/reconcile">Find existing installation</a>
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
