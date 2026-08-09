@@ -38,6 +38,16 @@ const emptyValidationSummary: ValidationGateSummaryRecord = {
 };
 
 describe("portal reusable components", () => {
+  it("keeps registered-loop fixtures owned by repositories in the fixture catalog", () => {
+    const repositoryFullNames = new Set(
+      portalFixture.repos.map((repository) => `${repository.owner}/${repository.name}`),
+    );
+
+    for (const loop of portalFixture.registeredLoops) {
+      expect(repositoryFullNames.has(loop.repositoryFullName)).toBe(true);
+    }
+  });
+
   it("renders explicit empty states for reusable list summaries", () => {
     render(<RepoCatalog repos={[]} />);
     expect(screen.getByText("No repositories tracked")).toBeTruthy();

@@ -273,7 +273,7 @@ export function LoopRegistrationView({
             value={triggerLabels}
           />
           <p className="text-sm text-muted-foreground">
-            Comma-separated GitHub labels. An issue carrying any of them can start a run.
+            Comma-separated GitHub labels that identify issues eligible for this registered loop.
           </p>
         </div>
 

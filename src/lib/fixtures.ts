@@ -306,7 +306,7 @@ export const portalFixture: FixtureState = {
       enabled: true,
       key: "development-loop",
       name: "Agent-ready development loop",
-      repositoryFullName: "ncolesummers/loopworks",
+      repositoryFullName: "ncolesummers/loopworks-web",
       triggerLabels: ["agent-ready"],
       validationGates: [
         { key: "focused-tests", name: "Focused manifest tests", required: true },
@@ -318,7 +318,7 @@ export const portalFixture: FixtureState = {
       enabled: false,
       key: "research-loop",
       name: "Research loop",
-      repositoryFullName: "ncolesummers/loopworks-agent",
+      repositoryFullName: "ncolesummers/factory-core",
       triggerLabels: ["agent-ready", "spike"],
       validationGates: [{ key: "research-review", name: "Research review", required: false }],
     },

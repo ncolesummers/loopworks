@@ -87,6 +87,11 @@ describe("loop registration form", () => {
     );
     expect((screen.getByLabelText("Loop key") as HTMLInputElement).value).toBe("development-loop");
     expect((screen.getByLabelText("Trigger labels") as HTMLInputElement).value).toBe("agent-ready");
+    expect(
+      screen.getByText(
+        "Comma-separated GitHub labels that identify issues eligible for this registered loop.",
+      ),
+    ).toBeTruthy();
     expect((screen.getByLabelText("Enabled") as HTMLInputElement).checked).toBe(true);
     expect(
       (screen.getByRole("radio", { name: /loopworks-org\/portal/ }) as HTMLInputElement).checked,

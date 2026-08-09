@@ -54,7 +54,7 @@ export function RegisteredLoopRegistry({
               <>
                 <div className="text-sm font-medium">No loops registered</div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Register a loop against a tracked repository to give Loopworks something to run.
+                  Register a loop against a tracked repository to make its contract visible here.
                 </p>
               </>
             )}

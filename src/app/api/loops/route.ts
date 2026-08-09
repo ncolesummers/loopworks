@@ -8,11 +8,13 @@ import type {
 } from "@/lib/loops/loop-registration-flow";
 import { createLoopRegistrationRuntime } from "@/lib/loops/loop-registration-runtime";
 import { createRequestLogger } from "@/lib/observability/logger";
+import {
+  type LoopRegistrationOutcome,
+  recordLoopRegistrationOutcomeMetric,
+} from "@/lib/observability/metrics";
 import { type LoopworksSpan, withLoopworksActiveSpan } from "@/lib/observability/trace-context";
 
 const route = "api.loops";
-const maxTriggerLabels = 20;
-const maxFieldLength = 200;
 
 /**
  * Upstream failure text can carry connection strings or provider detail. Only these coded reasons
@@ -34,6 +36,7 @@ type RegistrationSession =
 
 type RegistrationDependencies = {
   readRegistration: () => Promise<LoopRegistrationSnapshot>;
+  recordLoopRegistrationOutcomeMetric: typeof recordLoopRegistrationOutcomeMetric;
   registerLoop: (input: LoopRegistrationFormInput) => Promise<LoopRegistrationResult>;
   requireSession: (input: { route: string }) => Promise<RegistrationSession>;
   span: LoopworksSpan;
@@ -43,35 +46,40 @@ function markOutcome(span: LoopworksSpan | undefined, outcome: string): void {
   span?.setAttribute("loopworks.loops.registration.outcome", outcome);
 }
 
-function boundedString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length === 0 || trimmed.length > maxFieldLength ? null : trimmed;
+function markApplyOutcome(
+  dependencies: Partial<RegistrationDependencies>,
+  outcome: LoopRegistrationOutcome,
+): void {
+  markOutcome(dependencies.span, outcome);
+  try {
+    (dependencies.recordLoopRegistrationOutcomeMetric ?? recordLoopRegistrationOutcomeMetric)({
+      outcome,
+    });
+  } catch {
+    // An injected or default OTel recorder must never affect request handling.
+  }
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
 function triggerLabelList(value: unknown): string[] | null {
-  // An empty list is *valid input shape* and invalid manifest content, so it is deliberately not
-  // rejected here: the operator must see the schema's field-level message, not a bare 400.
-  if (!Array.isArray(value) || value.length > maxTriggerLabels) return null;
-  const labels: string[] = [];
-  for (const entry of value) {
-    const label = boundedString(entry);
-    if (label === null) return null;
-    labels.push(label);
-  }
-  return labels;
+  // Content constraints belong to validateLoopManifest. This boundary checks transport shape only
+  // so schema-valid values are not rejected and schema-invalid values retain field paths/hints.
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : null;
 }
 
 function parseRegistrationForm(body: unknown): LoopRegistrationFormInput | null {
   if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
   const payload = body as Record<string, unknown>;
 
-  const key = boundedString(payload.key);
-  const name = boundedString(payload.name);
-  const repositoryId = boundedString(payload.repositoryId);
+  const key = stringValue(payload.key);
+  const name = stringValue(payload.name);
+  const repositoryId = stringValue(payload.repositoryId);
   const issueLabels = triggerLabelList(payload.issueLabels);
   const description =
-    payload.description === undefined ? undefined : boundedString(payload.description);
+    payload.description === undefined ? undefined : stringValue(payload.description);
 
   if (key === null || name === null || repositoryId === null || issueLabels === null) return null;
   if (typeof payload.enabled !== "boolean") return null;
@@ -133,7 +141,7 @@ export async function handleLoopRegistrationApply(
   const requestLogger = createRequestLogger({ route });
   const session = await (dependencies.requireSession ?? requireApiSession)({ route });
   if (!session.authenticated) {
-    markOutcome(dependencies.span, "unauthenticated");
+    markApplyOutcome(dependencies, "unauthenticated");
     return session.response;
   }
 
@@ -141,13 +149,13 @@ export async function handleLoopRegistrationApply(
   try {
     body = await request.json();
   } catch {
-    markOutcome(dependencies.span, "invalid-request");
+    markApplyOutcome(dependencies, "invalid-request");
     return NextResponse.json({ status: "invalid-request" }, { status: 400 });
   }
 
   const form = parseRegistrationForm(body);
   if (!form) {
-    markOutcome(dependencies.span, "invalid-request");
+    markApplyOutcome(dependencies, "invalid-request");
     return NextResponse.json({ status: "invalid-request" }, { status: 400 });
   }
 
@@ -158,14 +166,14 @@ export async function handleLoopRegistrationApply(
       ((input: LoopRegistrationFormInput) => createLoopRegistrationRuntime().registerLoop(input))
     )(form);
   } catch (error) {
-    markOutcome(dependencies.span, "error");
+    markApplyOutcome(dependencies, "error");
     requestLogger.warn(
       { outcome: "error", reason: safeReason(error instanceof Error ? error.message : undefined) },
       "loop_registration_failed",
     );
     return NextResponse.json({ status: "error" }, { status: 502 });
   }
-  markOutcome(dependencies.span, result.status);
+  markApplyOutcome(dependencies, result.status);
 
   if (result.status === "error") {
     requestLogger.warn(

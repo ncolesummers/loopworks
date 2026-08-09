@@ -87,6 +87,11 @@ describe("registered loop registry", () => {
     render(<RegisteredLoopRegistry loops={[]} sourceLabel="Live database" />);
 
     expect(within(registry()).getByText("No loops registered")).toBeTruthy();
+    expect(
+      within(registry()).getByText(
+        "Register a loop against a tracked repository to make its contract visible here.",
+      ),
+    ).toBeTruthy();
     const action = within(registry()).getByRole("link", { name: "Register a loop" });
     expect(action.getAttribute("href")).toBe("/loops/register");
   });

@@ -2,7 +2,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { loopDefinitions, repositories } from "@/db/schema";
+import { githubInstallations, loopDefinitions, repositories } from "@/db/schema";
 import {
   createGithubRepositorySelectionStore,
   type GithubRepositorySelectionDatabase,
@@ -12,6 +12,8 @@ import {
   createLoopDefinitionStore,
   type LoopDefinitionDatabase,
 } from "@/lib/loops/loop-registration-store";
+import { deriveFirstRunState } from "@/lib/onboarding/first-run-state";
+import { readPortalRecords } from "@/lib/portal/records";
 
 import {
   createPgliteTestDatabase,
@@ -20,6 +22,7 @@ import {
 } from "../../helpers/pglite";
 
 const installationId = 5_000_001;
+const appId = 5_000;
 const now = new Date("2026-08-08T12:00:00.000Z");
 
 function definitionFor(fullName: string, key = "development-loop") {
@@ -45,6 +48,15 @@ describe("loop definition persistence", () => {
 
   beforeEach(async () => {
     await context.reset();
+    await context.db.insert(githubInstallations).values({
+      accountId: 5_000_002,
+      accountLogin: "loopworks-org",
+      accountType: "Organization",
+      appId,
+      installationId,
+      installedBy: "ncolesummers",
+      repositorySelection: "selected",
+    });
   }, pgliteTestHookTimeoutMs);
 
   afterAll(async () => {
@@ -126,6 +138,40 @@ describe("loop definition persistence", () => {
         repositoryFullName: "loopworks-org/portal",
       },
     ]);
+  });
+
+  it("projects a persisted definition into the portal and completes first-run activation", async () => {
+    const repository = await trackRepository();
+    const definition = definitionFor("loopworks-org/portal");
+
+    const before = await readPortalRecords({ database: context.db, githubAppId: appId, now });
+    expect(before.records.registeredLoops).toEqual([]);
+    expect(deriveFirstRunState({ result: before })).toMatchObject({
+      stage: "no-loops",
+      status: "onboarding",
+    });
+
+    await expect(store().register({ definition, now, repositoryId: repository.id })).resolves.toBe(
+      "registered",
+    );
+
+    const after = await readPortalRecords({ database: context.db, githubAppId: appId, now });
+    expect(after.records.registeredLoops).toEqual([
+      {
+        approvalRequirements: definition.approvals.requiredFor,
+        enabled: true,
+        key: definition.key,
+        name: definition.name,
+        repositoryFullName: "loopworks-org/portal",
+        triggerLabels: definition.triggers.issueLabels,
+        validationGates: definition.validationGates.map(({ key, name, required }) => ({
+          key,
+          name,
+          required,
+        })),
+      },
+    ]);
+    expect(deriveFirstRunState({ result: after })).toMatchObject({ status: "activated" });
   });
 
   it("persists the disabled state the operator chose rather than the column default", async () => {

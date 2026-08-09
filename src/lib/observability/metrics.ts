@@ -77,6 +77,12 @@ export const observabilityMetricContract = [
   },
   {
     instrument: "counter",
+    name: "loopworks.loop.registration.outcome",
+    requiredAttributes: ["outcome"],
+    unit: "{attempt}",
+  },
+  {
+    instrument: "counter",
     name: "loopworks.agent.tool.outcome",
     requiredAttributes: ["agent", "tool", "provider", "outcome"],
     unit: "{request}",
@@ -224,6 +230,7 @@ const stepRetryCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const githubInstallationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const loopRegistrationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const planningToolOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const planningToolDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const supportedGithubWebhookMetricEvents = new Set(["issues", "unknown", "unsupported"]);
@@ -258,6 +265,19 @@ export type GithubInstallationFlowOutcomeMetricInput = {
     | "pending-approval"
     | "error";
   phase: "installation" | "authorization";
+};
+
+export type LoopRegistrationOutcome =
+  | "unauthenticated"
+  | "invalid-request"
+  | "invalid"
+  | "duplicate-key"
+  | "repository-missing"
+  | "registered"
+  | "error";
+
+export type LoopRegistrationOutcomeMetricInput = {
+  outcome: LoopRegistrationOutcome;
 };
 
 export type PlanningToolMetricInput = {
@@ -487,6 +507,19 @@ function getGithubInstallationOutcomeCounter(meter: CounterMeter): Counter<Metri
   return counter;
 }
 
+function getLoopRegistrationOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
+  const cached = loopRegistrationOutcomeCounters.get(meter);
+  if (cached) return cached;
+
+  const metric = resolveObservabilityMetricDefinition("loopworks.loop.registration.outcome");
+  const counter = meter.createCounter(metric.name, {
+    description: "Loop registration request outcomes.",
+    unit: metric.unit,
+  });
+  loopRegistrationOutcomeCounters.set(meter, counter);
+  return counter;
+}
+
 function getPlanningToolOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
   const cached = planningToolOutcomeCounters.get(meter);
   if (cached) return cached;
@@ -643,6 +676,17 @@ export function recordGithubInstallationFlowOutcomeMetric(
     });
   } catch {
     // OTel emission must never affect installation request handling.
+  }
+}
+
+export function recordLoopRegistrationOutcomeMetric(
+  input: LoopRegistrationOutcomeMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getLoopRegistrationOutcomeCounter(meter).add(1, { outcome: input.outcome });
+  } catch {
+    // OTel emission must never affect loop registration request handling.
   }
 }
 

@@ -2,6 +2,12 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import { LoopRegistrationPageContent } from "@/app/(portal)/loops/register/page";
 
+const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
+
+vi.mock("@/lib/observability/logger", () => ({
+  createRequestLogger: () => ({ warn }),
+}));
+
 // The page renders a client component that refreshes the server read after registering; jsdom has
 // no mounted app router.
 const refresh = vi.fn();
@@ -9,6 +15,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   vi.unstubAllEnvs();
 });
 
@@ -62,6 +69,10 @@ describe("loop registration page", () => {
     expect(screen.getByRole("link", { name: "Back to loops" })).toBeTruthy();
     expect(screen.getByText("Loop registration unavailable")).toBeTruthy();
     expect(document.body.textContent).not.toContain("secret");
+    expect(warn).toHaveBeenCalledWith(
+      { reason: "unexpected_error" },
+      "loop_registration_read_failed",
+    );
   });
 
   it("serves the fixture snapshot only under the explicit non-production fixture gate", async () => {

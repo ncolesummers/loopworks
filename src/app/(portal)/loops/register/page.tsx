@@ -54,11 +54,11 @@ export async function LoopRegistrationPageContent({
     snapshot = await (
       readRegistration ?? (() => createLoopRegistrationRuntime().readRegistration())
     )();
-  } catch (error) {
-    // Configuration and runtime construction failures must not blank the page; the operator still
-    // needs the surrounding surface and its route back to the registry.
+  } catch {
+    // A failed read must not blank the page; the operator still needs the surrounding surface and
+    // its route back to the registry. Upstream exception text can contain connection details.
     createRequestLogger({ route: "portal.loops.register" }).warn(
-      { reason: error instanceof Error ? error.message : "unknown" },
+      { reason: "unexpected_error" },
       "loop_registration_read_failed",
     );
     snapshot = { reason: "loop_registration_unavailable", status: "error" };
