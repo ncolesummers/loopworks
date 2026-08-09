@@ -172,6 +172,31 @@ describe("configuration registry", () => {
     }
   });
 
+  it("derives the validation subprocess environment from an explicit non-secret policy", () => {
+    const exposedDefinitions = configRegistry.filter(
+      (entry) => "validationSubprocess" in entry && entry.validationSubprocess === true,
+    );
+
+    expect(exposedDefinitions.map((entry) => entry.name).sort()).toEqual([
+      "CI",
+      "HOME",
+      "LOOPWORKS_SECURITY_REQUIRE_SCANNERS",
+      "PATH",
+    ]);
+    for (const definition of exposedDefinitions) {
+      expect(definition, definition.name).toMatchObject({
+        group: "runtime",
+        secret: false,
+      });
+    }
+    for (const definition of configRegistry.filter((entry) => entry.secret)) {
+      expect(
+        "validationSubprocess" in definition ? definition.validationSubprocess : false,
+        definition.name,
+      ).not.toBe(true);
+    }
+  });
+
   it("reports all missing production requirements by variable and group without values", () => {
     expect(() => validateConfig({}, "production")).toThrow(
       /AUTH_SECRET \(auth\)[\s\S]*DATABASE_URL \(database\)[\s\S]*GITHUB_WEBHOOK_SECRET \(github\)/,

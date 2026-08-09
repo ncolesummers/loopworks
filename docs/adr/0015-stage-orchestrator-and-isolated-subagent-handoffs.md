@@ -59,6 +59,13 @@ Azure and Projects V2 inspection remain separate scope-and-permission contracts
 in issues #173 and #174. Planner web access is a separate guarded capability
 tracked by issue #68.
 
+Host-owned deterministic validation is a separate process boundary from Eve's
+guest sandboxes. As of issue [#178](https://github.com/ncolesummers/loopworks/issues/178),
+validation commands receive only the configuration registry's explicitly
+approved, non-secret subprocess environment. They never inherit the host
+process environment. Eve guests retain their independent sandbox environment
+and do not receive this host allow-list.
+
 Stage subagents do not mutate GitHub or durable workflow state. They communicate
 through versioned artifacts. Because declared subagent sandboxes are isolated,
 test-writing hands its repository changes forward as a bounded, SHA-256-bound,
@@ -130,6 +137,11 @@ additional artifact persistence, and strict transition checks.
 The root becomes orchestration-only. Stage ordering and approval checks remain
 deterministic control-plane behavior rather than model judgment.
 
+Environment isolation is not filesystem sandboxing. `HOME` remains available
+for validation toolchains and caches, and `PATH` remains available for
+executable resolution; separate sandbox and repository-access controls remain
+responsible for limiting file and process authority.
+
 ## Validation
 
 1. Eve discovery reports the root plus declared `planner`, `test-writer`,
@@ -155,6 +167,9 @@ deterministic control-plane behavior rather than model judgment.
 10. Research-routing discovery proves `loopKey` is returned, the root fails
    closed for undeclared research siblings, and no research subagent directories
    or versioned research payload schemas are introduced by #43.
+11. Validation-runner tests spawn a real gate with registry-declared secrets in
+    the parent and prove that only the approved non-secret environment reaches
+    the child; the curated Semgrep gate rejects omitted or inherited `env`.
 
 ## Follow-Ups
 

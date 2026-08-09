@@ -16,17 +16,22 @@ export type ConfigGroup =
 
 export type ConfigValue = boolean | string | readonly string[] | undefined;
 
-export type ConfigDefinition = {
+type ConfigDefinitionBase = {
   name: string;
   schema: z.ZodType<ConfigValue>;
   group: ConfigGroup;
   description: string;
   requiredIn: readonly ConfigRuntimeContext[];
-  secret: boolean;
   readOnly: boolean;
   defaults?: Partial<Record<ConfigRuntimeContext, ConfigValue>>;
   exampleValue?: string;
 };
+
+export type ConfigDefinition = ConfigDefinitionBase &
+  (
+    | { secret: true; validationSubprocess?: false }
+    | { secret: false; validationSubprocess?: boolean }
+  );
 
 export const authDevelopmentSecret = "loopworks-local-development-secret";
 export const localDatabaseUrl = "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks";
@@ -219,6 +224,7 @@ export const configRegistry = defineRegistry([
     requiredIn: notRequired,
     secret: false,
     readOnly: false,
+    validationSubprocess: true,
     defaults: { build: false, development: false, test: false, production: false },
     exampleValue: "false",
   },
@@ -408,6 +414,23 @@ export const configRegistry = defineRegistry([
   ...(
     [
       ["CI", "Continuous-integration runtime observation."],
+      ["HOME", "Home directory used by validation toolchains and caches."],
+      ["PATH", "Executable search path used by validation toolchains."],
+    ] as const
+  ).map(([name, description]) =>
+    defineConfig({
+      name,
+      schema: stringSchema,
+      group: "runtime",
+      description,
+      requiredIn: notRequired,
+      secret: false,
+      readOnly: true,
+      validationSubprocess: true,
+    }),
+  ),
+  ...(
+    [
       ["NEXT_PHASE", "Next.js lifecycle phase observation."],
       ["NEXT_RUNTIME", "Next.js server runtime observation."],
       ["NODE_ENV", "Node.js runtime mode observation."],
@@ -462,6 +485,26 @@ export type StringListConfigName = ConfigNameWithOutput<readonly string[]>;
 
 export function isConfigName(name: string): name is ConfigName {
   return registryByName.has(name);
+}
+
+export function createValidationSubprocessEnvironment(
+  env: Partial<NodeJS.ProcessEnv> = process.env,
+): Record<string, string> {
+  const subprocessEnvironment: Record<string, string> = {};
+
+  for (const definition of configRegistry) {
+    if (
+      !("validationSubprocess" in definition) ||
+      definition.validationSubprocess !== true ||
+      definition.secret
+    ) {
+      continue;
+    }
+    const value = env[definition.name];
+    if (value !== undefined) subprocessEnvironment[definition.name] = value;
+  }
+
+  return subprocessEnvironment;
 }
 
 export function resolveConfigRuntimeContext(
