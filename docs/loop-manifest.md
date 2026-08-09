@@ -50,6 +50,14 @@ Every tracked item should carry:
 The manifest is versioned. The current schema uses `version: 1` and requires at
 least one entry in `loops`.
 
+A registered loop definition is persisted per tracked repository as the exact
+validated `LoopDefinition`, separately from the `loops` table that mirrors
+GitHub issues. Registration composes a complete manifest from the shipped
+development-loop template, validates it through the same
+`validateLoopManifest` boundary used elsewhere, and only then persists its loop
+entry. Registration does not introduce a second schema or treat a synced issue
+as an executable loop contract. See [ADR 0025](adr/0025-registered-loop-definitions.md).
+
 Each loop definition includes:
 
 1. `key`, `name`, and `description` for stable identification.
