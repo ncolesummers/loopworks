@@ -1,5 +1,7 @@
 import { ExternalLink, FileJson2 } from "lucide-react";
 
+import { portalEmptyState } from "@/components/portal/empty-states";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { Button } from "@/components/ui/button";
 import type { Status } from "@/components/ui/status-badge";
@@ -24,20 +26,13 @@ function ValidationGateStateShell({
   state,
 }: Readonly<{
   detail: string;
-  state: "empty" | "error" | "loading";
+  state: "error" | "loading";
 }>) {
   const status =
     state === "loading"
       ? { label: "Loading", status: "loading" as const }
-      : state === "error"
-        ? { label: "Failed", status: "failed" as const }
-        : { label: "Empty", status: "empty" as const };
-  const title =
-    state === "loading"
-      ? "Loading validation gates"
-      : state === "error"
-        ? "Validation summary unavailable"
-        : "No validation gates yet";
+      : { label: "Failed", status: "failed" as const };
+  const title = state === "loading" ? "Loading validation gates" : "Validation summary unavailable";
 
   return (
     <div className="min-h-28 rounded-md border border-dashed p-4">
@@ -78,7 +73,11 @@ export function ValidationGateSummary({
       ) : summary.state === "error" ? (
         <ValidationGateStateShell detail={summary.detail} state="error" />
       ) : summary.state === "empty" || summary.gates.length === 0 ? (
-        <ValidationGateStateShell detail={summary.detail} state="empty" />
+        <EmptyState
+          className="p-4"
+          detail={summary.detail}
+          spec={portalEmptyState("validation-gates-none")}
+        />
       ) : (
         <ul className="space-y-3">
           {summary.gates.map((gate) => {

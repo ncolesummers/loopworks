@@ -4,6 +4,8 @@ import { Settings2 } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useMemo, useState } from "react";
 
+import { portalEmptyState, resolvePortalEmptyState } from "@/components/portal/empty-states";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import { getRepoHealthStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { FirstRunState } from "@/lib/onboarding/first-run-state";
 import type { RepoHealth, RepoRecord } from "@/lib/types";
 
 type RepoHealthFilter = RepoHealth | "all";
@@ -71,29 +74,22 @@ function RepoIdentity({ repo }: Readonly<{ repo: RepoRecord }>) {
   );
 }
 
-function CatalogState({
-  title,
-  detail,
-  status,
-}: Readonly<{
-  title: string;
-  detail: string;
-  status: "empty" | "loading";
-}>) {
+/** Matches `EmptyState`'s shell so the catalog holds its height between loading and empty. */
+function CatalogLoadingState() {
   return (
-    <div className="rounded-md border p-6" aria-busy={status === "loading"}>
+    <div className="min-h-28 rounded-md border border-dashed p-6" aria-busy="true">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">{title}</p>
-        <StatusBadge status={status} />
+        <p className="text-sm font-medium">Loading repositories</p>
+        <StatusBadge status="loading" />
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-      {status === "loading" ? (
-        <div className="mt-4 grid gap-2" aria-hidden="true">
-          <div className="h-3 w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
-          <div className="h-3 w-4/5 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
-          <div className="h-3 w-3/5 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
-        </div>
-      ) : null}
+      <p className="mt-1 text-sm text-muted-foreground">
+        Repository metadata, validation gates, and integration links are being refreshed.
+      </p>
+      <div className="mt-4 grid gap-2" aria-hidden="true">
+        <div className="h-3 w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+        <div className="h-3 w-4/5 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+        <div className="h-3 w-3/5 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+      </div>
     </div>
   );
 }
@@ -124,18 +120,26 @@ function repoMatchesSearch(repo: RepoRecord, query: string) {
 }
 
 export function RepoCatalog({
-  emptyDetail = "Connect a GitHub installation or adjust repo filters to populate the catalog.",
+  firstRun,
   repos,
   loading = false,
   sourceLabel,
 }: Readonly<{
-  emptyDetail?: string;
+  /** Composes the source state with the onboarding stage so a failed read never offers a connect step. */
+  firstRun?: FirstRunState;
   repos: RepoRecord[];
   loading?: boolean;
   sourceLabel?: string;
 }>) {
   const [searchQuery, setSearchQuery] = useState("");
   const [healthFilter, setHealthFilter] = useState<RepoHealthFilter>("all");
+  // The catalog is empty for a repository reason, so it speaks only to the two stages that
+  // actually explain it; `no-loops` implies repositories exist and cannot be the cause.
+  const noReposState = resolvePortalEmptyState({
+    fallback: "onboarding-no-repositories",
+    firstRun,
+    stages: ["no-installation", "no-repositories"],
+  });
 
   const filteredRepos = useMemo(
     () =>
@@ -163,23 +167,26 @@ export function RepoCatalog({
               {sourceLabel}
             </span>
           ) : null}
-          <Button variant="outline" size="sm" className="gap-2" asChild>
-            <Link href="/github">
-              <Settings2 className="h-4 w-4" />
-              Repo filters
-            </Link>
-          </Button>
+          {/*
+            Filtering is meaningless with no rows, and on an empty catalog this would compete
+            with - or point past - the activation step the empty state names. The empty state is
+            then the card's only call to action.
+          */}
+          {repos.length === 0 ? null : (
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <Link href="/settings/repositories">
+                <Settings2 className="h-4 w-4" />
+                Repo filters
+              </Link>
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent id="repos">
         {loading ? (
-          <CatalogState
-            title="Loading repositories"
-            detail="Repository metadata, validation gates, and integration links are being refreshed."
-            status="loading"
-          />
+          <CatalogLoadingState />
         ) : repos.length === 0 ? (
-          <CatalogState title="No repositories tracked" detail={emptyDetail} status="empty" />
+          <EmptyState spec={noReposState} />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
@@ -210,10 +217,12 @@ export function RepoCatalog({
             </div>
 
             {filteredRepos.length === 0 ? (
-              <CatalogState
-                title="No repositories match the current filters"
-                detail="Adjust search terms or health filters to broaden the catalog view."
-                status="empty"
+              <EmptyState
+                onReset={() => {
+                  setSearchQuery("");
+                  setHealthFilter("all");
+                }}
+                spec={portalEmptyState("catalog-no-filter-matches")}
               />
             ) : (
               <div className="overflow-x-auto rounded-md border">

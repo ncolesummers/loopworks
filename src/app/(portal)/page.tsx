@@ -1,6 +1,7 @@
 import { DashboardView } from "@/components/portal/dashboard-view";
 import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
+import { deriveFirstRunState } from "@/lib/onboarding/first-run-state";
 import {
   getPortalRecordsForPortal,
   getPortalSourceLabel,
@@ -33,11 +34,9 @@ export async function DashboardPageContent({
       now,
       requires: [],
     }));
-  const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
-
   return (
     <DashboardView
-      emptyDetail={emptyDetail}
+      firstRun={deriveFirstRunState({ result: portalResult })}
       records={portalResult.records}
       sourceLabel={getPortalSourceLabel(portalResult)}
     />

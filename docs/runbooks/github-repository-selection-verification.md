@@ -147,7 +147,7 @@ now reflect the selection with loops and deployments still empty. **That
 expectation has not yet been confirmed against production** — it is covered by
 `tests/unit/portal/pages-production-gate.test.tsx`, not by a live run.
 
-If `/catalog` shows "No repositories tracked" while the counter in step 5
+If `/catalog` shows "No repositories selected yet" while the counter in step 5
 reported a selection, re-check `GET /api/github/repositories` — if it returns the
 rows as `"selected": true`, the read path has regressed, not the write path.
 

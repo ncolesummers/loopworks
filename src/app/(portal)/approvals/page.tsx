@@ -1,6 +1,7 @@
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
+import { deriveFirstRunState } from "@/lib/onboarding/first-run-state";
 import {
   getPortalRecordsForPortal,
   getPortalSourceLabel,
@@ -33,15 +34,13 @@ export async function ApprovalsPageContent({
       now,
       requires: [],
     }));
-  const emptyDetail = portalResult.source === "unavailable" ? portalResult.error : undefined;
-
   return (
     <div className="space-y-6">
       <h1 className="sr-only">Approvals</h1>
       <h2 className="sr-only">Approval state</h2>
       <ApprovalGatePanel
         approval={portalResult.records.approval}
-        emptyDetail={emptyDetail}
+        firstRun={deriveFirstRunState({ result: portalResult })}
         sourceLabel={getPortalSourceLabel(portalResult)}
       />
     </div>

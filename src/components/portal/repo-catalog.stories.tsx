@@ -41,6 +41,30 @@ export const Empty: Story = {
   },
 };
 
+/** First run, no GitHub App yet: the catalog routes to installation. */
+export const FirstRunNoInstallation: Story = {
+  args: {
+    firstRun: { stage: "no-installation", status: "onboarding" },
+    repos: [],
+  },
+};
+
+/** App installed, nothing selected: the catalog routes to repository selection. */
+export const FirstRunNoRepositories: Story = {
+  args: {
+    firstRun: { stage: "no-repositories", status: "onboarding" },
+    repos: [],
+  },
+};
+
+/** A failed read: distinct copy from first run, and no connection call to action (ADR 0019). */
+export const Unavailable: Story = {
+  args: {
+    firstRun: { reason: "Portal data store unavailable.", status: "unavailable" },
+    repos: [],
+  },
+};
+
 export const Healthy: Story = {
   args: {
     repos: [repoByHealth("healthy")],

@@ -4,12 +4,15 @@ import { AlertTriangle, Clock3, FileJson2, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
+import { portalEmptyState, resolvePortalEmptyState } from "@/components/portal/empty-states";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { RunTimelineItem } from "@/components/portal/run-timeline-item";
 import { getApprovalStatus, getRunStatus } from "@/components/portal/status-mapping";
 import { ValidationGateSummary } from "@/components/portal/validation-gate-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { FirstRunState } from "@/lib/onboarding/first-run-state";
 import type { RunRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -24,9 +27,10 @@ export function RunRecordsView({
   runs,
   sourceLabel,
   initialRunId,
-  emptyDetail = "Run state will appear after the control-plane store is available.",
+  firstRun,
 }: Readonly<{
-  emptyDetail?: string;
+  /** A failed read must not be reported as a verified absence of runs (ADR 0019). */
+  firstRun?: FirstRunState;
   initialRunId?: string;
   runs: RunRecord[];
   sourceLabel: string;
@@ -40,16 +44,18 @@ export function RunRecordsView({
   const waitingCount = runs.filter((run) => run.status === "waiting_for_approval").length;
 
   if (runs.length === 0) {
+    const emptySpec = resolvePortalEmptyState({ fallback: "runs-none", firstRun });
+
     return (
       <Card className="shadow-none">
         <CardHeader>
           <CardTitle>Run timeline and artifacts</CardTitle>
-          <CardDescription>{emptyDetail}</CardDescription>
+          <CardDescription>
+            Blocked and approval-waiting runs stay visible before lower-priority history.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-            No runs available
-          </div>
+          <EmptyState spec={emptySpec} />
         </CardContent>
       </Card>
     );
@@ -168,9 +174,7 @@ export function RunRecordsView({
                 {selectedRun.steps.length > 0 ? (
                   selectedRun.steps.map((step) => <RunTimelineItem key={step.id} event={step} />)
                 ) : (
-                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                    No run steps recorded
-                  </div>
+                  <EmptyState className="p-4" spec={portalEmptyState("run-steps-none")} />
                 )}
               </div>
 
@@ -185,9 +189,7 @@ export function RunRecordsView({
                       />
                     ))
                   ) : (
-                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                      No artifacts recorded
-                    </div>
+                    <EmptyState className="p-4" spec={portalEmptyState("artifacts-none")} />
                   )}
                 </div>
 
@@ -218,9 +220,7 @@ export function RunRecordsView({
                       );
                     })
                   ) : (
-                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                      No approvals recorded
-                    </div>
+                    <EmptyState className="p-4" spec={portalEmptyState("run-approvals-none")} />
                   )}
                 </div>
               </div>

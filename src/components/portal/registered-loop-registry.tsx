@@ -1,23 +1,33 @@
 import { Workflow } from "lucide-react";
 import Link from "next/link";
 
+import { resolvePortalEmptyState } from "@/components/portal/empty-states";
 import { RegisteredLoopCard } from "@/components/portal/registered-loop-card";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { type FirstRunState, isFirstRunUnavailable } from "@/lib/onboarding/first-run-state";
 import type { RegisteredLoopItem } from "@/lib/types";
 
 export function RegisteredLoopRegistry({
-  emptyDetail,
+  firstRun,
   loops = [],
   sourceLabel = "Unavailable",
 }: Readonly<{
-  /** Set only when the read failed; its presence is what suppresses the registration call to action. */
-  emptyDetail?: string;
+  /** Composes the source state with the onboarding stage; a failed read suppresses the call to action. */
+  firstRun?: FirstRunState;
   loops?: RegisteredLoopItem[];
   sourceLabel?: string;
 }>) {
   const enabledCount = loops.filter((loop) => loop.enabled).length;
-  const unavailable = emptyDetail !== undefined;
+  const unavailable = firstRun !== undefined && isFirstRunUnavailable(firstRun);
+  // Registration is the step this surface exists for, so it also names the earlier stages that
+  // must happen before a loop can be scoped to a repository.
+  const emptyState = resolvePortalEmptyState({
+    fallback: "onboarding-no-loops",
+    firstRun,
+    stages: ["no-installation", "no-repositories", "no-loops"],
+  });
 
   return (
     <Card aria-label="Registered loops" className="shadow-none" role="region">
@@ -35,7 +45,12 @@ export function RegisteredLoopRegistry({
             <span>{sourceLabel}</span>
             <span className="text-muted-foreground">{enabledCount} enabled</span>
           </span>
-          {unavailable ? null : (
+          {/*
+            A failed read must not invite registration into a store it could not reach, and when
+            the registry is empty the empty state already carries the operator's next step - which
+            is not always registration, so duplicating it here would name the wrong one.
+          */}
+          {unavailable || loops.length === 0 ? null : (
             <Button asChild size="sm" variant="outline">
               <Link href="/loops/register">Register a loop</Link>
             </Button>
@@ -44,21 +59,7 @@ export function RegisteredLoopRegistry({
       </CardHeader>
       <CardContent className="space-y-3">
         {loops.length === 0 ? (
-          <div className="rounded-md border border-dashed p-6">
-            {unavailable ? (
-              <>
-                <div className="text-sm font-medium">Registered loops unavailable</div>
-                <p className="mt-1 text-sm text-muted-foreground">{emptyDetail}</p>
-              </>
-            ) : (
-              <>
-                <div className="text-sm font-medium">No loops registered</div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Register a loop against a tracked repository to make its contract visible here.
-                </p>
-              </>
-            )}
-          </div>
+          <EmptyState spec={emptyState} />
         ) : (
           loops.map((loop) => (
             <RegisteredLoopCard key={`${loop.repositoryFullName}:${loop.key}`} loop={loop} />

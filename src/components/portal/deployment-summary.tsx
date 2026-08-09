@@ -1,4 +1,6 @@
 import { ExternalLink, Monitor } from "lucide-react";
+import { resolvePortalEmptyState } from "@/components/portal/empty-states";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { getSafeExternalHref } from "@/components/portal/safe-url";
 import {
   getDeploymentEnvironmentStatus,
@@ -8,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Status } from "@/components/ui/status-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { FirstRunState } from "@/lib/onboarding/first-run-state";
 import type { DeploymentRecord } from "@/lib/types";
 
 function MetadataChip({
@@ -47,13 +50,16 @@ function getCheckStatus(deployment: DeploymentRecord): Status {
 
 export function DeploymentSummary({
   deployments,
+  firstRun,
   sourceLabel = "Fixture snapshot",
-  emptyDetail = "Deployment and preview records will appear after the first Vercel webhook sync.",
 }: Readonly<{
   deployments: DeploymentRecord[];
+  /** A failed read must not be reported as a verified absence of deployments (ADR 0019). */
+  firstRun?: FirstRunState;
   sourceLabel?: string;
-  emptyDetail?: string;
 }>) {
+  const emptyState = resolvePortalEmptyState({ fallback: "deployments-none", firstRun });
+
   return (
     <Card className="shadow-none">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -71,13 +77,7 @@ export function DeploymentSummary({
       </CardHeader>
       <CardContent id="deployments" className="space-y-3">
         {deployments.length === 0 ? (
-          <div className="rounded-md border p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium">No deployments available</p>
-              <StatusBadge status="empty" />
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">{emptyDetail}</p>
-          </div>
+          <EmptyState spec={emptyState} />
         ) : (
           deployments.map((deployment) => {
             const href = getSafeExternalHref(deployment.url);

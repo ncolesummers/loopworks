@@ -3,6 +3,7 @@
 import { ExternalLink, KeyRound, Link2, Lock, RefreshCcw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { portalEmptyState } from "@/components/portal/empty-states";
 import {
   type GithubInstallationOutcome,
   githubInstallationOutcomeCopy,
@@ -36,6 +37,8 @@ export function GitHubSettingsView({
 }>) {
   const [settings, setSettings] = useState(initialSettings);
   const hasInstallation = githubInstallations.length > 0;
+  const noInstallationState = portalEmptyState("github-settings-no-installation");
+  const noSettingsState = portalEmptyState("github-settings-none");
   // The result parameter is display-only (ADR 0021): it can never claim a
   // connection the rows do not show, and it must not claim the absence of one the
   // rows do show. Either direction would render a self-contradicting page.
@@ -89,9 +92,9 @@ export function GitHubSettingsView({
       ) : null}
 
       {settings.length === 0 ? (
-        <Card className="shadow-none">
+        <Card className="shadow-none" data-empty-state={noSettingsState.id}>
           <CardHeader>
-            <CardTitle>No GitHub settings projected</CardTitle>
+            <CardTitle>{noSettingsState.title}</CardTitle>
             <CardDescription>{emptyDetail}</CardDescription>
           </CardHeader>
         </Card>
@@ -140,11 +143,14 @@ export function GitHubSettingsView({
                         </Button>
                       </div>
                     ) : (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4">
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4"
+                        data-empty-state={noInstallationState.id}
+                      >
                         <div className="space-y-1">
-                          <div className="text-sm font-medium">No installation connected</div>
+                          <div className="text-sm font-medium">{noInstallationState.title}</div>
                           <div className="text-sm text-muted-foreground">
-                            Install the Loopworks GitHub App before selecting repositories.
+                            {noInstallationState.detail}
                           </div>
                           {/*
                            * GitHub sends the operator to its configure page instead of
@@ -158,10 +164,12 @@ export function GitHubSettingsView({
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Button asChild>
-                            <a href="/api/github/install">Connect GitHub App</a>
+                            <a href="/api/github/install">{noInstallationState.action?.label}</a>
                           </Button>
                           <Button asChild variant="outline">
-                            <a href="/api/github/install/reconcile">Find existing installation</a>
+                            <a href="/api/github/install/reconcile">
+                              {noInstallationState.secondaryAction?.label}
+                            </a>
                           </Button>
                         </div>
                       </div>

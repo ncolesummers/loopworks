@@ -35,10 +35,14 @@ export async function RunsPageContent({
       <h1 className="sr-only">Runs</h1>
       <h2 className="sr-only">Run history</h2>
       <RunRecordsView
+        // The run store is read separately from portal records, but a failed read is the same
+        // class of state: the surface cannot report an absence of runs it never saw (ADR 0019).
+        {...(result.source === "unavailable"
+          ? { firstRun: { reason: result.error, status: "unavailable" as const } }
+          : {})}
         initialRunId={initialRunId}
         runs={runs}
         sourceLabel={getRunSourceLabel(result)}
-        emptyDetail={result.source === "unavailable" ? result.error : undefined}
       />
     </div>
   );

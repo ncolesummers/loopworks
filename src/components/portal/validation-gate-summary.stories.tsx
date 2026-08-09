@@ -82,6 +82,10 @@ export const Skipped: Story = {
   },
 };
 
+/**
+ * Terminal emptiness: gate configuration lives in the repository manifest, so this state has no
+ * in-portal destination and says so rather than naming one it cannot route to (#127).
+ */
 export const Empty: Story = {
   args: {
     summary: {

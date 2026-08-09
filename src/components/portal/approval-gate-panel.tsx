@@ -2,6 +2,8 @@
 
 import { ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { resolvePortalEmptyState } from "@/components/portal/empty-states";
+import { EmptyState } from "@/components/portal/reusable-states";
 import { getApprovalChecklistStatus, getApprovalStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,18 +20,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
+import type { FirstRunState } from "@/lib/onboarding/first-run-state";
 import type { ApprovalGateRecord } from "@/lib/types";
 
 export function ApprovalGatePanel({
   approval,
-  emptyDetail = "Approval rows will appear after a loop or run requests review.",
+  firstRun,
   sourceLabel = "Unavailable",
 }: Readonly<{
   approval: ApprovalGateRecord | null;
-  emptyDetail?: string;
+  /** A failed read must not be reported as a verified absence of approvals (ADR 0019). */
+  firstRun?: FirstRunState;
   sourceLabel?: string;
 }>) {
   const [open, setOpen] = useState(false);
+  const emptySpec = resolvePortalEmptyState({ fallback: "approval-none", firstRun });
 
   if (!approval) {
     return (
@@ -37,15 +42,14 @@ export function ApprovalGatePanel({
         <CardHeader className="flex-row items-end justify-between gap-4">
           <div className="space-y-1">
             <CardTitle>Approval gate</CardTitle>
-            <CardDescription>{emptyDetail}</CardDescription>
+            <CardDescription>
+              High-risk transitions stop here for an explicit operator decision.
+            </CardDescription>
           </div>
           <StatusBadge status="empty" label={sourceLabel} />
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border border-dashed p-6">
-            <div className="text-sm font-medium">No approval gates available</div>
-            <p className="mt-1 text-sm text-muted-foreground">{emptyDetail}</p>
-          </div>
+          <EmptyState spec={emptySpec} />
         </CardContent>
       </Card>
     );
