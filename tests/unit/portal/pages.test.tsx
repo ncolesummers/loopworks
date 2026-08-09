@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { ApprovalsPageContent } from "@/app/(portal)/approvals/page";
 import { CatalogPageContent } from "@/app/(portal)/catalog/page";
@@ -54,6 +54,19 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
           state: "Intake",
         },
       ],
+      registeredLoops: [
+        {
+          approvalRequirements: ["external_write", "pr_creation"],
+          enabled: true,
+          key: "development-loop",
+          name: "Agent-ready development loop",
+          repositoryFullName: "ncolesummers/loopworks",
+          triggerLabels: ["agent-ready"],
+          validationGates: [
+            { key: "aggregate-validation", name: "Aggregate validation", required: true },
+          ],
+        },
+      ],
       repos: [
         {
           area: "control-plane",
@@ -107,6 +120,14 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
     expect(
       screen.getByRole("switch", { name: "Intake new repo requests" }).getAttribute("aria-checked"),
     ).toBe("true");
+    // Registered contracts lead; the issue mirror stays, labelled for what it is.
+    expect(screen.getByRole("region", { name: "Registered loops" })).toBeTruthy();
+    expect(
+      within(screen.getByRole("region", { name: "Registered loops" })).getByRole("article", {
+        name: "Agent-ready development loop",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("Synced issue loops")).toBeTruthy();
     cleanup();
 
     render(await ApprovalsPageContent(input));

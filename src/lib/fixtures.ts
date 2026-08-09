@@ -4,8 +4,14 @@ import {
   projectDevelopmentLoopArtifacts,
   projectDevelopmentLoopTimeline,
 } from "@/lib/loops/development-run";
+import type { LoopRegistrationSnapshot } from "@/lib/loops/loop-registration-flow";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
-import type { FixtureState, GitHubSettingRecord, LoopRegistryItem } from "@/lib/types";
+import type {
+  FixtureState,
+  GitHubSettingRecord,
+  LoopRegistryItem,
+  RegisteredLoopItem,
+} from "@/lib/types";
 
 const developmentLoopFixture = createDevelopmentLoopRunSkeleton({
   mode: "simulated",
@@ -68,6 +74,30 @@ export const repositorySelectionFixture: RepositorySelectionSnapshot = {
       owner: "ncolesummers",
       private: false,
       selected: false,
+    },
+  ],
+  status: "ready",
+};
+
+/**
+ * Development-only snapshot for the loop registration surface. Fixture repository ids are not
+ * database rows, so the surface disables registering rather than attempting a write that would fail.
+ */
+export const loopRegistrationFixture: LoopRegistrationSnapshot = {
+  repositories: [
+    {
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-web",
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "loopworks-web",
+      owner: "ncolesummers",
+    },
+    {
+      defaultBranch: "main",
+      fullName: "ncolesummers/loopworks-agent",
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "loopworks-agent",
+      owner: "ncolesummers",
     },
   ],
   status: "ready",
@@ -270,6 +300,29 @@ export const portalFixture: FixtureState = {
       risk: "low",
     },
   ] satisfies LoopRegistryItem[],
+  registeredLoops: [
+    {
+      approvalRequirements: ["external_write", "pr_creation", "manifest_rollout"],
+      enabled: true,
+      key: "development-loop",
+      name: "Agent-ready development loop",
+      repositoryFullName: "ncolesummers/loopworks-web",
+      triggerLabels: ["agent-ready"],
+      validationGates: [
+        { key: "focused-tests", name: "Focused manifest tests", required: true },
+        { key: "aggregate-validation", name: "Aggregate validation", required: true },
+      ],
+    },
+    {
+      approvalRequirements: ["manifest_rollout"],
+      enabled: false,
+      key: "research-loop",
+      name: "Research loop",
+      repositoryFullName: "ncolesummers/factory-core",
+      triggerLabels: ["agent-ready", "spike"],
+      validationGates: [{ key: "research-review", name: "Research review", required: false }],
+    },
+  ] satisfies RegisteredLoopItem[],
   timeline: developmentLoopTimeline,
   artifacts: [
     ...developmentLoopArtifacts,

@@ -45,6 +45,7 @@ Research fact sheets with sources are recorded on issue #21.
 | `loopworks.validation.duration` | histogram | `s` | `gate`, `command` |
 | `loopworks.webhook.outcome` | counter | `{delivery}` | `event`, `action`, `outcome` (`accepted`, `rejected`, `duplicate`, `invalid_signature`, `error`) |
 | `loopworks.github.installation.outcome` | counter | `{attempt}` | `phase`, `outcome` |
+| `loopworks.loop.registration.outcome` | counter | `{attempt}` | `outcome` (`unauthenticated`, `invalid-request`, `invalid`, `duplicate-key`, `repository-missing`, `registered`, `error`) |
 | `loopworks.agent.tool.outcome` | counter | `{request}` | `agent`, `tool`, `provider`, `outcome` |
 | `loopworks.agent.tool.duration` | histogram | `s` | `agent`, `tool`, `provider`, `outcome` |
 | `loopworks.deployment.observed` | counter | `{deployment}` | `environment`, `status` |

@@ -1,4 +1,5 @@
 import { LoopRegistry } from "@/components/portal/dashboard-view";
+import { RegisteredLoopRegistry } from "@/components/portal/registered-loop-registry";
 import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
@@ -22,8 +23,8 @@ export async function LoopsPageContent({
   const requestLogger = createRequestLogger({
     route: "portal.loops",
   });
-  // The registry renders its own empty state until loop registration (#126) runs,
-  // so it declares no requirement (#155).
+  // Both registries render their own empty state on a fresh install, so this surface declares no
+  // requirement (#155) and distinguishes empty from unavailable through `emptyDetail` instead.
   const portalResult =
     result ??
     (await getPortalRecordsForPortal({
@@ -39,8 +40,16 @@ export async function LoopsPageContent({
     <div className="space-y-6">
       <h1 className="sr-only">Loops</h1>
       <h2 className="sr-only">Loop controls</h2>
+      <RegisteredLoopRegistry
+        {...(emptyDetail === undefined ? {} : { emptyDetail })}
+        loops={portalResult.records.registeredLoops}
+        sourceLabel={getPortalSourceLabel(portalResult)}
+      />
       <LoopRegistry
-        emptyDetail={emptyDetail}
+        emptyDetail={
+          emptyDetail ?? "Issue loops will appear after issue sync writes durable state."
+        }
+        heading="Synced issue loops"
         loops={portalResult.records.loops}
         sourceLabel={getPortalSourceLabel(portalResult)}
       />

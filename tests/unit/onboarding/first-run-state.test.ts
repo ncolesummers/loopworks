@@ -15,6 +15,7 @@ type PortalResultInput = {
   error?: string;
   githubInstallations?: PortalRecords["githubInstallations"];
   loops?: PortalRecords["loops"];
+  registeredLoops?: PortalRecords["registeredLoops"];
   repos?: PortalRecords["repos"];
   source?: PortalRecordsResult["source"];
   timeline?: PortalRecords["timeline"];
@@ -35,6 +36,7 @@ function portalRecordsResult(input: PortalResultInput = {}): PortalRecordsResult
     ],
     githubSettings: portalFixture.githubSettings,
     loops: input.loops ?? portalFixture.loops.slice(0, 1),
+    registeredLoops: input.registeredLoops ?? portalFixture.registeredLoops.slice(0, 1),
     repos: input.repos ?? portalFixture.repos.slice(0, 1),
     timeline: input.timeline ?? portalFixture.timeline,
     validationResults: portalFixture.validationResults,
@@ -93,14 +95,42 @@ describe("deriveFirstRunState", () => {
     });
   });
 
-  it("returns no-loops onboarding when a repository has no loops", () => {
+  it("returns no-loops onboarding when a repository has no registered loops", () => {
     const state = deriveFirstRunState({
-      result: portalRecordsResult({ loops: [], timeline: [] }),
+      result: portalRecordsResult({ registeredLoops: [], timeline: [] }),
     });
 
     expect(state).toEqual({
       stage: "no-loops",
       status: "onboarding",
+    });
+  });
+
+  it("stays in no-loops while only synced issue loops exist", () => {
+    // Activation completes at a registered loop contract (#126). Issue rows arrive from webhook
+    // sync and say nothing about whether the operator ever registered a loop.
+    const state = deriveFirstRunState({
+      result: portalRecordsResult({
+        loops: portalFixture.loops,
+        registeredLoops: [],
+        timeline: [],
+      }),
+    });
+
+    expect(state).toEqual({
+      stage: "no-loops",
+      status: "onboarding",
+    });
+  });
+
+  it("activates on a registered loop even before any issue has synced", () => {
+    const state = deriveFirstRunState({
+      result: portalRecordsResult({ loops: [], timeline: [] }),
+    });
+
+    expect(state).toEqual({
+      hasRunActivity: false,
+      status: "activated",
     });
   });
 
@@ -158,12 +188,12 @@ describe("deriveFirstRunState", () => {
     });
   });
 
-  it("crosses from activated to no-loops when loop count changes from one to zero", () => {
+  it("crosses from activated to no-loops when registered loop count changes from one to zero", () => {
     const withLoop = deriveFirstRunState({
       result: portalRecordsResult({ timeline: [] }),
     });
     const withoutLoop = deriveFirstRunState({
-      result: portalRecordsResult({ loops: [], timeline: [] }),
+      result: portalRecordsResult({ registeredLoops: [], timeline: [] }),
     });
 
     expect(withLoop).toEqual({

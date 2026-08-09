@@ -61,7 +61,10 @@ export function deriveFirstRunState(input: { result: PortalRecordsResult }): Fir
     return { stage: "no-repositories", status: "onboarding" };
   }
 
-  if (input.result.records.loops.length === 0) {
+  // Activation completes at a *registered* loop contract, not a synced issue row: `records.loops`
+  // mirrors GitHub issues and arrives from webhook sync, so it says nothing about whether the
+  // operator ever registered a loop (#126, ADR 0019).
+  if (input.result.records.registeredLoops.length === 0) {
     return { stage: "no-loops", status: "onboarding" };
   }
 

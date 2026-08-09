@@ -34,9 +34,9 @@ describe("agent context budget", () => {
   });
 
   it("indexes the proposed signed provenance decision and its migration boundary", () => {
-    const adr = readFileSync("docs/adr/0025-github-bound-signed-commit-provenance.md", "utf8");
+    const adr = readFileSync("docs/adr/0026-github-bound-signed-commit-provenance.md", "utf8");
 
-    expect(adrIndex).toContain("0025-github-bound-signed-commit-provenance.md");
+    expect(adrIndex).toContain("0026-github-bound-signed-commit-provenance.md");
     expect(adr).toContain("Status: Proposed");
     expect(adr).toContain("https://github.com/ncolesummers/loopworks/issues/209");
     expect(adr).toContain("GitHub-resolved");

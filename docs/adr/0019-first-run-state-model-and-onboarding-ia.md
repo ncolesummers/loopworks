@@ -4,6 +4,7 @@ Status: Proposed
 Date: 2026-08-02
 Issue: [#123](https://github.com/ncolesummers/loopworks/issues/123)
 Parent epic: [#122](https://github.com/ncolesummers/loopworks/issues/122)
+Updated by: [#126](https://github.com/ncolesummers/loopworks/issues/126)
 
 ## Context
 
@@ -39,9 +40,11 @@ onboarding stages:
 All onboarding stages are reachable from real `readPortalRecords` output. Zero
 installation rows select `no-installation`. With an installation present, zero
 repository rows produce `records.repos.length === 0` and select
-`no-repositories`. One or more repository rows with zero loop rows produce
-`records.repos.length > 0` and `records.loops.length === 0`, selecting
-`no-loops`. Populated repositories and loops produce `activated`.
+`no-repositories`. One or more repository rows with zero registered loop
+definitions produce `records.repos.length > 0` and
+`records.registeredLoops.length === 0`, selecting `no-loops`. Populated
+repositories and registered loop definitions produce `activated`. GitHub issue
+mirror rows in `records.loops` do not affect onboarding.
 
 `no-installation` reads `PortalRecords.githubInstallations`, which is projected
 from the independent installation table by the existing portal-record read.
@@ -51,8 +54,8 @@ no query of its own.
 Derive the state server-side for each portal read. Never persist or compute it
 on the client. There is no completion flag, dismissal, or snoozing. At the model
 boundary, deleting the last repository returns the operator to
-`no-repositories`, and deleting the last loop while retaining a repository
-returns the operator to `no-loops`.
+`no-repositories`, and deleting the last registered loop definition while
+retaining a repository returns the operator to `no-loops`.
 
 Compose the state with `source` before inspecting records. An `"unavailable"`
 result short-circuits to `{ reason, status: "unavailable" }`. Current fixture
@@ -151,9 +154,10 @@ must not be used as a run count, audit fact, or durable completion claim.
 ## Validation
 
 `tests/unit/onboarding/first-run-state.test.ts` covers all onboarding stages,
-the installation/repository/loop boundaries, activated states with and without run
-activity, unavailable ordering and exact reason propagation, and fixture
-activation. Its non-fresh assignability tests prove that onboarding cannot carry
+the installation/repository/registered-loop boundaries, the separation from
+synced issue loops, activated states with and without run activity, unavailable
+ordering and exact reason propagation, and fixture activation. Its non-fresh
+assignability tests prove that onboarding cannot carry
 a real unavailable reason and unavailable cannot carry a real onboarding stage;
 removing the `?: never` exclusions makes their `@ts-expect-error` directives
 unused and fails typecheck. Guard tests cover every union arm and document why
@@ -193,8 +197,13 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   `repositorySelectionFixture` for Playwright and Storybook coverage while the
   transition itself is proven by PGlite tests. Acceptance remains pending review
   and aggregate validation.
-- [#126](https://github.com/ncolesummers/loopworks/issues/126): implement first
-  loop registration.
+- [#126](https://github.com/ncolesummers/loopworks/issues/126): implemented first
+  loop registration with a durable `loop_definitions` store, a registration
+  surface at `/loops/register`, and a registered-loop projection distinct from
+  synced issue loops. `no-loops` now reads that registered projection. Fixture
+  mode remains read-only, so PGlite and route tests prove the write and
+  transition while Playwright covers the operator surface. Acceptance remains
+  pending review and aggregate validation. See ADR 0025.
 - [#127](https://github.com/ncolesummers/loopworks/issues/127): implement
   actionable empty-state routing and atomically consume the relaxed production
   gate.

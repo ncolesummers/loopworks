@@ -22,6 +22,7 @@ import {
   recordGithubInstallationFlowOutcomeMetric,
   recordGithubWebhookOutcomeMetric,
   recordLockContentionMetric,
+  recordLoopRegistrationOutcomeMetric,
   recordPlanningToolDurationMetric,
   recordPlanningToolOutcomeMetric,
   recordResearchLoopRunCreatedObservability,
@@ -75,6 +76,7 @@ describe("ADR 0012 observability metric contract", () => {
       "loopworks.validation.duration",
       "loopworks.webhook.outcome",
       "loopworks.github.installation.outcome",
+      "loopworks.loop.registration.outcome",
       "loopworks.agent.tool.outcome",
       "loopworks.agent.tool.duration",
       "loopworks.deployment.observed",
@@ -160,6 +162,53 @@ describe("ADR 0012 observability metric contract", () => {
         value: 1,
       },
     ]);
+  });
+
+  it("records loop registration outcomes with low-cardinality metadata only", () => {
+    const recordings: Array<{ attributes?: Record<string, unknown>; name: string; value: number }> =
+      [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+    };
+    const outcomes = [
+      "unauthenticated",
+      "invalid-request",
+      "invalid",
+      "duplicate-key",
+      "repository-missing",
+      "registered",
+      "error",
+    ] as const;
+
+    for (const outcome of outcomes) {
+      recordLoopRegistrationOutcomeMetric({ outcome }, meter);
+    }
+
+    expect(recordings).toEqual(
+      outcomes.map((outcome) => ({
+        attributes: { outcome },
+        name: "loopworks.loop.registration.outcome",
+        value: 1,
+      })),
+    );
+    expect(
+      recordings.every((recording) => Object.keys(recording.attributes ?? {}).join() === "outcome"),
+    ).toBe(true);
+    expect(() =>
+      recordLoopRegistrationOutcomeMetric({ outcome: "error" }, {
+        createCounter: () => ({
+          add: () => {
+            throw new Error("export failed");
+          },
+        }),
+      } as never),
+    ).not.toThrow();
   });
 
   it("records development-loop run creation through the ADR metric name and attributes", () => {

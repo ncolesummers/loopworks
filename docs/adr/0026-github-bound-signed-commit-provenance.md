@@ -1,4 +1,4 @@
-# ADR 0025: GitHub-Bound Signed Commit Provenance
+# ADR 0026: GitHub-Bound Signed Commit Provenance
 
 Status: Proposed
 Date: 2026-08-08

@@ -45,7 +45,8 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0022](0022-msw-for-third-party-boundary-tests.md) | Proposed | Intercept HTTP with MSW so tests exercise real third-party client construction instead of injected fakes. |
 | [0023](0023-self-improving-loops-and-approved-memory.md) | Proposed | Derive exact run outcomes, use a sibling retrospector, and inject only approved, in-scope learned memory under deterministic decay and context limits. |
 | [0024](0024-phased-security-scanning-in-the-validation-chain.md) | Proposed | Run pinned security scanners through repository-owned commands in the existing validation chain, separating where a scanner runs from what its findings do. |
-| [0025](0025-github-bound-signed-commit-provenance.md) | Proposed | Require GitHub-resolved, verified signed commit provenance while preserving contributor identities and published history. |
+| [0025](0025-registered-loop-definitions.md) | Proposed | Persist validated loop definitions separately from the GitHub issue mirror and reuse manifest validation at registration. |
+| [0026](0026-github-bound-signed-commit-provenance.md) | Proposed | Require GitHub-resolved, verified signed commit provenance while preserving contributor identities and published history. |
 
 ## Template
 
