@@ -81,12 +81,8 @@
           "name": "accounts_user_id_users_id_fk",
           "tableFrom": "accounts",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -94,10 +90,7 @@
       "compositePrimaryKeys": {
         "accounts_provider_provider_account_id_pk": {
           "name": "accounts_provider_provider_account_id_pk",
-          "columns": [
-            "provider",
-            "provider_account_id"
-          ]
+          "columns": ["provider", "provider_account_id"]
         }
       },
       "uniqueConstraints": {},
@@ -217,12 +210,8 @@
           "name": "agent_plans_loop_id_loops_id_fk",
           "tableFrom": "agent_plans",
           "tableTo": "loops",
-          "columnsFrom": [
-            "loop_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["loop_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -230,12 +219,8 @@
           "name": "agent_plans_run_id_loop_runs_id_fk",
           "tableFrom": "agent_plans",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -364,12 +349,8 @@
           "name": "approval_transition_events_approval_id_approvals_id_fk",
           "tableFrom": "approval_transition_events",
           "tableTo": "approvals",
-          "columnsFrom": [
-            "approval_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approval_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -377,12 +358,8 @@
           "name": "approval_transition_events_run_id_loop_runs_id_fk",
           "tableFrom": "approval_transition_events",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -517,12 +494,8 @@
           "name": "approvals_loop_id_loops_id_fk",
           "tableFrom": "approvals",
           "tableTo": "loops",
-          "columnsFrom": [
-            "loop_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["loop_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -530,12 +503,8 @@
           "name": "approvals_run_id_loop_runs_id_fk",
           "tableFrom": "approvals",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -652,12 +621,8 @@
           "name": "artifacts_run_id_loop_runs_id_fk",
           "tableFrom": "artifacts",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -665,12 +630,8 @@
           "name": "artifacts_step_id_run_steps_id_fk",
           "tableFrom": "artifacts",
           "tableTo": "run_steps",
-          "columnsFrom": [
-            "step_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["step_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -847,12 +808,8 @@
           "name": "deployments_repository_id_repositories_id_fk",
           "tableFrom": "deployments",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -860,12 +817,8 @@
           "name": "deployments_loop_id_loops_id_fk",
           "tableFrom": "deployments",
           "tableTo": "loops",
-          "columnsFrom": [
-            "loop_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["loop_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -873,12 +826,8 @@
           "name": "deployments_run_id_loop_runs_id_fk",
           "tableFrom": "deployments",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -888,9 +837,7 @@
         "deployments_external_id_unique": {
           "name": "deployments_external_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "external_id"
-          ]
+          "columns": ["external_id"]
         }
       },
       "policies": {},
@@ -981,9 +928,7 @@
         "github_installation_flows_state_digest_unique": {
           "name": "github_installation_flows_state_digest_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "state_digest"
-          ]
+          "columns": ["state_digest"]
         }
       },
       "policies": {},
@@ -1198,12 +1143,8 @@
           "name": "idempotency_locks_run_id_loop_runs_id_fk",
           "tableFrom": "idempotency_locks",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1213,9 +1154,7 @@
         "idempotency_locks_key_unique": {
           "name": "idempotency_locks_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "key"
-          ]
+          "columns": ["key"]
         }
       },
       "policies": {},
@@ -1301,12 +1240,8 @@
           "name": "loop_definitions_repository_id_repositories_id_fk",
           "tableFrom": "loop_definitions",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1414,12 +1349,8 @@
           "name": "loop_events_loop_id_loops_id_fk",
           "tableFrom": "loop_events",
           "tableTo": "loops",
-          "columnsFrom": [
-            "loop_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["loop_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1603,12 +1534,8 @@
           "name": "loop_runs_repository_id_repositories_id_fk",
           "tableFrom": "loop_runs",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1728,12 +1655,8 @@
           "name": "loops_repository_id_repositories_id_fk",
           "tableFrom": "loops",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1895,12 +1818,8 @@
           "name": "observability_events_repository_id_repositories_id_fk",
           "tableFrom": "observability_events",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1908,12 +1827,8 @@
           "name": "observability_events_run_id_loop_runs_id_fk",
           "tableFrom": "observability_events",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1921,12 +1836,8 @@
           "name": "observability_events_step_id_run_steps_id_fk",
           "tableFrom": "observability_events",
           "tableTo": "run_steps",
-          "columnsFrom": [
-            "step_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["step_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2067,16 +1978,12 @@
         "repositories_github_repo_id_unique": {
           "name": "repositories_github_repo_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "github_repo_id"
-          ]
+          "columns": ["github_repo_id"]
         },
         "repositories_full_name_unique": {
           "name": "repositories_full_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "full_name"
-          ]
+          "columns": ["full_name"]
         }
       },
       "policies": {},
@@ -2232,12 +2139,8 @@
           "name": "run_steps_run_id_loop_runs_id_fk",
           "tableFrom": "run_steps",
           "tableTo": "loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2277,12 +2180,8 @@
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2349,16 +2248,12 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         },
         "users_github_login_unique": {
           "name": "users_github_login_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "github_login"
-          ]
+          "columns": ["github_login"]
         }
       },
       "policies": {},
@@ -2455,12 +2350,8 @@
           "name": "vercel_projects_repository_id_repositories_id_fk",
           "tableFrom": "vercel_projects",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repository_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repository_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2470,9 +2361,7 @@
         "vercel_projects_project_id_unique": {
           "name": "vercel_projects_project_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "project_id"
-          ]
+          "columns": ["project_id"]
         }
       },
       "policies": {},
@@ -2507,10 +2396,7 @@
       "compositePrimaryKeys": {
         "verification_tokens_identifier_token_pk": {
           "name": "verification_tokens_identifier_token_pk",
-          "columns": [
-            "identifier",
-            "token"
-          ]
+          "columns": ["identifier", "token"]
         }
       },
       "uniqueConstraints": {},
@@ -2595,9 +2481,7 @@
         "webhook_deliveries_delivery_id_unique": {
           "name": "webhook_deliveries_delivery_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "delivery_id"
-          ]
+          "columns": ["delivery_id"]
         }
       },
       "policies": {},
@@ -2609,15 +2493,7 @@
     "public.approval_status": {
       "name": "approval_status",
       "schema": "public",
-      "values": [
-        "requested",
-        "approved",
-        "rejected",
-        "cancelled",
-        "expired",
-        "applied",
-        "bypassed"
-      ]
+      "values": ["requested", "approved", "rejected", "cancelled", "expired", "applied", "bypassed"]
     },
     "public.artifact_type": {
       "name": "artifact_type",
@@ -2638,22 +2514,12 @@
     "public.deployment_status": {
       "name": "deployment_status",
       "schema": "public",
-      "values": [
-        "queued",
-        "building",
-        "ready",
-        "error",
-        "canceled"
-      ]
+      "values": ["queued", "building", "ready", "error", "canceled"]
     },
     "public.idempotency_lock_status": {
       "name": "idempotency_lock_status",
       "schema": "public",
-      "values": [
-        "acquired",
-        "released",
-        "expired"
-      ]
+      "values": ["acquired", "released", "expired"]
     },
     "public.loop_state": {
       "name": "loop_state",
@@ -2672,22 +2538,12 @@
     "public.observability_severity": {
       "name": "observability_severity",
       "schema": "public",
-      "values": [
-        "debug",
-        "info",
-        "warn",
-        "error"
-      ]
+      "values": ["debug", "info", "warn", "error"]
     },
     "public.repo_health": {
       "name": "repo_health",
       "schema": "public",
-      "values": [
-        "healthy",
-        "watch",
-        "blocked",
-        "disconnected"
-      ]
+      "values": ["healthy", "watch", "blocked", "disconnected"]
     },
     "public.run_status": {
       "name": "run_status",
@@ -2705,34 +2561,17 @@
     "public.run_step_status": {
       "name": "run_step_status",
       "schema": "public",
-      "values": [
-        "queued",
-        "running",
-        "skipped",
-        "failed",
-        "succeeded"
-      ]
+      "values": ["queued", "running", "skipped", "failed", "succeeded"]
     },
     "public.run_terminal_reason": {
       "name": "run_terminal_reason",
       "schema": "public",
-      "values": [
-        "succeeded",
-        "failed",
-        "timed_out",
-        "stalled",
-        "canceled_by_reconciliation"
-      ]
+      "values": ["succeeded", "failed", "timed_out", "stalled", "canceled_by_reconciliation"]
     },
     "public.webhook_delivery_status": {
       "name": "webhook_delivery_status",
       "schema": "public",
-      "values": [
-        "received",
-        "processed",
-        "ignored",
-        "failed"
-      ]
+      "values": ["received", "processed", "ignored", "failed"]
     }
   },
   "schemas": {},
