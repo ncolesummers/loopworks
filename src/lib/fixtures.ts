@@ -5,7 +5,12 @@ import {
   projectDevelopmentLoopTimeline,
 } from "@/lib/loops/development-run";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
-import type { FixtureState, GitHubSettingRecord, LoopRegistryItem } from "@/lib/types";
+import type {
+  FixtureState,
+  GitHubSettingRecord,
+  LoopRegistryItem,
+  RegisteredLoopItem,
+} from "@/lib/types";
 
 const developmentLoopFixture = createDevelopmentLoopRunSkeleton({
   mode: "simulated",
@@ -270,6 +275,29 @@ export const portalFixture: FixtureState = {
       risk: "low",
     },
   ] satisfies LoopRegistryItem[],
+  registeredLoops: [
+    {
+      approvalRequirements: ["external_write", "pr_creation", "manifest_rollout"],
+      enabled: true,
+      key: "development-loop",
+      name: "Agent-ready development loop",
+      repositoryFullName: "ncolesummers/loopworks",
+      triggerLabels: ["agent-ready"],
+      validationGates: [
+        { key: "focused-tests", name: "Focused manifest tests", required: true },
+        { key: "aggregate-validation", name: "Aggregate validation", required: true },
+      ],
+    },
+    {
+      approvalRequirements: ["manifest_rollout"],
+      enabled: false,
+      key: "research-loop",
+      name: "Research loop",
+      repositoryFullName: "ncolesummers/loopworks-agent",
+      triggerLabels: ["agent-ready", "spike"],
+      validationGates: [{ key: "research-review", name: "Research review", required: false }],
+    },
+  ] satisfies RegisteredLoopItem[],
   timeline: developmentLoopTimeline,
   artifacts: [
     ...developmentLoopArtifacts,

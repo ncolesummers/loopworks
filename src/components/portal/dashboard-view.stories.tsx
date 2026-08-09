@@ -11,6 +11,7 @@ const fixtureRecords = {
   githubInstallations: portalFixture.githubInstallations,
   githubSettings: portalFixture.githubSettings,
   loops: portalFixture.loops,
+  registeredLoops: portalFixture.registeredLoops,
   repos: portalFixture.repos,
   timeline: portalFixture.timeline,
   validationResults: portalFixture.validationResults,

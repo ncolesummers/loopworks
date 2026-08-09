@@ -105,6 +105,7 @@ export interface DeploymentRecord {
   inspectorUrl?: string;
 }
 
+/** A synced GitHub issue moving through the loop lifecycle, not a registered loop contract. */
 export interface LoopRegistryItem {
   name: string;
   state: LoopState;
@@ -113,6 +114,26 @@ export interface LoopRegistryItem {
   queueDepth: number;
   risk: "low" | "medium" | "high";
   skippedReason?: string;
+}
+
+export interface RegisteredLoopValidationGate {
+  key: string;
+  name: string;
+  required: boolean;
+}
+
+/**
+ * A loop *definition* an operator registered against a repository. This is the projection of
+ * `loop_definitions.definition`, reduced to the fields PRD UX requirement 4 puts on the registry.
+ */
+export interface RegisteredLoopItem {
+  approvalRequirements: string[];
+  enabled: boolean;
+  key: string;
+  name: string;
+  repositoryFullName: string;
+  triggerLabels: string[];
+  validationGates: RegisteredLoopValidationGate[];
 }
 
 export interface TimelineEvent {
@@ -228,6 +249,7 @@ export interface FixtureState {
   repos: RepoRecord[];
   deployments: DeploymentRecord[];
   loops: LoopRegistryItem[];
+  registeredLoops: RegisteredLoopItem[];
   timeline: TimelineEvent[];
   artifacts: ArtifactRecord[];
   validationResults: ValidationResultRecord[];

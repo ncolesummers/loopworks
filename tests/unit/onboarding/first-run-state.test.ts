@@ -15,6 +15,7 @@ type PortalResultInput = {
   error?: string;
   githubInstallations?: PortalRecords["githubInstallations"];
   loops?: PortalRecords["loops"];
+  registeredLoops?: PortalRecords["registeredLoops"];
   repos?: PortalRecords["repos"];
   source?: PortalRecordsResult["source"];
   timeline?: PortalRecords["timeline"];
@@ -35,6 +36,7 @@ function portalRecordsResult(input: PortalResultInput = {}): PortalRecordsResult
     ],
     githubSettings: portalFixture.githubSettings,
     loops: input.loops ?? portalFixture.loops.slice(0, 1),
+    registeredLoops: input.registeredLoops ?? portalFixture.registeredLoops.slice(0, 1),
     repos: input.repos ?? portalFixture.repos.slice(0, 1),
     timeline: input.timeline ?? portalFixture.timeline,
     validationResults: portalFixture.validationResults,
