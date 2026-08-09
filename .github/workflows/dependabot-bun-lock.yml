@@ -42,8 +42,16 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          case "$PULL_REQUEST_NUMBER" in
+            ''|*[!0-9]*)
+              echo "pull request number must be a positive integer" >&2
+              exit 1
+              ;;
+          esac
+          test "$PULL_REQUEST_NUMBER" -gt 0
           bun --eval '
             const lock = Bun.JSONC.parse(await Bun.file("bun.lock").text());
             if (lock.patchedDependencies?.["image-size@2.0.2"] !== "patches/image-size@2.0.2.patch") {
@@ -55,6 +63,7 @@ jobs:
           printf "%s\n" "$HEAD_REF" > "$ARTIFACT_PATH/head-ref"
           printf "%s\n" "$HEAD_REPOSITORY" > "$ARTIFACT_PATH/head-repository"
           printf "%s\n" "$HEAD_SHA" > "$ARTIFACT_PATH/head-sha"
+          printf "%s\n" "$PULL_REQUEST_NUMBER" > "$ARTIFACT_PATH/pull-request-number"
 
       # Artifacts cross the privilege boundary as inert data. The privileged
       # workflow below validates every metadata field before creating a commit.

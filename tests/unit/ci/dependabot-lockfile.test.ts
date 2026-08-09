@@ -87,6 +87,9 @@ describe("Dependabot Bun lockfile workflows", () => {
     expect(stage?.run).toContain('patchedDependencies?.["image-size@2.0.2"]');
     expect(stage?.run).toContain('cp -- bun.lock "$ARTIFACT_PATH/bun.lock"');
     expect(stage?.run).toContain('printf "%s\\n" "$HEAD_SHA" > "$ARTIFACT_PATH/head-sha"');
+    expect(stage?.run).toContain(
+      'printf "%s\\n" "$PULL_REQUEST_NUMBER" > "$ARTIFACT_PATH/pull-request-number"',
+    );
 
     const upload = steps.find((step) => step.uses === "actions/upload-artifact@v4");
     expect(upload?.with).toMatchObject({
@@ -119,7 +122,7 @@ describe("Dependabot Bun lockfile workflows", () => {
     );
   });
 
-  it("never executes PR code and no-ops instead of creating an empty commit", () => {
+  it("creates a GitHub-signed, expected-head-bound repair without executing PR code", () => {
     const steps = committer.jobs?.commit?.steps ?? [];
     expect(steps).toHaveLength(1);
     expect(steps.every((step) => step.uses === undefined)).toBe(true);
@@ -130,14 +133,23 @@ describe("Dependabot Bun lockfile workflows", () => {
     expect(commit?.run).toContain('if test "$CURRENT_HEAD" != "$EXPECTED_HEAD"; then');
     expect(commit?.run).toContain(`git rev-parse "${shellVariable("CURRENT_HEAD")}^"`);
     expect(commit?.run).toContain("git diff --no-ext-diff --quiet -- bun.lock");
-    expect(commit?.run).toContain("git add -- bun.lock");
-    expect(commit?.run).toContain("git commit --no-verify");
-    expect(commit?.run).toContain(
-      `--force-with-lease="refs/heads/${shellVariable("HEAD_REF")}:${shellVariable("EXPECTED_HEAD")}"`,
-    );
+    expect(commit?.run).toContain("createCommitOnBranch");
+    expect(commit?.run).toContain("expectedHeadOid");
+    expect(commit?.run).toContain("fileContents");
+    expect(commit?.run).toContain('NEW_HEAD="$(printf');
+    expect(commit?.run).toContain('dispatch_validation "$CURRENT_HEAD"');
+    expect(commit?.run).toContain('dispatch_validation "$NEW_HEAD"');
+    expect(commit?.run).toContain('test -n "$EXPECTED_PULL_REQUEST_NUMBER"');
+    expect(commit?.run).toContain('test "$PULL_REQUEST_NUMBER" = "$EXPECTED_PULL_REQUEST_NUMBER"');
+    expect(commit?.run).toContain('test "$PULL_REQUEST_NUMBER" -gt 0');
+    expect(commit?.run).not.toContain("git config");
+    expect(commit?.run).not.toContain("git commit");
+    expect(commit?.run).not.toContain("git push");
+    expect(commit?.run).not.toContain("author:");
+    expect(commit?.run).not.toContain("committer:");
   });
 
-  it("explicitly dispatches the full CI chain after the token-authenticated push", () => {
+  it("dispatches CI on the PR branch and trusted provenance on the default branch", () => {
     expect(ci.on).toMatchObject({ workflow_dispatch: {} });
     const steps = committer.jobs?.commit?.steps ?? [];
     const commit = steps.find((step) => step.id === "commit");
@@ -145,8 +157,18 @@ describe("Dependabot Bun lockfile workflows", () => {
     expect(commit?.run).toContain(
       'gh workflow run ci.yml --repo "$HEAD_REPOSITORY" --ref "$HEAD_REF"',
     );
+    expect(commit?.run).toContain(
+      'gh workflow run commit-provenance.yml --repo "$HEAD_REPOSITORY" --ref "$DEFAULT_BRANCH"',
+    );
+    expect(commit?.run).toContain(
+      '-f "pull_request=$PULL_REQUEST_NUMBER" -f "head_sha=$VALIDATION_HEAD_SHA"',
+    );
     expect(commit?.env).toMatchObject({
+      DEFAULT_BRANCH: githubExpression("github.event.workflow_run.repository.default_branch"),
       GH_TOKEN: githubExpression("github.token"),
+      EXPECTED_PULL_REQUEST_NUMBER: githubExpression(
+        "github.event.workflow_run.pull_requests[0].number",
+      ),
       HEAD_REF: githubExpression("github.event.workflow_run.head_branch"),
     });
   });

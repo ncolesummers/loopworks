@@ -27,9 +27,11 @@ jobs:
         env:
           ARTIFACT_PATH: ${{ runner.temp }}/dependabot-bun-lock
           EXPECTED_HEAD: ${{ github.event.workflow_run.head_sha }}
+          EXPECTED_PULL_REQUEST_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           GH_TOKEN: ${{ github.token }}
           HEAD_REF: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          DEFAULT_BRANCH: ${{ github.event.workflow_run.repository.default_branch }}
           REPOSITORY_PATH: ${{ runner.temp }}/dependabot-repository
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
@@ -43,6 +45,22 @@ jobs:
           test "$(cat "$ARTIFACT_PATH/head-ref")" = "$HEAD_REF"
           test "$(cat "$ARTIFACT_PATH/head-repository")" = "$HEAD_REPOSITORY"
           test "$(cat "$ARTIFACT_PATH/head-sha")" = "$EXPECTED_HEAD"
+          test -n "$EXPECTED_PULL_REQUEST_NUMBER"
+          PULL_REQUEST_NUMBER="$(cat "$ARTIFACT_PATH/pull-request-number")"
+          case "$PULL_REQUEST_NUMBER" in
+            ''|*[!0-9]*)
+              echo "pull request number must be a positive integer" >&2
+              exit 1
+              ;;
+          esac
+          test "$PULL_REQUEST_NUMBER" -gt 0
+          test "$PULL_REQUEST_NUMBER" = "$EXPECTED_PULL_REQUEST_NUMBER"
+
+          dispatch_validation() {
+            local VALIDATION_HEAD_SHA="$1"
+            gh workflow run ci.yml --repo "$HEAD_REPOSITORY" --ref "$HEAD_REF"
+            gh workflow run commit-provenance.yml --repo "$HEAD_REPOSITORY" --ref "$DEFAULT_BRANCH" -f "pull_request=$PULL_REQUEST_NUMBER" -f "head_sha=$VALIDATION_HEAD_SHA"
+          }
 
           git init "$REPOSITORY_PATH"
           cd "$REPOSITORY_PATH"
@@ -58,7 +76,7 @@ jobs:
             test "$(git diff --no-ext-diff --name-only "$EXPECTED_HEAD" "$CURRENT_HEAD")" = "bun.lock"
             git show "${CURRENT_HEAD}:bun.lock" > "$ARTIFACT_PATH/current-bun.lock"
             cmp --silent "$ARTIFACT_PATH/bun.lock" "$ARTIFACT_PATH/current-bun.lock"
-            gh workflow run ci.yml --repo "$HEAD_REPOSITORY" --ref "$HEAD_REF"
+            dispatch_validation "$CURRENT_HEAD"
             exit 0
           fi
 
@@ -70,13 +88,35 @@ jobs:
           fi
 
           test "$(git diff --name-only)" = "bun.lock"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- bun.lock
-          test "$(git diff --cached --name-only)" = "bun.lock"
-          git commit --no-verify -m "chore(deps): update bun.lock"
-          git push \
-            --force-with-lease="refs/heads/${HEAD_REF}:${EXPECTED_HEAD}" \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "HEAD:refs/heads/${HEAD_REF}"
-          gh workflow run ci.yml --repo "$HEAD_REPOSITORY" --ref "$HEAD_REF"
+          FILE_CONTENTS="$(base64 < bun.lock | tr -d '\n')"
+          GRAPHQL_QUERY='mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }'
+          GRAPHQL_INPUT="$(jq -cn \
+            --arg repository "$HEAD_REPOSITORY" \
+            --arg branch "$HEAD_REF" \
+            --arg expectedHeadOid "$EXPECTED_HEAD" \
+            --arg fileContents "$FILE_CONTENTS" \
+            '{
+              branch: {
+                repositoryNameWithOwner: $repository,
+                branchName: $branch
+              },
+              expectedHeadOid: $expectedHeadOid,
+              message: { headline: "chore(deps): update bun.lock" },
+              fileChanges: {
+                additions: [{ path: "bun.lock", contents: $fileContents }]
+              }
+            }')"
+          GRAPHQL_BODY="$(jq -cn \
+            --arg query "$GRAPHQL_QUERY" \
+            --argjson input "$GRAPHQL_INPUT" \
+            '{ query: $query, variables: { input: $input } }')"
+          GRAPHQL_RESPONSE="$(printf '%s' "$GRAPHQL_BODY" | gh api graphql --input -)"
+          NEW_HEAD="$(printf '%s' "$GRAPHQL_RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')"
+          case "$NEW_HEAD" in
+            ''|*[!0-9a-fA-F]*)
+              echo "GitHub did not return a valid repair commit OID" >&2
+              exit 1
+              ;;
+          esac
+          test "${#NEW_HEAD}" -eq 40
+          dispatch_validation "$NEW_HEAD"

@@ -1,0 +1,140 @@
+name: Commit provenance
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number to validate
+        required: true
+        type: string
+      head_sha:
+        description: Exact pull-request head SHA to validate
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  validate:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      github.ref_name == github.event.repository.default_branch
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve current pull-request head
+        id: resolve
+        env:
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          INPUT_HEAD_SHA: ${{ inputs.head_sha }}
+          INPUT_PR_NUMBER: ${{ inputs.pull_request }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if test "$EVENT_NAME" = "pull_request_target"; then
+            PULL_REQUEST_NUMBER="$EVENT_PR_NUMBER"
+            REQUESTED_HEAD_SHA="$EVENT_HEAD_SHA"
+          else
+            PULL_REQUEST_NUMBER="$INPUT_PR_NUMBER"
+            REQUESTED_HEAD_SHA="$INPUT_HEAD_SHA"
+          fi
+
+          case "$PULL_REQUEST_NUMBER" in
+            ''|*[!0-9]*)
+              echo "pull request number must be a positive integer" >&2
+              exit 1
+              ;;
+          esac
+          test "$PULL_REQUEST_NUMBER" -gt 0
+          case "$REQUESTED_HEAD_SHA" in
+            ''|*[!0-9a-fA-F]*)
+              echo "pull request head SHA must be a 40-character hexadecimal object ID" >&2
+              exit 1
+              ;;
+          esac
+          test "${#REQUESTED_HEAD_SHA}" -eq 40
+
+          PULL_REQUEST_JSON="$(gh api --method GET "repos/$REPOSITORY/pulls/$PULL_REQUEST_NUMBER")"
+          CURRENT_HEAD_SHA="$(printf '%s' "$PULL_REQUEST_JSON" | jq -r '.head.sha // empty')"
+          BASE_REF="$(printf '%s' "$PULL_REQUEST_JSON" | jq -r '.base.ref // empty')"
+          # Compare the API's current head SHA to the requested value.
+          test "$CURRENT_HEAD_SHA" = "$REQUESTED_HEAD_SHA"
+          test -n "$BASE_REF"
+          git check-ref-format --branch "$BASE_REF"
+
+          {
+            printf 'head_sha=%s\n' "$CURRENT_HEAD_SHA"
+            printf 'base_ref=%s\n' "$BASE_REF"
+            printf 'pull_request_number=%s\n' "$PULL_REQUEST_NUMBER"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --silent --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=pending \
+            -f context=commit-provenance \
+            -f description='Verifying GitHub-bound commit provenance'
+
+      - name: Checkout trusted base
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ steps.resolve.outputs.base_ref }}
+          repository: ${{ github.repository }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Run provenance check
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ steps.resolve.outputs.pull_request_number }}
+        run: bun run commit:provenance --github "$PULL_REQUEST_NUMBER"
+
+      - name: Publish provenance status
+        if: always()
+        env:
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          PULL_REQUEST_NUMBER: ${{ steps.resolve.outputs.pull_request_number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          STATE=failure
+          DESCRIPTION="Commit provenance check: $STATE"
+          CURRENT_HEAD_SHA=""
+          if CURRENT_HEAD_SHA="$(gh api --method GET "repos/$REPOSITORY/pulls/$PULL_REQUEST_NUMBER" | jq -r '.head.sha // empty')"; then
+            :
+          fi
+          if test "$CHECK_OUTCOME" = success && test "$CURRENT_HEAD_SHA" = "$HEAD_SHA"; then
+            STATE=success
+            DESCRIPTION="Commit provenance check: success"
+          elif test "$CHECK_OUTCOME" = success; then
+            DESCRIPTION="Pull-request head changed during provenance check"
+          fi
+          gh api --silent --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
+            -f state="$STATE" \
+            -f context=commit-provenance \
+            -f description="$DESCRIPTION"
+          test "$STATE" = success
