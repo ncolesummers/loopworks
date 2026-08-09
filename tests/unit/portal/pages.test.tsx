@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { ApprovalsPageContent } from "@/app/(portal)/approvals/page";
@@ -5,7 +8,8 @@ import { CatalogPageContent } from "@/app/(portal)/catalog/page";
 import { LoopsPageContent } from "@/app/(portal)/loops/page";
 import { DashboardPageContent } from "@/app/(portal)/page";
 import { RunsPageContent } from "@/app/(portal)/runs/page";
-import { SettingsPageContent } from "@/app/(portal)/settings/page";
+import SettingsPage, { SettingsPageContent } from "@/app/(portal)/settings/page";
+import { githubInstallationOutcomes } from "@/components/portal/github-installation-outcome";
 import type { PortalRecordsResult } from "@/lib/portal/records";
 
 afterEach(async () => {
@@ -141,6 +145,44 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
     expect(screen.queryByText(/unavailable in production/i)).toBeNull();
     expect(screen.getByText("Live database")).toBeTruthy();
     expect(screen.getByText("GitHub app connected")).toBeTruthy();
+  });
+
+  /**
+   * The Settings allowlist is what turns a callback outcome into visible copy. An
+   * outcome the allowlist drops (#151 added one) would silently render nothing —
+   * the dead end this work exists to remove. Iterating the exported vocabulary
+   * rather than a hand-written copy is what makes that unmissable.
+   */
+  /**
+   * The vocabulary must live outside a `"use client"` module. A runtime value
+   * exported from a client module reaches this server component as a
+   * client-reference proxy, so `new Set(...)` throws at module evaluation and
+   * every `/settings` request 500s — a failure no type-check and no direct
+   * component render can see.
+   */
+  it("keeps the result vocabulary in a module the server page can actually read", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/components/portal/github-installation-outcome.ts"),
+      "utf8",
+    );
+
+    // The directive itself, not a mention of it in prose.
+    expect(source).not.toMatch(/^\s*["']use client["']/m);
+    expect(Array.isArray(githubInstallationOutcomes)).toBe(true);
+  });
+
+  it("Settings page admits every declared result and drops anything else", async () => {
+    expect(githubInstallationOutcomes).toContain("no-installation-found");
+
+    for (const outcome of githubInstallationOutcomes) {
+      const admitted = await SettingsPage({ searchParams: Promise.resolve({ github: outcome }) });
+      expect(admitted.props.installationOutcome).toBe(outcome);
+
+      const spoofed = await SettingsPage({
+        searchParams: Promise.resolve({ github: `${outcome}-ish` }),
+      });
+      expect(spoofed.props.installationOutcome).toBeUndefined();
+    }
   });
 
   it.each([

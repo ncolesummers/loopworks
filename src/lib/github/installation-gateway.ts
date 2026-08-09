@@ -153,6 +153,12 @@ export function createGithubInstallationGateway(input: {
   const createUserClient =
     input.createUserClient ?? ((accessToken: string) => new Octokit({ auth: accessToken }));
 
+  // One pagination call site for both installation reads, as a standalone
+  // function rather than a `this` call so a destructured gateway method keeps
+  // working.
+  const paginateUserInstallations = (accessToken: string) =>
+    createUserClient(accessToken).paginate("GET /user/installations", { per_page: 100 });
+
   return {
     async exchangeUserCode(exchangeInput) {
       const body = new URLSearchParams({
@@ -197,13 +203,20 @@ export function createGithubInstallationGateway(input: {
       return data.login;
     },
 
+    async listUserInstallations(accessToken) {
+      const installations = await paginateUserInstallations(accessToken);
+      return installations.flatMap((installation) => {
+        const data = object(installation);
+        const installationId = positiveInteger(data?.id);
+        const appId = positiveInteger(data?.app_id);
+        // Reconciliation matches candidates against the configured app id, so an
+        // entry missing either identifier cannot be matched and is dropped.
+        return installationId && appId ? [{ appId, installationId }] : [];
+      });
+    },
+
     async userCanAccessInstallation(accessToken, installationId) {
-      const installations = await createUserClient(accessToken).paginate(
-        "GET /user/installations",
-        {
-          per_page: 100,
-        },
-      );
+      const installations = await paginateUserInstallations(accessToken);
       return installations.some((installation) => object(installation)?.id === installationId);
     },
 

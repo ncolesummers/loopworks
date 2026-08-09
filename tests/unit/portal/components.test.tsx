@@ -663,6 +663,124 @@ describe("portal reusable components", () => {
     expect(screen.queryByRole("link", { name: "Connect GitHub App" })).toBeNull();
   });
 
+  /**
+   * GitHub dead-ends the install link when the only eligible account already has
+   * the App (#151), so "Not connected" must always sit next to an affordance that
+   * can actually resolve it.
+   */
+  it("offers the reconciliation route alongside the install route when disconnected", () => {
+    render(
+      <GitHubSettingsView
+        githubInstallations={[]}
+        readOnly
+        settings={[
+          {
+            detail: "No GitHub App installation is connected yet.",
+            enabled: false,
+            key: "sso",
+            title: "GitHub SSO",
+          },
+        ]}
+        sourceLabel="Live database"
+      />,
+    );
+
+    const install = screen.getByRole("link", { name: "Connect GitHub App" });
+    const reconcile = screen.getByRole("link", { name: "Find existing installation" });
+    expect(install.getAttribute("href")).toBe("/api/github/install");
+    expect(reconcile.getAttribute("href")).toBe("/api/github/install/reconcile");
+    // The primary action must stay first in DOM and therefore tab order.
+    expect(install.compareDocumentPosition(reconcile)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByText("Not connected")).toBeTruthy();
+    expect(screen.getByText(/already installed the loopworks github app/i)).toBeTruthy();
+  });
+
+  it("names the cause when reconciliation finds no installation for the operator", () => {
+    render(
+      <GitHubSettingsView
+        githubInstallations={[]}
+        installationOutcome="no-installation-found"
+        readOnly
+        settings={[
+          {
+            detail: "No GitHub App installation is connected yet.",
+            enabled: false,
+            key: "sso",
+            title: "GitHub SSO",
+          },
+        ]}
+        sourceLabel="Live database"
+      />,
+    );
+
+    // Not a success claim, so the display-only downgrade must leave it intact.
+    expect(screen.getByRole("status").textContent).toContain(
+      "No GitHub App installation was visible to your GitHub account",
+    );
+    // The copy must not send the operator back to the install link that already
+    // dead-ended; it names the access case too.
+    expect(screen.getByRole("status").textContent).toContain("cannot access the installation");
+    expect(screen.getByRole("status").textContent).not.toContain("could not be verified");
+    expect(screen.getByRole("link", { name: "Find existing installation" })).toBeTruthy();
+  });
+
+  /**
+   * The result parameter is display-only in both directions: it cannot claim a
+   * connection the rows do not show, and it cannot claim the absence of one they
+   * do — a stale reconciliation link would otherwise render a page saying both.
+   */
+  it("suppresses a no-installation result that contradicts the connected rows", () => {
+    render(
+      <GitHubSettingsView
+        githubInstallations={[
+          {
+            accountLogin: "loopworks-org",
+            accountType: "Organization",
+            installationId: 124_001,
+            repositorySelection: "selected",
+          },
+        ]}
+        installationOutcome="no-installation-found"
+        readOnly
+        settings={[
+          {
+            detail: "1 GitHub App installation is connected.",
+            enabled: true,
+            key: "sso",
+            title: "GitHub SSO",
+          },
+        ]}
+        sourceLabel="Live database"
+      />,
+    );
+
+    expect(screen.getByText("GitHub app connected")).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  /**
+   * ADR 0019: a failed read must not render a connection call to action, so the
+   * badge cannot claim "Not connected" either — that would be an unresolvable
+   * dead end of a different kind.
+   */
+  it("reports an unavailable read as unknown rather than not connected", () => {
+    render(
+      <GitHubSettingsView
+        dataUnavailable
+        emptyDetail="Portal data store unavailable."
+        githubInstallations={[]}
+        readOnly
+        settings={[]}
+        sourceLabel="Unavailable"
+      />,
+    );
+
+    expect(screen.getByText("Connection unknown")).toBeTruthy();
+    expect(screen.queryByText("Not connected")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Connect GitHub App" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Find existing installation" })).toBeNull();
+  });
+
   it("filters catalog rows by search and health while preserving explicit filtered-empty state", () => {
     const repos: RepoRecord[] = [
       {

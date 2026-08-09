@@ -5,7 +5,7 @@ import type { db } from "@/db/client";
 import { githubInstallationFlows, githubInstallations } from "@/db/schema";
 
 export type GithubInstallationFlowPhase = "installation" | "authorization";
-export type GithubInstallationDatabase = Pick<typeof db, "insert" | "update">;
+export type GithubInstallationDatabase = Pick<typeof db, "insert" | "select" | "update">;
 export type GithubInstallationRecord = typeof githubInstallations.$inferSelect;
 
 export function digestGithubInstallationState(state: string): string {
@@ -54,6 +54,19 @@ export function createGithubInstallationStore(database: GithubInstallationDataba
         )
         .returning();
       return challenge ?? null;
+    },
+
+    /**
+     * Scoped to the configured App, matching how Settings projects installations.
+     * A row left by a different App must not make this portal look connected.
+     */
+    async hasConnectedInstallation(input: { appId: number }): Promise<boolean> {
+      const rows = await database
+        .select({ installationId: githubInstallations.installationId })
+        .from(githubInstallations)
+        .where(eq(githubInstallations.appId, input.appId))
+        .limit(1);
+      return rows.length > 0;
     },
 
     async connectInstallation(

@@ -6,6 +6,11 @@ import {
 } from "@/lib/github/installation-store";
 
 const flowTtlMs = 10 * 60 * 1000;
+/**
+ * Reconciliation verifies each candidate as the App, so an operator who belongs
+ * to many accounts must not turn one callback into unbounded App API calls.
+ */
+const maxReconciliationCandidates = 10;
 
 export type GithubInstallationCallbackInput = {
   actorId: string;
@@ -17,11 +22,23 @@ export type GithubInstallationCallbackInput = {
   githubInstallationState: string | null;
 };
 
+export type GithubInstallationAuthorizeRedirect = {
+  kind: "authorize";
+  location: string;
+  verifierCookie: string;
+};
+
 export type GithubInstallationCallbackResult =
-  | { kind: "authorize"; location: string; verifierCookie: string }
+  | GithubInstallationAuthorizeRedirect
   | {
       kind: "settings";
-      outcome: "already-connected" | "cancelled" | "connected" | "error" | "pending-approval";
+      outcome:
+        | "already-connected"
+        | "cancelled"
+        | "connected"
+        | "error"
+        | "no-installation-found"
+        | "pending-approval";
     };
 
 export type GithubInstallationChallenge = {
@@ -68,6 +85,7 @@ export type GithubInstallationStore = {
     phase: GithubInstallationFlowPhase;
     stateDigest: string;
   }): Promise<GithubInstallationChallenge | undefined>;
+  hasConnectedInstallation(input: { appId: number }): Promise<boolean>;
 };
 
 export type AvailableGithubRepository = {
@@ -80,6 +98,11 @@ export type AvailableGithubRepository = {
   private: boolean;
 };
 
+export type AccessibleGithubInstallation = {
+  appId: number;
+  installationId: number;
+};
+
 export type GithubInstallationGateway = {
   exchangeUserCode(input: {
     clientId: string;
@@ -90,6 +113,7 @@ export type GithubInstallationGateway = {
   }): Promise<string>;
   getAuthenticatedUserLogin(accessToken: string): Promise<string>;
   listInstallationRepositories(installationId: number): Promise<AvailableGithubRepository[]>;
+  listUserInstallations(accessToken: string): Promise<AccessibleGithubInstallation[]>;
   userCanAccessInstallation(accessToken: string, installationId: number): Promise<boolean>;
   verifyAppInstallation(installationId: number): Promise<VerifiedGithubInstallation>;
 };
@@ -156,6 +180,36 @@ export function createGithubInstallationFlow(dependencies: {
     });
   }
 
+  /**
+   * Both entries into the authorization phase mint fresh state and a fresh PKCE
+   * verifier against the one registered callback URL. Keeping them in one place
+   * stops the Setup-URL entry and the operator-initiated entry from drifting
+   * apart in what they bind.
+   */
+  async function beginAuthorization(input: {
+    actorId: string;
+    installationId?: number;
+  }): Promise<GithubInstallationAuthorizeRedirect> {
+    const state = await createChallenge({
+      actorId: input.actorId,
+      installationId: input.installationId,
+      phase: "authorization",
+    });
+    const verifier = dependencies.generateSecret();
+    const location = new URL("https://github.com/login/oauth/authorize");
+    location.searchParams.set("client_id", dependencies.config.clientId);
+    location.searchParams.set("redirect_uri", dependencies.config.callbackUrl);
+    location.searchParams.set("state", state);
+    location.searchParams.set("code_challenge", pkceChallenge(verifier));
+    location.searchParams.set("code_challenge_method", "S256");
+
+    return {
+      kind: "authorize",
+      location: location.toString(),
+      verifierCookie: verifier,
+    };
+  }
+
   async function handleInstallationReturn(
     input: GithubInstallationCallbackInput,
   ): Promise<GithubInstallationCallbackResult> {
@@ -180,27 +234,84 @@ export function createGithubInstallationFlow(dependencies: {
         return settings("error");
       }
 
-      const state = await createChallenge({
-        actorId: input.actorId,
-        installationId,
-        phase: "authorization",
-      });
-      const verifier = dependencies.generateSecret();
-      const location = new URL("https://github.com/login/oauth/authorize");
-      location.searchParams.set("client_id", dependencies.config.clientId);
-      location.searchParams.set("redirect_uri", dependencies.config.callbackUrl);
-      location.searchParams.set("state", state);
-      location.searchParams.set("code_challenge", pkceChallenge(verifier));
-      location.searchParams.set("code_challenge_method", "S256");
-
-      return {
-        kind: "authorize",
-        location: location.toString(),
-        verifierCookie: verifier,
-      };
+      return beginAuthorization({ actorId: input.actorId, installationId });
     } catch {
       return settings("error");
     }
+  }
+
+  /**
+   * Connects every installation of the configured App that the authorized
+   * operator can reach. Each candidate is still verified as the App before any
+   * write, so the operator token selects candidates but never authenticates
+   * them.
+   */
+  async function reconcileFromOperatorToken(input: {
+    accessToken: string;
+    actorId: string;
+  }): Promise<GithubInstallationCallbackResult> {
+    // Reconciliation is the recovery path for a portal with no installation at
+    // all (#151). Once one is connected, adding more rows would silently repoint
+    // repository selection, which resolves an installation by lowest id with no
+    // actor scoping (`repository-selection.ts`). Refuse before spending any
+    // GitHub call. Connecting a second account needs an explicit selection
+    // surface, not a side effect of this route.
+    if (await dependencies.store.hasConnectedInstallation({ appId: dependencies.config.appId })) {
+      return settings("already-connected");
+    }
+
+    const accessible = await dependencies.gateway.listUserInstallations(input.accessToken);
+    const candidates = [
+      ...new Set(
+        accessible
+          .filter((installation) => installation.appId === dependencies.config.appId)
+          .map((installation) => installation.installationId),
+      ),
+    ]
+      // Newest first. GitHub installation ids increase monotonically, so the
+      // installation the operator just configured — the one #151 is about — is
+      // the highest id, and must survive the bound rather than be the first
+      // thing it discards.
+      .sort((left, right) => right - left)
+      .slice(0, maxReconciliationCandidates);
+    if (candidates.length === 0) return settings("no-installation-found");
+
+    let connectedAny = false;
+    let verifiedAny = false;
+    for (const installationId of candidates) {
+      let installation: VerifiedGithubInstallation;
+      try {
+        installation = await dependencies.gateway.verifyAppInstallation(installationId);
+      } catch {
+        // One unverifiable or suspended installation must not deny the operator
+        // the others they legitimately control.
+        continue;
+      }
+      if (
+        installation.installationId !== installationId ||
+        installation.appId !== dependencies.config.appId ||
+        installation.suspendedAt
+      ) {
+        continue;
+      }
+      verifiedAny = true;
+      const now = dependencies.now();
+      const outcome = await dependencies.store.connectInstallation({
+        accountId: installation.accountId,
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
+        appId: installation.appId,
+        installationId: installation.installationId,
+        installedAt: now,
+        installedBy: input.actorId,
+        repositorySelection: installation.repositorySelection,
+        updatedAt: now,
+      });
+      connectedAny ||= outcome === "connected";
+    }
+
+    if (!verifiedAny) return settings("error");
+    return settings(connectedAny ? "connected" : "already-connected");
   }
 
   async function handleAuthorizationReturn(
@@ -211,7 +322,7 @@ export function createGithubInstallationFlow(dependencies: {
       phase: "authorization",
       state: input.githubInstallationState,
     });
-    if (!challenge?.installationId) return settings("error");
+    if (!challenge) return settings("error");
     if (input.error === "access_denied") return settings("cancelled");
     if (input.error || !input.authorizationCode || !input.pkceVerifier) {
       return settings("error");
@@ -227,6 +338,17 @@ export function createGithubInstallationFlow(dependencies: {
       });
       const githubLogin = await dependencies.gateway.getAuthenticatedUserLogin(accessToken);
       if (githubLogin.toLowerCase() !== input.actorId.toLowerCase()) return settings("error");
+      // An authorization challenge carrying no candidate installation is an
+      // operator-initiated reconciliation: GitHub never called the Setup URL, so
+      // there is no candidate to bind and the operator's own token is what
+      // establishes which installations they may reconcile (#151).
+      if (!challenge.installationId) {
+        // Awaited inside this `try` on purpose: returning the promise would let a
+        // gateway or store rejection escape the catch below and reject
+        // `callback()` itself, which every caller treats as an unhandled failure
+        // rather than the `error` outcome.
+        return await reconcileFromOperatorToken({ accessToken, actorId: input.actorId });
+      }
       if (
         !(await dependencies.gateway.userCanAccessInstallation(
           accessToken,
@@ -275,6 +397,16 @@ export function createGithubInstallationFlow(dependencies: {
       );
       location.searchParams.set("state", state);
       return { location: location.toString() };
+    },
+
+    /**
+     * GitHub only installs from `/installations/new` when an eligible target
+     * lacks the App; otherwise it short-circuits to the configure page and never
+     * calls the Setup URL (#151). This is the operator's own way into the
+     * authorization phase for an installation that already exists.
+     */
+    async startReconciliation(input: { actorId: string }) {
+      return beginAuthorization({ actorId: input.actorId });
     },
 
     async callback(

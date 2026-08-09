@@ -1,7 +1,8 @@
 import {
-  GitHubSettingsView,
   type GithubInstallationOutcome,
-} from "@/components/portal/github-settings-view";
+  githubInstallationOutcomes,
+} from "@/components/portal/github-installation-outcome";
+import { GitHubSettingsView } from "@/components/portal/github-settings-view";
 import { db } from "@/db/client";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
@@ -42,6 +43,7 @@ export async function SettingsPageContent({
 
   return (
     <GitHubSettingsView
+      dataUnavailable={portalResult.source === "unavailable"}
       emptyDetail={emptyDetail}
       githubInstallations={portalResult.records.githubInstallations}
       installationOutcome={installationOutcome}
@@ -52,13 +54,7 @@ export async function SettingsPageContent({
   );
 }
 
-const installationOutcomes = new Set<GithubInstallationOutcome>([
-  "already-connected",
-  "cancelled",
-  "connected",
-  "error",
-  "pending-approval",
-]);
+const installationOutcomes = new Set<GithubInstallationOutcome>(githubInstallationOutcomes);
 
 export default async function SettingsPage({
   searchParams,

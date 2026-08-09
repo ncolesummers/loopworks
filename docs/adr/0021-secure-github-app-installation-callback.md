@@ -3,6 +3,7 @@
 Status: Proposed
 Date: 2026-08-02
 Issue: [#124](https://github.com/ncolesummers/loopworks/issues/124)
+Updated by: [#151](https://github.com/ncolesummers/loopworks/issues/151)
 
 ## Context
 
@@ -38,6 +39,58 @@ Use two verification phases:
    active Loopworks session, and confirms that user can access the candidate
    installation before persistence. The transient user token is discarded.
 
+The Setup URL cannot be the only entry to phase 2. GitHub performs an
+installation from `/apps/<slug>/installations/new` only when an eligible target
+does not already have the App; when the only eligible account already has it,
+GitHub short-circuits to that account's installation configure page and never
+calls the Setup URL. Phase 1 then never runs, no challenge is consumed, and
+Settings dead-ends on "Not connected" while GitHub reports the App as installed
+— reproduced twice against production on 2026-08-05
+([#151](https://github.com/ncolesummers/loopworks/issues/151)).
+
+Therefore add a second, operator-initiated entry to the same phase 2:
+`/api/github/install/reconcile` mints an authorization challenge carrying **no**
+candidate installation and starts the web authorization flow with fresh state
+and PKCE against the one registered callback URL. An authorization challenge
+with no candidate installation is, by construction, a reconciliation: the
+Setup-URL entry always binds one. That distinction needs no new phase value, no
+schema change, and no second registered callback URL.
+
+Reconciliation discovers candidates from the operator's own token rather than
+from a query parameter, so the same two proofs still hold: the GitHub user must
+match the active Loopworks session, and the installation must be reachable by
+that user. Candidates are filtered to the configured App ID, deduplicated,
+ordered newest first — GitHub installation ids increase monotonically, so the
+account the operator just configured must survive the bound rather than be the
+first thing it discards — and bounded so one callback cannot fan out unbounded
+App API calls. Each surviving candidate is then verified as the App before
+persistence exactly as the bound path verifies its single candidate. An
+unverifiable or suspended candidate is skipped rather than failing the others.
+Zero candidates of the configured App write nothing and return
+`no-installation-found`.
+
+Reconciliation is scoped to a portal that has no installation at all, which is
+the state #151 describes. Once an installation of the configured App is stored,
+it writes nothing and returns `already-connected`, before spending any GitHub
+call. This is a correctness requirement, not a policy preference: repository
+selection resolves its installation as the lowest installation id with no actor
+scoping (`resolveInstallation` in `src/lib/github/repository-selection.ts`), so a
+second reconciliation row would silently repoint the portal — and every
+subsequent repository selection — at an account the operator merely belongs to.
+Connecting an additional account therefore requires an explicit selection
+surface and actor-scoped resolution, not a side effect of this route.
+
+Reconciliation failures resolve to a result, never a rejection. Any gateway or
+store rejection inside it is mapped by the same handler that maps the bound
+path's failures, so a rate limit or an unavailable database cannot surface as an
+unhandled error to callers.
+
+"Redirect on update" is not the fix: its redirect carries `setup_action=update`
+and no `state`, so no challenge can be consumed and it would trade a silent dead
+end for a noisy one. Accepting a callback that presents `installation_id`
+without a challenge is likewise refused — that is precisely the protection this
+ADR exists to provide.
+
 A fresh verified duplicate is idempotent: return `already-connected`, preserve
 the original installer and installation time, refresh mutable account and
 repository-selection metadata, and write no duplicate row. Cancellation and
@@ -48,9 +101,26 @@ ID. A result query parameter is display-only and cannot render a successful
 connection without a matching persisted installation.
 
 Expose only stable result vocabulary to Settings: `connected`,
-`already-connected`, `cancelled`, `pending-approval`, and `error`. Logs and OTel
-attributes contain route, phase, actor, and outcome only. State, codes,
-verifiers, cookies, tokens, request bodies, and raw GitHub errors are excluded.
+`already-connected`, `cancelled`, `no-installation-found`, `pending-approval`,
+and `error`. Logs and OTel attributes contain route, phase, actor, and outcome
+only. State, codes, verifiers, cookies, tokens, request bodies, and raw GitHub
+errors are excluded.
+
+Settings derives its query-parameter allowlist from the one declared vocabulary,
+so an outcome cannot gain operator-facing copy yet be dropped before it reaches
+the surface. The parameter is display-only in both directions: it can neither
+claim a connection the rows do not show nor claim the absence of one they do.
+
+Settings must never render a disconnected state without an affordance that can
+resolve it, so the disconnected surface offers both entries. A failed portal read
+is not a disconnected state: it reports connection as unknown and, per ADR 0019,
+renders no connection call to action.
+
+`no-installation-found` names both causes GitHub conflates. `GET
+/user/installations` lists an installation only when the signed-in operator can
+access it, so an empty result means the App is not installed on that account *or*
+that this operator cannot see it. Copy that named only the first would send the
+operator back to the install link that already dead-ends.
 
 ## Consequences
 
@@ -73,9 +143,20 @@ unobservable.
 1. PGlite tests prove one-time actor-bound consumption, expiry, concurrent
    replay rejection, independent installation persistence, and duplicate
    idempotency.
+   `tests/unit/github/installation-reconcile.integration.test.ts` adds the
+   reconciliation entry over a real store: the challenge persists with a null
+   candidate installation and an unstored state digest, one connection crosses
+   `no-installation` to `no-repositories`, replay and cross-actor callbacks write
+   nothing, and revisiting a stored installation preserves the original
+   installer.
 2. Flow and gateway tests cover wrong-app installations, login mismatch,
    inaccessible installations, PKCE exchange failures, cancellation, pending
-   approval, and user-access pagination.
+   approval, and user-access pagination. Reconciliation adds coverage for
+   foreign-app candidates, zero candidates, several candidates, skipped
+   unverifiable candidates, the candidate bound, and forged, cross-actor, and
+   replayed reconciliation callbacks. `listUserInstallations` is exercised
+   through the default Octokit client over MSW, not only an injected fake
+   (ADR 0022).
 3. Logger tests redact installation state, authorization codes, PKCE verifiers,
    and the registry-declared client secret.
 4. Component and browser tests cover real connected and disconnected states,
@@ -94,3 +175,17 @@ unobservable.
 3. [Issue #140](https://github.com/ncolesummers/loopworks/issues/140) binds
    authorization to the immutable GitHub provider account id and adds bounded
    retention for consumed and expired installation challenges.
+4. [Issue #151](https://github.com/ncolesummers/loopworks/issues/151) added the
+   reconciliation entry, the `no-installation-found` result, and the
+   disconnected-surface affordances. Acceptance remains pending review and
+   aggregate validation.
+5. Connecting more than one installation needs an explicit selection surface and
+   actor-scoped installation resolution before reconciliation may write into an
+   already-connected portal. Until then reconciliation refuses that case. The
+   underlying gap is that `resolveInstallation` picks the lowest installation id
+   for every operator; it predates this ADR and is not introduced by #151.
+6. Reconciliation reports a partially successful run as `connected` and skips
+   candidates it cannot verify, including suspended installations, without naming
+   which. A per-candidate outcome vocabulary would improve that; Settings does
+   list exactly the installations that landed, so the operator can see the
+   result.

@@ -61,6 +61,24 @@ describe("portal surfaces through the production data gate", () => {
     },
   );
 
+  /**
+   * #151: the install link dead-ends when the account already has the App, so a
+   * disconnected Settings page must also route the operator to reconciliation.
+   */
+  it("Settings page offers both connection routes on a reachable empty production database", async () => {
+    const markup = renderToStaticMarkup(
+      await SettingsPageContent({
+        database: context.db,
+        env: productionEnv,
+        now: new Date("2026-08-06T12:00:00.000Z"),
+      }),
+    );
+
+    expect(markup).toContain('href="/api/github/install"');
+    expect(markup).toContain('href="/api/github/install/reconcile"');
+    expect(markup).toContain("Not connected");
+  });
+
   it("Catalog page lists a selected repository with no loops, deployments, or approvals present", async () => {
     // The shape repository selection actually writes: no Vercel project link, no
     // loops, never synced.
