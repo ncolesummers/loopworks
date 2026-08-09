@@ -16,7 +16,7 @@ import { type ComponentType, useMemo, useState } from "react";
 import { ApprovalGatePanel } from "@/components/portal/approval-gate-panel";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { DeploymentSummary } from "@/components/portal/deployment-summary";
-import { resolvePortalEmptyState } from "@/components/portal/empty-states";
+import { portalEmptyState, resolvePortalEmptyState } from "@/components/portal/empty-states";
 import { LoopCard } from "@/components/portal/loop-card";
 import { RepoCatalog } from "@/components/portal/repo-catalog";
 import { EmptyState } from "@/components/portal/reusable-states";
@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { evaluateLoopTriggerDecision } from "@/lib/loops/trigger-decision";
-import type { FirstRunState } from "@/lib/onboarding/first-run-state";
+import { type FirstRunState, isFirstRunOnboarding } from "@/lib/onboarding/first-run-state";
 import type { PortalRecords } from "@/lib/portal/records";
 import type { ArtifactRecord, LoopRegistryItem, TimelineEvent } from "@/lib/types";
 
@@ -68,6 +68,31 @@ function Metric({
       </CardHeader>
       <CardContent className="pt-0 text-sm text-muted-foreground">{detail}</CardContent>
     </Card>
+  );
+}
+
+/**
+ * The dashboard is the first screen after sign-in, so it is where PRD UX requirement 9 is met or
+ * missed. The catalog panel already names the installation and repository steps there, but no
+ * dashboard panel speaks for registration: with a tracked repository and no registered loop, the
+ * first screen rendered an operational shell that named no next step at all, and activation
+ * dead-ended one step from the end (#128). The registered-loop registry that owns that step lives
+ * on `/loops`, so the dashboard states it here.
+ *
+ * Only that stage. Repeating a step a panel below already names would put the same landmark on the
+ * page twice, which is both an accessibility failure and two competing copies of one instruction.
+ * A failed read renders nothing: an unreachable store is not a verified absence to activate out of,
+ * and the panels already report it.
+ */
+function FirstRunActivationStep({ firstRun }: Readonly<{ firstRun?: FirstRunState }>) {
+  if (firstRun === undefined || !isFirstRunOnboarding(firstRun) || firstRun.stage !== "no-loops") {
+    return null;
+  }
+
+  return (
+    <section aria-label="Next activation step">
+      <EmptyState spec={portalEmptyState("onboarding-no-loops")} />
+    </section>
   );
 }
 
@@ -254,6 +279,8 @@ export function DashboardView({
         </h1>
         <h2 className="sr-only">Dashboard overview</h2>
       </section>
+
+      <FirstRunActivationStep firstRun={firstRun} />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (

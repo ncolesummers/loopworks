@@ -24,6 +24,14 @@ export default defineConfig({
   },
   projects: [
     {
+      // Runs against a database holding none of the demo rows, staged by
+      // `scripts/seed-day-zero.ts`. `scripts/test-seeded-postgres.ts` runs it before the seed
+      // stage and clears after it, so the two projects never share a database state.
+      name: "day-zero",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /day-zero-activation\.spec\.ts/,
+    },
+    {
       name: "seeded-postgres",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /seeded-postgres\.spec\.ts/,

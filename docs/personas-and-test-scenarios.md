@@ -110,6 +110,31 @@ Risks:
 | S05 | Security Reviewer | GitHub SSO allowlists reject unauthorized identities and persist the GitHub login used for approval attribution. | Unit, Playwright |
 | S06 | Security Reviewer | GitHub App callbacks reject forged or replayed state and verify the active operator can access the installation before persisting it. | Unit, integration |
 
+### Day-Zero Journey
+
+P05, M04, and M05 are one ordered walk, not three independent scenarios. The
+five personas above are described mid-workflow, with repos, loops, and runs
+already present; this is the operator who has none of them yet. Each step is the
+precondition of the next, and the walk ends where activation ends, at a
+registered loop:
+
+1. **P05, no installation.** The first screen after sign-in names the
+   installation step. A cancelled install and an install GitHub reports nothing
+   for read differently, and both still offer the reconciliation route, because
+   GitHub dead-ends the install link for an account that already has the App.
+2. **M04, no repositories.** The connected installation grants access to no
+   repository yet, so the next step is repository selection.
+3. **M05, no loops.** A tracked repository exists, so the next step is
+   registering a loop against it. The registry then reflects that loop's enabled
+   state, and the operator is activated.
+
+`tests/e2e/day-zero-activation.spec.ts` walks it against an emptied database,
+asserting at every step that no empty state names an action the operator cannot
+take and that axe passes in both themes. GitHub itself is stubbed at the
+boundary: installation and repository access arrive as fixture rows, and every
+step the product owns is driven through its real surfaces. Producing a first
+*run* depends on a trigger and is deliberately outside the walk.
+
 ## How To Use This Matrix
 
 [GitHub milestones](https://github.com/ncolesummers/loopworks/milestones) own
