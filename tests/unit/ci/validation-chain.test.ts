@@ -40,10 +40,14 @@ describe("local validation chain", () => {
     expect(hook?.pass_filenames, "the validation hook passes filenames").toBe(false);
   });
 
-  it("keeps precommit delegating to validate rather than restating it", () => {
-    // A precommit that listed gates itself would drift from `validate` and
-    // could drop the scanners while both scripts still looked plausible.
-    expect(packageJson.scripts.precommit).toBe("bun run validate");
+  it("runs commit provenance preflight before delegating to validate", () => {
+    // Provenance is commit-context policy, while validate is the repository
+    // quality chain. Keep both repository-owned and keep provenance first so a
+    // fixture identity fails before the expensive aggregate gate.
+    expect(packageJson.scripts["commit:preflight"]).toBe(
+      "bun run scripts/check-commit-provenance.ts --local",
+    );
+    expect(packageJson.scripts.precommit).toBe("bun run commit:preflight && bun run validate");
   });
 
   it("reaches every validate-lane scanner from validate", () => {
