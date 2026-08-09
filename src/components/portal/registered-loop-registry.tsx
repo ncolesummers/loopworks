@@ -21,16 +21,16 @@ export function RegisteredLoopRegistry({
 
   return (
     <Card aria-label="Registered loops" className="shadow-none" role="region">
-      <CardHeader className="flex-row items-end justify-between gap-4">
-        <div className="space-y-1">
+      <CardHeader className="items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 space-y-1">
           <CardTitle>Registered loops</CardTitle>
           <CardDescription>
             Loop contracts registered against a tracked repository, with the triggers, gates, and
             approvals each one runs under.
           </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-6 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          <span className="inline-flex min-h-6 max-w-full flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium">
             <Workflow className="h-3.5 w-3.5 text-muted-foreground" />
             <span>{sourceLabel}</span>
             <span className="text-muted-foreground">{enabledCount} enabled</span>
