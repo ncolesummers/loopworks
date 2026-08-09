@@ -7,10 +7,10 @@ import {
   type GithubInstallationStore,
 } from "@/lib/github/installation-flow";
 
-function createHarness() {
+function createHarness(options: { secrets?: string[] } = {}) {
   const challenges = new Map<string, GithubInstallationChallenge>();
   const connected: Array<{ installationId: number; installedBy: string }> = [];
-  const secrets = ["install-state", "oauth-state", "pkce-verifier"];
+  const secrets = options.secrets ?? ["install-state", "oauth-state", "pkce-verifier"];
   const store: GithubInstallationStore = {
     async connectInstallation(input) {
       if (connected.some((row) => row.installationId === input.installationId)) {
@@ -33,6 +33,9 @@ function createHarness() {
       challenge.consumedAt = input.now;
       return challenge;
     },
+    async hasConnectedInstallation() {
+      return connected.length > 0;
+    },
     async createChallenge(input) {
       const challenge = {
         ...input,
@@ -51,6 +54,9 @@ function createHarness() {
     },
     async listInstallationRepositories() {
       return [];
+    },
+    async listUserInstallations() {
+      return [{ appId: 124, installationId: 124_001 }];
     },
     async userCanAccessInstallation() {
       return true;
@@ -80,7 +86,7 @@ function createHarness() {
     store,
   });
 
-  return { challenges, connected, flow, gateway };
+  return { challenges, connected, flow, gateway, store };
 }
 
 describe("GitHub App installation flow", () => {
@@ -368,5 +374,309 @@ describe("GitHub App installation flow", () => {
         githubInstallationState: "oauth-state",
       }),
     ).resolves.toEqual({ kind: "settings", outcome: "error" });
+  });
+});
+
+/**
+ * GitHub only installs from `/apps/<slug>/installations/new` when an eligible
+ * target does not already have the App. When the only eligible account already
+ * has it, GitHub short-circuits to the configure page and never calls the Setup
+ * URL, so the installation phase can never run for that operator (#151).
+ * Reconciliation is the operator-initiated entry into the same authorization
+ * phase, distinguished by an authorization challenge with no candidate
+ * installation.
+ */
+describe("GitHub App installation reconciliation", () => {
+  function createReconcileHarness() {
+    return createHarness({ secrets: ["reconcile-state", "reconcile-verifier"] });
+  }
+
+  async function reconcileCallback(
+    flow: ReturnType<typeof createHarness>["flow"],
+    overrides: Partial<{
+      actorId: string;
+      authorizationCode: string | null;
+      error: string | null;
+      pkceVerifier: string | null;
+      githubInstallationState: string | null;
+    }> = {},
+  ) {
+    return flow.callback({
+      actorId: "ncolesummers",
+      authorizationCode: "one-time-code",
+      error: null,
+      installationId: null,
+      pkceVerifier: "reconcile-verifier",
+      setupAction: null,
+      githubInstallationState: "reconcile-state",
+      ...overrides,
+    });
+  }
+
+  it("starts an unbound authorization challenge with fresh state and PKCE", async () => {
+    const { challenges, flow } = createReconcileHarness();
+
+    const result = await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    expect(result.verifierCookie).toBe("reconcile-verifier");
+    const url = new URL(result.location);
+    expect(url.origin + url.pathname).toBe("https://github.com/login/oauth/authorize");
+    expect(url.searchParams.get("client_id")).toBe("Iv1.loopworks");
+    expect(url.searchParams.get("redirect_uri")).toBe(
+      "https://loopworks.example/api/github/install/callback",
+    );
+    expect(url.searchParams.get("state")).toBe("reconcile-state");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("code_challenge")).not.toBe("reconcile-verifier");
+    expect([...challenges.values()]).toEqual([
+      expect.objectContaining({
+        actorId: "ncolesummers",
+        phase: "authorization",
+        installationId: undefined,
+        expiresAt: new Date("2026-08-03T04:10:00.000Z"),
+      }),
+    ]);
+    expect(JSON.stringify([...challenges.values()])).not.toContain("reconcile-state");
+  });
+
+  it("connects an installation GitHub never announced through the setup url", async () => {
+    const { connected, flow } = createReconcileHarness();
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "connected",
+    });
+    expect(connected).toEqual([{ installationId: 124_001, installedBy: "ncolesummers" }]);
+  });
+
+  it("reports no-installation-found when the operator controls no installation", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "listUserInstallations").mockResolvedValue([]);
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "no-installation-found",
+    });
+    expect(connected).toEqual([]);
+  });
+
+  it("ignores installations belonging to a different app", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "listUserInstallations").mockResolvedValue([
+      { appId: 999, installationId: 999_001 },
+    ]);
+    const verify = vi.spyOn(gateway, "verifyAppInstallation");
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "no-installation-found",
+    });
+    expect(verify).not.toHaveBeenCalled();
+    expect(connected).toEqual([]);
+  });
+
+  it("refuses reconciliation when the GitHub login does not match the session", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "getAuthenticatedUserLogin").mockResolvedValue("attacker");
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+    expect(connected).toEqual([]);
+  });
+
+  it("refuses forged, cross-actor, and replayed reconciliation callbacks", async () => {
+    const forged = createReconcileHarness();
+    await expect(
+      reconcileCallback(forged.flow, { githubInstallationState: "not-a-real-state" }),
+    ).resolves.toEqual({ kind: "settings", outcome: "error" });
+    expect(forged.connected).toEqual([]);
+
+    const crossActor = createReconcileHarness();
+    await crossActor.flow.startReconciliation({ actorId: "ncolesummers" });
+    await expect(reconcileCallback(crossActor.flow, { actorId: "somebody-else" })).resolves.toEqual(
+      { kind: "settings", outcome: "error" },
+    );
+    expect(crossActor.connected).toEqual([]);
+
+    const replayed = createReconcileHarness();
+    await replayed.flow.startReconciliation({ actorId: "ncolesummers" });
+    await reconcileCallback(replayed.flow);
+    await expect(reconcileCallback(replayed.flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+    expect(replayed.connected).toEqual([{ installationId: 124_001, installedBy: "ncolesummers" }]);
+  });
+
+  it("separates authorization denial from missing PKCE material", async () => {
+    const denied = createReconcileHarness();
+    await denied.flow.startReconciliation({ actorId: "ncolesummers" });
+    await expect(
+      reconcileCallback(denied.flow, { authorizationCode: null, error: "access_denied" }),
+    ).resolves.toEqual({ kind: "settings", outcome: "cancelled" });
+
+    const noVerifier = createReconcileHarness();
+    await noVerifier.flow.startReconciliation({ actorId: "ncolesummers" });
+    await expect(reconcileCallback(noVerifier.flow, { pkceVerifier: null })).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+
+    const noCode = createReconcileHarness();
+    await noCode.flow.startReconciliation({ actorId: "ncolesummers" });
+    await expect(
+      reconcileCallback(noCode.flow, { authorizationCode: null, error: "server_error" }),
+    ).resolves.toEqual({ kind: "settings", outcome: "error" });
+
+    expect([...denied.connected, ...noVerifier.connected, ...noCode.connected]).toEqual([]);
+  });
+
+  it("connects every verified installation the operator controls and skips the rest", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "listUserInstallations").mockResolvedValue([
+      { appId: 124, installationId: 124_003 },
+      { appId: 124, installationId: 124_002 },
+      { appId: 124, installationId: 124_001 },
+    ]);
+    vi.spyOn(gateway, "verifyAppInstallation").mockImplementation(async (installationId) => {
+      if (installationId === 124_002) throw new Error("github_installation_verification_failed");
+      return {
+        accountId: 12_400 + installationId,
+        accountLogin: `loopworks-${installationId}`,
+        accountType: "Organization",
+        appId: 124,
+        installationId,
+        repositorySelection: "selected",
+      };
+    });
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "connected",
+    });
+    expect(connected).toEqual([
+      { installationId: 124_003, installedBy: "ncolesummers" },
+      { installationId: 124_001, installedBy: "ncolesummers" },
+    ]);
+  });
+
+  /**
+   * Reconciliation exists for the portal that has no installation at all. Once one
+   * is connected, writing more rows would silently repoint repository selection,
+   * which resolves an installation by lowest id with no actor filter
+   * (`repository-selection.ts`). So it refuses, without calling GitHub.
+   */
+  it("writes nothing and calls no GitHub API once an installation is connected", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    connected.push({ installationId: 124_001, installedBy: "someone-earlier" });
+    const listUserInstallations = vi.spyOn(gateway, "listUserInstallations");
+    const verifyAppInstallation = vi.spyOn(gateway, "verifyAppInstallation");
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "already-connected",
+    });
+    expect(connected).toEqual([{ installationId: 124_001, installedBy: "someone-earlier" }]);
+    expect(listUserInstallations).not.toHaveBeenCalled();
+    expect(verifyAppInstallation).not.toHaveBeenCalled();
+  });
+
+  it("still consumes the challenge when it refuses an already-connected portal", async () => {
+    const { connected, flow } = createReconcileHarness();
+    connected.push({ installationId: 124_001, installedBy: "someone-earlier" });
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await reconcileCallback(flow);
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+  });
+
+  it("errors without writing when every candidate fails verification", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "verifyAppInstallation").mockRejectedValue(
+      new Error("github_installation_verification_failed"),
+    );
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+    expect(connected).toEqual([]);
+  });
+
+  /**
+   * A rate limit or 5xx from `GET /user/installations` is the likeliest failure
+   * on this path. It must resolve to the `error` outcome like every other
+   * authorization-phase failure, never reject `callback()` — a rejection escapes
+   * the flow's own mapping and reaches callers as an unhandled failure.
+   */
+  it("reports a failing installation listing as an outcome rather than rejecting", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "listUserInstallations").mockRejectedValue(
+      new Error("github rate limit exceeded"),
+    );
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+    expect(connected).toEqual([]);
+  });
+
+  it("reports a failing installation write as an outcome rather than rejecting", async () => {
+    const { connected, flow, store } = createReconcileHarness();
+    vi.spyOn(store, "connectInstallation").mockRejectedValue(new Error("database unavailable"));
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "error",
+    });
+    expect(connected).toEqual([]);
+  });
+
+  /**
+   * The bound must keep the newest installations. GitHub ids increase
+   * monotonically, so the account the operator just configured is the highest id
+   * — dropping it would discard exactly the installation #151 is about.
+   */
+  it("bounds how many candidates one reconciliation verifies, keeping the newest", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    vi.spyOn(gateway, "listUserInstallations").mockResolvedValue(
+      Array.from({ length: 25 }, (_, index) => ({
+        appId: 124,
+        installationId: 124_100 - index,
+      })),
+    );
+    vi.spyOn(gateway, "verifyAppInstallation").mockImplementation(async (installationId) => ({
+      accountId: 12_400 + installationId,
+      accountLogin: `loopworks-${installationId}`,
+      accountType: "Organization",
+      appId: 124,
+      installationId,
+      repositorySelection: "selected",
+    }));
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(reconcileCallback(flow)).resolves.toEqual({
+      kind: "settings",
+      outcome: "connected",
+    });
+    expect(connected).toHaveLength(10);
+    expect(connected.map((row) => row.installationId)).toEqual([
+      124_100, 124_099, 124_098, 124_097, 124_096, 124_095, 124_094, 124_093, 124_092, 124_091,
+    ]);
   });
 });

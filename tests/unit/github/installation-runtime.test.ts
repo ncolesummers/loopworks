@@ -66,12 +66,13 @@ describe("GitHub installation runtime", () => {
     ).toBe("http://127.0.0.1:3000/api/github/install/callback");
   });
 
-  it("composes start and callback operations without opening a network connection", () => {
+  it("composes start, reconciliation, and callback operations without opening a network connection", () => {
     const runtime = createGithubInstallationRuntime(validEnv);
 
     expect(runtime).toEqual({
       callback: expect.any(Function),
       start: expect.any(Function),
+      startReconciliation: expect.any(Function),
     });
   });
 });

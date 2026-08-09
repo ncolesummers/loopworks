@@ -262,6 +262,7 @@ export type GithubInstallationFlowOutcomeMetricInput = {
     | "connected"
     | "already-connected"
     | "cancelled"
+    | "no-installation-found"
     | "pending-approval"
     | "error";
   phase: "installation" | "authorization";

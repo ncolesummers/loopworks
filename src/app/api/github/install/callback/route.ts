@@ -5,6 +5,11 @@ import type {
   GithubInstallationCallbackInput,
   GithubInstallationCallbackResult,
 } from "@/lib/github/installation-flow";
+import {
+  clearGithubInstallationPkceCookie,
+  readGithubInstallationPkceCookie,
+  setGithubInstallationPkceCookie,
+} from "@/lib/github/installation-pkce-cookie";
 import { createGithubInstallationRuntime } from "@/lib/github/installation-runtime";
 import { createRequestLogger } from "@/lib/observability/logger";
 import { recordGithubInstallationFlowOutcomeMetric } from "@/lib/observability/metrics";
@@ -13,8 +18,6 @@ import {
   markGithubInstallationSpanOutcome,
   withLoopworksActiveSpan,
 } from "@/lib/observability/trace-context";
-
-const pkceCookieName = "loopworks-github-install-pkce";
 
 type CallbackSession =
   | { authenticated: true; actorId: string }
@@ -69,15 +72,7 @@ export async function handleGithubInstallationCallback(
       authorizationCode: url.searchParams.get("code"),
       error: url.searchParams.get("error"),
       installationId: url.searchParams.get("installation_id"),
-      pkceVerifier: request.headers
-        .get("cookie")
-        ?.match(new RegExp(`(?:^|;\\s*)${pkceCookieName}=([^;]+)`))?.[1]
-        ? decodeURIComponent(
-            request.headers
-              .get("cookie")
-              ?.match(new RegExp(`(?:^|;\\s*)${pkceCookieName}=([^;]+)`))?.[1] ?? "",
-          )
-        : null,
+      pkceVerifier: readGithubInstallationPkceCookie(request),
       setupAction: url.searchParams.get("setup_action"),
       githubInstallationState: url.searchParams.get("state"),
     });
@@ -96,14 +91,10 @@ export async function handleGithubInstallationCallback(
         outcome: "authorize",
         phase: authorizationPhase,
       });
-      const response = NextResponse.redirect(result.location);
-      response.cookies.set(pkceCookieName, result.verifierCookie, {
-        httpOnly: true,
-        maxAge: 10 * 60,
-        sameSite: "lax",
-        secure: new URL(request.url).protocol === "https:",
+      return setGithubInstallationPkceCookie(NextResponse.redirect(result.location), {
+        requestUrl: request.url,
+        verifier: result.verifierCookie,
       });
-      return response;
     }
 
     recordGithubInstallationFlowOutcomeMetric({
@@ -122,11 +113,9 @@ export async function handleGithubInstallationCallback(
       phase,
     });
 
-    const response = NextResponse.redirect(
-      new URL(`/settings?github=${result.outcome}`, request.url),
+    return clearGithubInstallationPkceCookie(
+      NextResponse.redirect(new URL(`/settings?github=${result.outcome}`, request.url)),
     );
-    response.cookies.delete(pkceCookieName);
-    return response;
   } catch {
     recordGithubInstallationFlowOutcomeMetric({ outcome: "error", phase });
     requestLogger.warn({ outcome: "error", phase }, "github_installation_callback_failed");

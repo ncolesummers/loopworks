@@ -121,6 +121,71 @@ describe("GitHub installation verification gateway", () => {
     expect(paginate).toHaveBeenCalledWith("GET /user/installations", { per_page: 100 });
   });
 
+  it("normalizes the operator's own installations and drops malformed entries", async () => {
+    const paginate = vi.fn(async () => [
+      { app_id: 124, id: 124_001 },
+      { app_id: 999, id: 999_001 },
+      { app_id: 124, id: "not-a-number" },
+      { app_id: null, id: 124_002 },
+      null,
+    ]);
+    const gateway = createGithubInstallationGateway({
+      appId: 124,
+      createAppClient: () => ({ request: vi.fn() }),
+      createUserClient: () => ({ paginate, request: vi.fn() }),
+      oauthFetchImpl: vi.fn(),
+      privateKey: "private-key",
+    });
+
+    await expect(gateway.listUserInstallations("ghu_token")).resolves.toEqual([
+      { appId: 124, installationId: 124_001 },
+      { appId: 999, installationId: 999_001 },
+    ]);
+    expect(paginate).toHaveBeenCalledWith("GET /user/installations", { per_page: 100 });
+  });
+
+  it("paginates the operator's installations through the default client, with no injected fake", async () => {
+    const requestedPages: (string | null)[] = [];
+    const authorizations: (string | null)[] = [];
+    mswServer.use(
+      http.get("https://api.github.com/user/installations", ({ request }) => {
+        const url = new URL(request.url);
+        const page = url.searchParams.get("page");
+        requestedPages.push(page);
+        authorizations.push(request.headers.get("authorization"));
+        // The live endpoint wraps the array in a counted envelope and links the next page; only a
+        // real paginating client unwraps the envelope and follows the link.
+        if (page === "2") {
+          return HttpResponse.json({
+            installations: [{ app_id: 124, id: 124_002 }],
+            total_count: 2,
+          });
+        }
+        return HttpResponse.json(
+          { installations: [{ app_id: 124, id: 124_001 }], total_count: 2 },
+          {
+            headers: {
+              link: '<https://api.github.com/user/installations?per_page=100&page=2>; rel="next"',
+            },
+          },
+        );
+      }),
+    );
+    const gateway = createGithubInstallationGateway({
+      appId: 124,
+      privateKey: generateAppPrivateKey(),
+    });
+
+    await expect(gateway.listUserInstallations("ghu_token")).resolves.toEqual([
+      { appId: 124, installationId: 124_001 },
+      { appId: 124, installationId: 124_002 },
+    ]);
+    await expect(gateway.userCanAccessInstallation("ghu_token", 124_002)).resolves.toBe(true);
+    await expect(gateway.userCanAccessInstallation("ghu_token", 777_001)).resolves.toBe(false);
+    expect(requestedPages).toEqual([null, "2", null, "2", null, "2"]);
+    expect(new Set(authorizations)).toEqual(new Set(["token ghu_token"]));
+  });
+
   it("normalizes every repository page the installation can reach", async () => {
     const paginate = vi.fn(async () => [
       {
