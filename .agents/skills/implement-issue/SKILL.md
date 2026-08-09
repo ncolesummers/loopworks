@@ -1,6 +1,6 @@
 ---
 name: implement-issue
-description: Implement a GitHub issue end to end under the LoopWorks TDD workflow. Use when asked to implement, build, or fix a numbered issue or issue URL, and for the AC extraction, test-plan-first, adversarial review, and acceptance-evidence steps that work requires.
+description: Implement a GitHub issue end to end on the current branch and stop before committing. Use when asked to implement, build, or fix a numbered issue or issue URL without publishing, and for the AC extraction, test-plan-first, adversarial review, and acceptance-evidence steps that work requires. Use implement-issue-pr instead when the request also asks for a branch, commits, or a pull request.
 ---
 
 # Implement Issue
@@ -18,8 +18,9 @@ doing anything else.
 
 These are not boilerplate. They hold for the entire run:
 
-1. Never create, switch, rebase, or clean branches. If the current branch is
-   unsuitable for this issue, stop and say so.
+1. Never create, switch, rebase, or clean branches or worktrees. If the current
+   branch is unsuitable for this issue, stop and say so. Use the
+   `implement-issue-pr` skill when the work needs its own branch.
 2. No commits, pushes, or PRs unless explicitly asked.
 3. No unrelated refactors. Fix what the ACs require and nothing else.
 4. Preserve user work already in the tree.
@@ -119,7 +120,7 @@ Brief, verbatim:
 > state what you attacked and why it held.
 
 Dedupe both lists. Fix or defer each finding with a stated reason, then re-run
-the checks step 5 calls for.
+the checks the validate step calls for.
 
 ## Acceptance evidence
 

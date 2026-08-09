@@ -40,8 +40,13 @@ represented and never create or write fixture identities.
 
 Enforcement has four layers:
 
-1. `AGENTS.md` and the `implement-issue` skill define the authorization,
-   signing, evidence, and stop conditions.
+1. `AGENTS.md` and the `implement-issue` and `implement-issue-pr` skills define
+   the authorization, signing, evidence, and stop conditions. `implement-issue`
+   stops before committing and publishes only when the user explicitly asks;
+   `implement-issue-pr` is authorized at invocation to commit on a branch it
+   created and open a draft PR. Both run the same preflight, signing, local
+   verification, and GitHub provenance checks in the same order — the variants
+   differ in who authorizes publication, never in what is verified.
 2. `commit:preflight` runs before the repository validation chain locally.
 3. The trusted-base `commit-provenance` workflow runs
    `commit:provenance --github <PR>` with read-only GitHub metadata access for
