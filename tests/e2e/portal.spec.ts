@@ -8,7 +8,7 @@ const portalRoutes = [
     heading: "Agentic delivery loops, repo health, and deployment visibility",
   },
   { path: "/catalog", nav: "Catalog", heading: "Repo catalog" },
-  { path: "/loops", nav: "Loops", heading: "Loop registry" },
+  { path: "/loops", nav: "Loops", heading: "Registered loops" },
   { path: "/runs", nav: "Runs", heading: "Run timeline and artifacts" },
   { path: "/approvals", nav: "Approvals", heading: "Approval gate" },
   {
@@ -25,6 +25,8 @@ const portalRoutes = [
 
 // Reached from Settings rather than the nav, so it carries no `nav` entry.
 const repositorySelectionPath = "/settings/repositories";
+// Reached from the loop registry rather than the nav.
+const loopRegistrationPath = "/loops/register";
 
 const portalSourceLabel = "Fixture fallback";
 const dbBackedPortalPaths = ["/", "/catalog", "/loops", "/approvals", "/settings"] as const;
@@ -432,6 +434,62 @@ test.describe("Loopworks portal", () => {
     ).toBe(true);
   });
 
+  // Persona P01: a first-run operator reaches loop registration from the registry that names it.
+  test("routes an operator from the loop registry into registration and back", async ({ page }) => {
+    await page.goto("/loops");
+
+    await expect(page.getByRole("heading", { name: "Registered loops" })).toBeVisible();
+    await page.getByRole("link", { name: "Register a loop" }).click();
+
+    await expect(page).toHaveURL(loopRegistrationPath);
+    await expect(page.getByRole("heading", { name: "Register a loop" })).toBeVisible();
+    await page.getByRole("link", { name: "Back to loops" }).first().click();
+    await expect(page).toHaveURL("/loops");
+  });
+
+  // Persona P01: the registry shows what an already-registered loop actually runs under.
+  test("loop registry shows enabled state, triggers, gates, and approvals", async ({ page }) => {
+    await page.goto("/loops");
+
+    const registry = page.getByRole("region", { name: "Registered loops" });
+    const entry = registry.getByRole("article", { name: "Agent-ready development loop" });
+
+    await expect(entry.getByText("Enabled")).toBeVisible();
+    await expect(entry.getByRole("list", { name: "Trigger labels" })).toContainText("agent-ready");
+    await expect(entry.getByRole("list", { name: "Validation gates" })).toContainText(
+      "Aggregate validation",
+    );
+    await expect(entry.getByRole("list", { name: "Approval requirements" })).toContainText(
+      "pr_creation",
+    );
+    // The synced issue mirror stays, labelled for what it is rather than as the registry.
+    await expect(page.getByText("Synced issue loops")).toBeVisible();
+  });
+
+  test("keeps loop registration keyboard-operable and stable at mobile width", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(loopRegistrationPath);
+
+    const submit = page.getByRole("button", { name: "Register loop" });
+    const agent = page.getByRole("radio", { name: /loopworks-agent/ });
+
+    await page.getByLabel("Loop name").focus();
+    await agent.focus();
+    await page.keyboard.press("Space");
+    await expect(agent).toBeChecked();
+
+    await page.getByLabel("Trigger labels").fill("agent-ready, status:ready");
+    await expect(page.getByLabel("Trigger labels")).toHaveValue("agent-ready, status:ready");
+
+    // The fixture server serves ids the database does not know, so registering stays disabled.
+    await expect(submit).toBeDisabled();
+    await expect(page.getByText(/fixture data, so registration is disabled/i)).toBeVisible();
+
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+
   test("keeps the legacy GitHub settings route as a settings alias", async ({ page }) => {
     await page.goto("/github");
 
@@ -543,7 +601,11 @@ test.describe("Loopworks portal", () => {
       test("has no a11y violations (incl. contrast) on primary portal surfaces", async ({
         page,
       }) => {
-        for (const path of [...portalRoutes.map((route) => route.path), repositorySelectionPath]) {
+        for (const path of [
+          ...portalRoutes.map((route) => route.path),
+          repositorySelectionPath,
+          loopRegistrationPath,
+        ]) {
           await page.goto(path);
           // Full default axe rule set (wcag2/wcag21/best-practice) WITH
           // color-contrast — only the prior contrast suppression is removed.
