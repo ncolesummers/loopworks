@@ -14,7 +14,9 @@ LOOPWORKS_ENV_TARGET="preview"
 # --- From the GitHub App for THIS environment. Preview must use its own App so
 # --- a preview deployment can never hold the production private key or act on
 # --- production installations.
+# The numeric App ID, e.g. 4542534.
 GITHUB_APP_ID=""
+# NOT the App ID above. The Client ID sits below it and looks like Iv23li...
 GITHUB_APP_CLIENT_ID=""
 GITHUB_APP_CLIENT_SECRET=""
 GITHUB_APP_SLUG=""

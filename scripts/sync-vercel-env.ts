@@ -157,6 +157,16 @@ export function validateVercelEnvFile(
     );
   }
 
+  // GitHub App settings show the numeric App ID directly above the Client ID,
+  // and both client fields silently accept the wrong one. The failure surfaces
+  // only after a redeploy, as an opaque GitHub 404 at /login/oauth/authorize.
+  for (const name of ["AUTH_GITHUB_ID", "GITHUB_APP_CLIENT_ID"] as const) {
+    const value = entries.get(name);
+    if (value && /^\d+$/.test(value)) {
+      fail(`${name} looks like the App ID; use the App's Client ID (for example Iv23li...).`);
+    }
+  }
+
   // Registry validation in the production context, which is the context a
   // Preview deployment actually resolves to. Rejects malformed values, the
   // generated example placeholders, and non-HTTPS public origins locally

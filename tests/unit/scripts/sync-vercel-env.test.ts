@@ -190,6 +190,35 @@ describe("sync-vercel-env", () => {
       ).toThrow(/allowlist/);
     });
 
+    // The App ID sits directly above the Client ID on the GitHub App settings
+    // page. Pasting it into either client field yields a GitHub 404 at
+    // /login/oauth/authorize, twenty minutes and one redeploy later.
+    it("rejects an all-digits client id, which is always the App ID", () => {
+      for (const name of ["AUTH_GITHUB_ID", "GITHUB_APP_CLIENT_ID"]) {
+        expect(() =>
+          validateVercelEnvFile(previewEnvFile({ [name]: "4542534" }), "preview"),
+        ).toThrow(new RegExp(`${name}.*App ID`));
+      }
+    });
+
+    it("accepts a real GitHub App client id", () => {
+      const entries = validateVercelEnvFile(
+        previewEnvFile({
+          AUTH_GITHUB_ID: "Iv23li-preview-client-id",
+          GITHUB_APP_CLIENT_ID: "Iv23li-preview-client-id",
+        }),
+        "preview",
+      );
+
+      expect(entries.get("AUTH_GITHUB_ID")).toBe("Iv23li-preview-client-id");
+    });
+
+    it("still requires GITHUB_APP_ID itself to be numeric", () => {
+      expect(() =>
+        validateVercelEnvFile(previewEnvFile({ GITHUB_APP_ID: "4542534" }), "preview"),
+      ).not.toThrow();
+    });
+
     it("rejects generated example placeholders and non-HTTPS public origins", () => {
       expect(() =>
         validateVercelEnvFile(
