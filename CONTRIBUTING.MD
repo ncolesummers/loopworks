@@ -42,6 +42,11 @@ locally, explain why and include the best available evidence in the pull
 request. Do not replace `bun run check` with its narrower formatting or lint
 subcommands.
 
+Changes to the GitHub installation or repository-selection surfaces need a
+preview deployment reachable at the alias registered with the preview GitHub
+App. Label the pull request `preview:alias` to claim it, then follow
+[Vercel preview verification](docs/runbooks/vercel-preview-verification.md).
+
 Use the [pull request template](.github/pull_request_template.md) for the
 required issue, red evidence, green validation, documentation, and review
 record.

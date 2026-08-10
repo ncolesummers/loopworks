@@ -1,0 +1,129 @@
+name: Preview alias
+
+# Points one stable hostname at a pull request's preview deployment so the
+# preview GitHub App has a callback and Setup URL that never change. ADR 0021
+# allows exactly one registered callback URL, and per-branch preview hostnames
+# cannot satisfy that, so the installation and repository-selection flows are
+# only exercisable through this alias.
+#
+# Opt-in per pull request via the `preview:alias` label rather than on every
+# preview build: one alias cannot serve two pull requests, and reassigning it
+# under an in-flight verification would silently invalidate the evidence.
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number to alias
+        required: true
+        type: string
+
+permissions: {}
+
+# Latest wins; an older run finishing second would leave the alias behind the
+# commit the pull request comment claims it serves.
+concurrency:
+  group: preview-alias
+  cancel-in-progress: true
+
+jobs:
+  alias:
+    # `pull_request` withholds secrets from fork branches, so this runs for
+    # in-repository branches only. That is deliberate: the job holds a Vercel
+    # token, and `pull_request_target` would expose it to fork-authored code.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'preview:alias')
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Resolve pull-request head
+        id: resolve
+        env:
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          INPUT_PR_NUMBER: ${{ inputs.pull_request }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if test "$EVENT_NAME" = "pull_request"; then
+            PULL_REQUEST_NUMBER="$EVENT_PR_NUMBER"
+            HEAD_SHA="$EVENT_HEAD_SHA"
+          else
+            PULL_REQUEST_NUMBER="$INPUT_PR_NUMBER"
+            case "$PULL_REQUEST_NUMBER" in
+              ''|*[!0-9]*)
+                echo "pull request number must be a positive integer" >&2
+                exit 1
+                ;;
+            esac
+            HEAD_SHA="$(gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST_NUMBER" --jq .head.sha)"
+          fi
+
+          test -n "$HEAD_SHA"
+          echo "pull_request=$PULL_REQUEST_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Cache Bun install store
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-store-${{ runner.os }}-bun1.3.14-${{ hashFiles('bun.lock') }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Waits for the preview build to reach READY, then repoints the alias.
+      # The script refuses any deployment whose target is production.
+      - name: Assign preview alias
+        id: alias
+        env:
+          VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+          PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
+          PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          # `.vercel/` is gitignored, so the linked-project file is never in a
+          # CI checkout; the identifiers come from repository variables.
+          for required in PREVIEW_ALIAS PROJECT_ID ORG_ID; do
+            test -n "${!required}" || {
+              echo "Set the VERCEL_${required#VERCEL_} repository variable first." >&2
+              exit 1
+            }
+          done
+          {
+            echo 'comment<<PREVIEW_ALIAS_EOF'
+            bun run scripts/vercel-preview-alias.ts \
+              --commit-sha "$HEAD_SHA" \
+              --alias "$PREVIEW_ALIAS" \
+              --project-id "$PROJECT_ID" \
+              --org-id "$ORG_ID"
+            echo 'PREVIEW_ALIAS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment the alias on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ steps.resolve.outputs.pull_request }}
+          COMMENT: ${{ steps.alias.outputs.comment }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh pr comment "$PULL_REQUEST_NUMBER" --repo "$REPOSITORY" --body "$COMMENT"

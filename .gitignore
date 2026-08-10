@@ -16,8 +16,13 @@ test-results
 .env
 .env.local
 .env.*.local
-# Filled-in copy of scripts/prod-env.example; holds live production secrets.
+# Filled-in copies of scripts/vercel-env.example; hold live environment secrets.
+vercel-env.local
+vercel-env.*.local
 prod-env.local
 CLAUDE.local.md
 tsconfig.tsbuildinfo
 .vercel
+
+# Agent browser screenshots land here when a shell cwd resets; never commit them.
+/*.png

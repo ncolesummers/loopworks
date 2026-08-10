@@ -1,0 +1,43 @@
+# Fill in, save as vercel-env.local (gitignored), then:
+#   bun run vercel-env:write preview --file vercel-env.local
+# Do not commit the filled-in copy: it holds live secrets.
+#
+# Preview and Production need the SAME variable set. A Vercel Preview runs with
+# NODE_ENV=production, so the config registry enforces the full production
+# contract there and a missing value 500s every route before middleware.
+#
+# Keep one file per environment. The declared target below must match the
+# `vercel-env:write` argument, which is what stops production credentials from
+# being written into Preview.
+LOOPWORKS_ENV_TARGET="preview"
+
+# --- From the GitHub App for THIS environment. Preview must use its own App so
+# --- a preview deployment can never hold the production private key or act on
+# --- production installations.
+# The numeric App ID, e.g. 4542534.
+GITHUB_APP_ID=""
+# NOT the App ID above. The Client ID sits below it and looks like Iv23li...
+GITHUB_APP_CLIENT_ID=""
+GITHUB_APP_CLIENT_SECRET=""
+GITHUB_APP_SLUG=""
+# The whole PEM, with literal \n escapes between lines. Do NOT paste the command
+# below into this file — it only expands when run in a shell. Run it in your
+# terminal and paste the RESULT, or append it with:
+#   printf 'GITHUB_APP_PRIVATE_KEY="%s"\n' \
+#     "$(awk 'BEGIN{ORS="\\n"}1' ~/Downloads/your-app.private-key.pem)" >> vercel-env.local
+GITHUB_APP_PRIVATE_KEY=""
+
+# --- Sign-in. The same GitHub App client credentials serve both, which is why
+# --- the App carries two callback URLs.
+AUTH_GITHUB_ID=""
+AUTH_GITHUB_SECRET=""
+
+# --- Runtime. For preview this must be the stable alias the preview GitHub
+# --- App registers, not a per-branch deployment hostname.
+LOOPWORKS_PUBLIC_URL="https://loopworks-preview.vercel.app"
+LOOPWORKS_ALLOWED_GITHUB_USERS="ncolesummers"
+
+# --- Secrets: generate with `openssl rand -hex 32`
+AUTH_SECRET=""
+LOOPWORKS_EVE_TEST_RECEIPT_SECRET=""
+GITHUB_WEBHOOK_SECRET=""

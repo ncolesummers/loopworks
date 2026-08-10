@@ -100,10 +100,15 @@ every deploy — the schema is current.
 To change a value later:
 
 ```bash
-cp scripts/prod-env.example prod-env.local    # fill in; gitignored, holds live secrets
-./scripts/set-production-env.sh prod-env.local
-vercel redeploy <production-deployment-id>    # not `deploy --prod`, see below
+cp scripts/vercel-env.example vercel-env.local  # fill in; gitignored, holds live secrets
+# set LOOPWORKS_ENV_TARGET="production" in the copy
+bun run vercel-env:write production --file vercel-env.local
+vercel redeploy <production-deployment-id>      # not `deploy --prod`, see below
 ```
+
+`bun run vercel-env:check production` reports missing names without reading any
+value. The same contract governs Preview — see
+[Vercel preview verification](vercel-preview-verification.md).
 
 Use `redeploy`, not `vercel deploy --prod`: the latter uploads your current
 working tree, which would push whatever branch you have checked out to
