@@ -167,6 +167,16 @@ export function validateVercelEnvFile(
     }
   }
 
+  // The example documents a `$(awk ...)` one-liner for the PEM, which stores the
+  // command text verbatim when pasted into the file rather than run in a shell.
+  // The App JWT then fails at runtime as an opaque /settings?github=error.
+  const privateKey = entries.get("GITHUB_APP_PRIVATE_KEY");
+  if (privateKey && !/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(privateKey)) {
+    fail(
+      "GITHUB_APP_PRIVATE_KEY is not a PEM; paste the key file's contents, not a path or an unevaluated shell command.",
+    );
+  }
+
   // Registry validation in the production context, which is the context a
   // Preview deployment actually resolves to. Rejects malformed values, the
   // generated example placeholders, and non-HTTPS public origins locally

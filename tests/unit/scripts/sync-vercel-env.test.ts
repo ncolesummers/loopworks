@@ -40,7 +40,8 @@ function previewEnvFile(overrides: Record<string, string> = {}): string {
     GITHUB_APP_ID: "654321",
     GITHUB_APP_CLIENT_ID: "preview-app-client-id",
     GITHUB_APP_CLIENT_SECRET: "preview-app-client-secret",
-    GITHUB_APP_PRIVATE_KEY: "preview-private-key",
+    GITHUB_APP_PRIVATE_KEY:
+      "-----BEGIN RSA PRIVATE KEY-----\\npreview-key-body\\n-----END RSA PRIVATE KEY-----",
     GITHUB_APP_SLUG: "loopworks-preview",
     GITHUB_WEBHOOK_SECRET: "preview-webhook-secret",
     ...overrides,
@@ -216,6 +217,28 @@ describe("sync-vercel-env", () => {
     it("still requires GITHUB_APP_ID itself to be numeric", () => {
       expect(() =>
         validateVercelEnvFile(previewEnvFile({ GITHUB_APP_ID: "4542534" }), "preview"),
+      ).not.toThrow();
+    });
+
+    // The example documents a `$(awk ...)` one-liner for the PEM. Pasted into
+    // the file instead of run in a shell, it stores the command text, and the
+    // App JWT then fails at runtime as an opaque /settings?github=error.
+    it("rejects a private key that is not a PEM", () => {
+      for (const value of [
+        `"$(awk 'BEGIN{ORS="\\n"}1' ~/Downloads/app.private-key.pem)"`,
+        "~/Downloads/app.private-key.pem",
+        "not-a-key",
+      ]) {
+        expect(() =>
+          validateVercelEnvFile(previewEnvFile({ GITHUB_APP_PRIVATE_KEY: value }), "preview"),
+        ).toThrow(/GITHUB_APP_PRIVATE_KEY.*PEM/);
+      }
+    });
+
+    it("accepts a PEM with escaped or real newlines", () => {
+      const pem = "-----BEGIN RSA PRIVATE KEY-----\\nMIIEow==\\n-----END RSA PRIVATE KEY-----";
+      expect(() =>
+        validateVercelEnvFile(previewEnvFile({ GITHUB_APP_PRIVATE_KEY: pem }), "preview"),
       ).not.toThrow();
     });
 

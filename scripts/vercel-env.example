@@ -20,8 +20,11 @@ GITHUB_APP_ID=""
 GITHUB_APP_CLIENT_ID=""
 GITHUB_APP_CLIENT_SECRET=""
 GITHUB_APP_SLUG=""
-# Paste the whole PEM. Literal \n escapes are accepted, so this works:
-#   GITHUB_APP_PRIVATE_KEY="$(awk 'BEGIN{ORS="\\n"}1' ~/Downloads/your-app.private-key.pem)"
+# The whole PEM, with literal \n escapes between lines. Do NOT paste the command
+# below into this file — it only expands when run in a shell. Run it in your
+# terminal and paste the RESULT, or append it with:
+#   printf 'GITHUB_APP_PRIVATE_KEY="%s"\n' \
+#     "$(awk 'BEGIN{ORS="\\n"}1' ~/Downloads/your-app.private-key.pem)" >> vercel-env.local
 GITHUB_APP_PRIVATE_KEY=""
 
 # --- Sign-in. The same GitHub App client credentials serve both, which is why

@@ -23,3 +23,6 @@ prod-env.local
 CLAUDE.local.md
 tsconfig.tsbuildinfo
 .vercel
+
+# Agent browser screenshots land here when a shell cwd resets; never commit them.
+/*.png
