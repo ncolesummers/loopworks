@@ -18,6 +18,8 @@
     "config:sync": "bun run scripts/sync-env-example.ts --write",
     "config:check": "bun run scripts/sync-env-example.ts --check",
     "config:access-check": "bun run scripts/check-env-access.ts",
+    "vercel-env:check": "bun run scripts/sync-vercel-env.ts --check",
+    "vercel-env:write": "bun run scripts/sync-vercel-env.ts --write",
     "commit:preflight": "bun run scripts/check-commit-provenance.ts --local",
     "commit:provenance": "bun run scripts/check-commit-provenance.ts",
     "markdownlint": "markdownlint-cli2",
