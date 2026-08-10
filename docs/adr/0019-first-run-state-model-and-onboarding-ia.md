@@ -30,12 +30,12 @@ whose existence is independent of repository selection.
 ## Decision
 
 Define a server-derived `FirstRunState` with three ordered, first-match-wins
-onboarding stages:
+onboarding stages followed by the terminal `activated` state:
 
 1. `no-installation`
 2. `no-repositories`
 3. `no-loops`
-4. `activated`
+4. `activated` (terminal state, not an onboarding stage)
 
 All onboarding stages are reachable from real `readPortalRecords` output. Zero
 installation rows select `no-installation`. With an installation present, zero
@@ -174,6 +174,22 @@ work originally ran `bun run format:check` and `bun run lint`, which surfaced
 the gap that neither runs Biome assists. `bun run check` replaced both in
 `validate`, and is the command to run here.
 
+### #122 validation evidence
+
+The following validation checks for [#122](https://github.com/ncolesummers/loopworks/issues/122)
+passed on the current `main`. This evidence does not by itself close the parent
+epic; #122 remains open until its acceptance checklist is reviewed.
+
+- `bun run validate` — 133 Vitest files / 1,098 tests, Storybook build, security
+  scanners, and 34 Playwright tests.
+- `bun run build` — exit 0.
+- `DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" bun run test:e2e:seeded`
+  — day-zero: 1 passed; seeded-postgres: 4 passed.
+
+The seeded lane uses the dedicated local `loopworks_e2e` database and is
+separate from `bun run validate`; its guarded reset/reseed behavior is
+described above and in `docs/development.md`.
+
 ## Follow-Ups
 
 - Track and enable `exactOptionalPropertyTypes` as a separate repo-wide
@@ -181,8 +197,10 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   approximately 93 existing errors must be resolved first.
 - [#124](https://github.com/ncolesummers/loopworks/issues/124): implemented the
   independent installation record, truthful `no-installation` stage, and the
-  Settings-specific successful-empty read path; acceptance remains pending
-  review and aggregate validation.
+  Settings-specific successful-empty read path. The child issue is closed; the
+  remaining challenge-retention and identity-hardening work is tracked separately in
+  [#140](https://github.com/ncolesummers/loopworks/issues/140) and
+  [#203](https://github.com/ncolesummers/loopworks/issues/203).
 - [#125](https://github.com/ncolesummers/loopworks/issues/125): implemented
   repository selection at `/settings/repositories`. Selection writes identity
   fields into `repositories`, so the `no-repositories` boundary this ADR models
@@ -195,15 +213,20 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   fixture limitation this ADR records still holds: `dev:fixture` cannot exercise
   the onboarding transition, so the page serves an explicit, non-production
   `repositorySelectionFixture` for Playwright and Storybook coverage while the
-  transition itself is proven by PGlite tests. Acceptance remains pending review
-  and aggregate validation.
+  transition itself is proven by PGlite tests. The child issue is closed;
+  operator-bound access, multi-installation policy, orphan handling, and
+  large-installation scale remain separate follow-ups in
+  [#145](https://github.com/ncolesummers/loopworks/issues/145)
+  through [#148](https://github.com/ncolesummers/loopworks/issues/148).
 - [#126](https://github.com/ncolesummers/loopworks/issues/126): implemented first
   loop registration with a durable `loop_definitions` store, a registration
   surface at `/loops/register`, and a registered-loop projection distinct from
   synced issue loops. `no-loops` now reads that registered projection. Fixture
   mode remains read-only, so PGlite and route tests prove the write and
-  transition while Playwright covers the operator surface. Acceptance remains
-  pending review and aggregate validation. See ADR 0025.
+  transition while Playwright covers the operator surface. The child issue is
+  closed;
+  registration ends at a persisted, visible loop by design, while triggering or
+  executing a run remains out of scope. See ADR 0025.
 - [#127](https://github.com/ncolesummers/loopworks/issues/127): implemented
   actionable empty-state routing, and is the first UI consumer of
   `deriveFirstRunState`. The portal pages previously collapsed all three sources
@@ -242,7 +265,8 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   now covers those states; this follow-up remains the owner of the inventory and
   actionability rules above.
 
-  Acceptance remains pending review and aggregate validation.
+  The child issue is closed; the seeded day-zero lane now covers the first-run
+  and unavailable states described above.
 - [#128](https://github.com/ncolesummers/loopworks/issues/128): implemented the
   day-zero walk (persona ids P05, M04, M05) that #127 left uncovered.
   `tests/e2e/day-zero-activation.spec.ts` runs in the seeded Postgres lane
@@ -277,4 +301,4 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
   it is deliberately not part of this lane.
 - Revisit `hasRunActivity` when portal records expose an authoritative run
   signal.
-- Move this ADR from Proposed to Accepted after review.
+- Move this ADR from Proposed to Accepted after this documentation PR is reviewed.
