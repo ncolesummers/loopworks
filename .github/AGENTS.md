@@ -23,3 +23,11 @@ while maintaining pull requests.
 6. To resolve an inline PR review comment through the GitHub API, query
    `pullRequest.reviewThreads` and resolve the review-thread node ID; the review
    comment database ID is not directly resolvable.
+7. Preview deployments cannot exercise the GitHub installation or
+   repository-selection surfaces on their own: those flows require the stable
+   alias registered with the preview GitHub App. When a pull request changes
+   them, label it `preview:alias` so `preview-alias.yml` repoints the alias at
+   that pull request, then verify against the alias. Only one pull request can
+   hold the alias at a time, and fork branches cannot use it. Procedure lives in
+   `docs/runbooks/vercel-preview-verification.md`; the durable decision is
+   ADR 0027.

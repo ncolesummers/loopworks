@@ -42,6 +42,8 @@ Closes #
 - [ ] Relevant Storybook states covered or not needed
 - [ ] Light/dark and accessibility review completed or not needed
 - [ ] Human verification completed before commit
+- [ ] GitHub install/repository-selection changes verified against the preview
+      alias (label `preview:alias`) or not needed
 
 ## Agent review notes
 
