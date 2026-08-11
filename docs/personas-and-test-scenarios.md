@@ -93,6 +93,7 @@ Risks:
 | P03 | Product Operator | A durable decision from planning links to an ADR proposal or accepted ADR. | Integration, docs review |
 | P04 | Product Operator | An operator switches between light and dark mode from the app shell; the choice persists across reloads and both themes meet contrast. | Playwright, a11y |
 | P05 | Product Operator | A day-zero operator with no installation, repositories, or loops sees the next activation step instead of an empty operational dashboard, and every empty state routes to an action they can take. | Playwright, a11y |
+| P06 | Product Operator | An unauthenticated visitor turned away from a protected route reads what Loopworks is, why GitHub holds the identity, that access is approved rather than self-served, and the activation steps that follow — before authenticating. | Playwright, a11y, Storybook |
 | M01 | Maintainer | Catalog rows show owner, framework, CI commands, docs, observability, design-system, enabled loops, Vercel project links, and search/filter controls. | Playwright, Storybook |
 | M02 | Maintainer | Turning either development or research routing off prevents trigger execution and records the loop-specific skipped reason without fabricating a run. | Unit, integration, Playwright |
 | M03 | Maintainer | Missing Vercel credentials in dev returns explicit fixture fallback metadata; production does not silently return fixtures. | Unit, integration |
@@ -109,6 +110,7 @@ Risks:
 | S04 | Security Reviewer | Logger redaction removes token, secret, authorization, OAuth, and webhook-sensitive fields. | Unit |
 | S05 | Security Reviewer | GitHub SSO allowlists reject unauthorized identities and persist the GitHub login used for approval attribution. | Unit, Playwright |
 | S06 | Security Reviewer | GitHub App callbacks reject forged or replayed state and verify the active operator can access the installation before persisting it. | Unit, integration |
+| S07 | Security Reviewer | A denied or failed sign-in renders mapped copy with an honest next step and never exposes the raw error parameter, provider errors, tokens, scopes, or allowlist internals. | Unit, Playwright |
 
 ### Day-Zero Journey
 

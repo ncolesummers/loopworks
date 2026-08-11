@@ -31,5 +31,10 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       testMatch: /auth-guard\.spec\.ts/,
     },
+    {
+      name: "sign-in",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /sign-in\.spec\.ts/,
+    },
   ],
 });
