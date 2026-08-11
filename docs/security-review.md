@@ -45,6 +45,17 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
    installation association, then is discarded without persistence or logging.
 8. Callback state, authorization codes, PKCE verifiers, cookies, client secrets,
    private keys, tokens, and raw GitHub error objects are excluded from logs.
+9. Sign-in and sign-in failure are served from the app-owned `/sign-in` route
+   (ADR 0028). The `error` query parameter is attacker-controlled — the proxy
+   carries the original request's query string onto the redirect, and
+   `/api/auth/error` forwards its parameter verbatim — so it is resolved through
+   a closed code map with a generic fallback and is never shown as visible copy. Denial
+   copy states the outcome and a human next step; it must never name the
+   allowlist, an organization, a scope, a token, or an Auth.js error type.
+10. `src/lib/auth/sign-in-action.ts` is a `"use server"` module, so its exports
+    are public endpoints. It only starts the GitHub authorization handshake, and
+    it re-sanitizes the submitted `callbackUrl` to a same-origin path rather than
+    trusting the hidden field the page rendered.
 
 ## Required Checks
 

@@ -48,6 +48,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0025](0025-registered-loop-definitions.md) | Proposed | Persist validated loop definitions separately from the GitHub issue mirror and reuse manifest validation at registration. |
 | [0026](0026-github-bound-signed-commit-provenance.md) | Proposed | Require GitHub-resolved, verified signed commit provenance while preserving contributor identities and published history. |
 | [0027](0027-isolated-preview-environment-and-stable-alias.md) | Proposed | Share one registry-derived configuration contract across Preview and Production, isolate preview behind its own GitHub App, and verify through a CI-assigned stable alias. |
+| [0028](0028-app-owned-sign-in-entry-point.md) | Proposed | Serve sign-in from an app-owned route, alias the Auth.js error page to it because AccessDenied routes there, and map every failure code to non-disclosing copy. |
 
 ## Template
 

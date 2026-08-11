@@ -5,14 +5,16 @@ import GitHub from "next-auth/providers/github";
 import { db } from "@/db/client";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { readGithubAccessTokenForUser } from "@/lib/auth/accounts";
-import { evaluateAuthAllowlist, readAuthAllowlistConfig } from "@/lib/auth/allowlist";
-import { fetchGithubOrganizationLogins } from "@/lib/auth/github";
+import { readAuthAllowlistConfig } from "@/lib/auth/allowlist";
+import { fetchGithubOrganizationLookup } from "@/lib/auth/github";
 import {
   applyGithubLoginToSession,
   mapGithubProfileToAuthUser,
   readGithubLoginFromProfile,
 } from "@/lib/auth/identity";
+import { authPages } from "@/lib/auth/pages";
 import { authorizeGithubSession } from "@/lib/auth/session-policy";
+import { resolveGithubSignInDecision } from "@/lib/auth/sign-in-decision";
 import { readStringConfig } from "@/lib/config/registry";
 import { logger } from "@/lib/observability/logger";
 
@@ -27,6 +29,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   }),
   trustHost: true,
   secret: authSecret,
+  // Both routes are app-owned so no operator ever reads a raw Auth.js error code. `error` must
+  // alias `signIn`: see `src/lib/auth/pages.ts` for why an allowlist denial arrives there.
+  pages: authPages,
   session: {
     strategy: "database",
   },
@@ -64,20 +69,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ account, profile }) {
       const config = readAuthAllowlistConfig();
       const githubLogin = readGithubLoginFromProfile(profile);
-      const githubOrganizations =
-        config.allowedGithubOrgs.length > 0 && account?.access_token
-          ? await fetchGithubOrganizationLogins({
-              accessToken: account.access_token,
-            })
-          : [];
+      let githubOrganizations: Awaited<ReturnType<typeof fetchGithubOrganizationLookup>> = {
+        logins: [],
+        status: "available",
+      };
+      if (config.allowedGithubOrgs.length > 0 && account?.access_token) {
+        githubOrganizations = await fetchGithubOrganizationLookup({
+          accessToken: account.access_token,
+        });
+      }
 
-      const decision = evaluateAuthAllowlist(
-        {
-          githubLogin,
-          githubOrganizations,
-        },
+      const evaluation = resolveGithubSignInDecision({
         config,
-      );
+        githubLogin,
+        githubOrganizations,
+      });
+
+      if (evaluation.outcome === "unavailable") {
+        logger.warn("auth_signin_github_org_lookup_unavailable");
+        return evaluation.redirect;
+      }
+
+      const decision = evaluation.decision;
 
       logger.info(
         {
