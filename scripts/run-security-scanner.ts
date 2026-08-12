@@ -96,10 +96,11 @@ export const scannerRegistry: readonly ScannerDefinition[] = [
   },
   {
     // History is CI-only: the local gate scans the working tree, which is what
-    // a developer can still change before pushing. Measured at 205 commits it
-    // is fast (~0.8s), so the split is about division of labour rather than
-    // runtime, and this could be promoted into `validate` by changing `lane`
-    // alone. Run it locally, unchanged, to reproduce a CI history failure.
+    // a developer can still change before pushing. Re-measured 2026-08-11 at
+    // 258 commits it is fast (~1.5s), so the split is about division of labour
+    // rather than runtime, and this could be promoted into `validate` by
+    // changing `lane` alone. Whether it should be is #233. Run it locally,
+    // unchanged, to reproduce a CI history failure.
     id: "gitleaks-history",
     script: "security:gitleaks:history",
     binary: "gitleaks",

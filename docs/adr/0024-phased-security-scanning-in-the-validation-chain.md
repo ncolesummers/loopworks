@@ -1,6 +1,6 @@
 # ADR 0024: Phased Security Scanning in the Validation Chain
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-08
 Issue: [#175](https://github.com/ncolesummers/loopworks/issues/175)
 Updated by: [#177](https://github.com/ncolesummers/loopworks/issues/177),
@@ -75,7 +75,8 @@ it prints the install command so it cannot read as a pass, and
 existing repository invariant and each verified against a positive and a
 negative fixture before being added. Broad upstream rulesets and ZAP are a
 separate advisory lane, deferred until their false-positive and runtime
-baselines have been reviewed.
+baselines have been reviewed, and tracked as #231 and #232 rather than left as
+prose.
 
 **Dependabot supplies update intake, not the security verdict.** Weekly Bun and
 GitHub Actions version updates are configured in the repository, and repository
@@ -141,6 +142,10 @@ normal frozen install as the gate that verifies the committed result.
 - `tests/unit/ci/validation-chain.test.ts` — the prek hook still reaches
   `precommit`, which still delegates to `validate`, which still reaches the
   scanners.
+- `tests/unit/ci/security-scanning.test.ts` (`deferred lanes`) — every entry in
+  the `Deferred` section of `docs/security-review.md` is a list item linking the
+  issue that carries it, so work phased out of this ADR cannot survive as
+  untracked prose.
 - `tests/unit/ci/dependabot.test.ts` — the Bun and GitHub Actions schedules,
   grouping policy, and isolated runtime migrations remain explicit.
 - `tests/unit/ci/dependabot-lockfile.test.ts` — the PR actor/repository guard,
@@ -156,9 +161,17 @@ normal frozen install as the gate that verifies the committed result.
   dependency remediation and blocking OSV transition.
 - [#180](https://github.com/ncolesummers/loopworks/issues/180) — remove or
   re-review the four residual exceptions before 2026-11-06.
-- Advisory broad-Semgrep and ZAP lanes, deferred from #175.
-- Revisit whether the committed-history scan should move into `validate`; at
-  205 commits it takes about 0.8s, so the CI-only split is currently a division
-  of labour rather than a runtime constraint.
+- [#231](https://github.com/ncolesummers/loopworks/issues/231) — the advisory
+  broad upstream Semgrep lane, deferred from #175.
+- [#232](https://github.com/ncolesummers/loopworks/issues/232) — the advisory
+  ZAP lane against a local production-mode deployment, deferred from #175 and
+  sequenced after the persona journeys in
+  [#200](https://github.com/ncolesummers/loopworks/issues/200) and
+  [#201](https://github.com/ncolesummers/loopworks/issues/201).
+- [#233](https://github.com/ncolesummers/loopworks/issues/233) — resolve whether
+  the committed-history scan should move into `validate`. Re-measured on
+  2026-08-11 at 258 commits it takes about 1.5s, so the CI-only split is a
+  division of labour rather than a runtime constraint — which is not the
+  justification #175's exception criterion asks for.
 
 Refs ADR 0006.

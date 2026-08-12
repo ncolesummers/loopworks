@@ -223,7 +223,9 @@ Advisory remains a supported property of a *finding*, decided in
 not `continue-on-error` in the workflow, which would also swallow a scanner
 crash, a timeout, and a missing binary — the failure mode this work exists to
 prevent. No configured scanner is advisory today, no CI step in this repository
-carries `continue-on-error`, and tests assert both facts.
+carries `continue-on-error`, and tests assert both facts. The two lanes that
+will use the advisory disposition are deferred and tracked, not abandoned; see
+[Deferred](#deferred).
 
 ### Documented local/CI divergences
 
@@ -235,8 +237,12 @@ carries `continue-on-error`, and tests assert both facts.
    working tree, which is what a developer can still change before pushing.
    Reproduce a CI history failure locally with the identical command,
    `bun run security:gitleaks:history`. This split is about division of labour,
-   not runtime: measured at 205 commits the history scan takes about 0.8s, so it
-   can be promoted into `validate` by changing `lane` in the registry alone.
+   not runtime: re-measured on 2026-08-11 at 258 commits the history scan takes
+   about 1.5s, so it can be promoted into `validate` by changing `lane` in the
+   registry alone. Whether it should be is tracked as
+   [#233](https://github.com/ncolesummers/loopworks/issues/233); note that
+   #175's own exception criterion asks for a divergence "justified by runtime or
+   environment constraints", which this one explicitly is not.
 
 ### Baseline and suppression policy
 
@@ -320,9 +326,26 @@ pull request.
 
 ### Deferred
 
-Broad upstream/community Semgrep rules and ZAP against a local production-mode
-deployment are a separate, advisory lane, deferred from #175 until their
-false-positive and runtime baselines have been reviewed.
+Two advisory lanes were deliberately left out of #175. Each is tracked as its
+own issue and stays deferred until its false-positive and runtime baseline has
+been reviewed against this repository. Every entry below must be a list item
+linking the issue that carries it, and `tests/unit/ci/security-scanning.test.ts`
+(`deferred lanes`) fails on one that is not — before that check this section was
+a prose paragraph naming only the issue the work was deferred *from*, which once
+that issue closed would have left the work indistinguishable from abandoned. The
+check cannot prove a linked issue is still open. The lanes:
+
+- Broad upstream/community Semgrep rules —
+  [#231](https://github.com/ncolesummers/loopworks/issues/231). The wiring is a
+  registry entry; the cost is triaging the finding volume an unreviewed upstream
+  ruleset produces here.
+- ZAP against a local production-mode deployment —
+  [#232](https://github.com/ncolesummers/loopworks/issues/232). Needs a
+  production build, a seeded database, a digest-pinned container, and a
+  documented authenticated route scope. Sequenced after
+  [#200](https://github.com/ncolesummers/loopworks/issues/200) and
+  [#201](https://github.com/ncolesummers/loopworks/issues/201) so the baseline
+  is not measured against a route surface that is about to change.
 
 ## Exit Criteria
 
