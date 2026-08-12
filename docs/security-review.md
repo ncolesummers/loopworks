@@ -131,6 +131,50 @@ than by convention:
 - The hook must keep reaching `validate` rather than restating its gates
   (`tests/unit/ci/validation-chain.test.ts`).
 
+### The merge contract
+
+A gate that fails a CI job only blocks a merge if the branch requires that job.
+Until 2026-08-11 `main` had no branch protection and no required status checks,
+so every gate described here as "blocking" blocked a job and nothing else: a
+pull request could be merged with CI red, or with CI never having run. That gap
+was #235.
+
+`main` now carries two rulesets:
+
+| Ruleset | Rules |
+| --- | --- |
+| [17921291](https://github.com/ncolesummers/loopworks/rules/17921291) | `deletion`, `non_fast_forward`, `copilot_code_review` |
+| [20728131](https://github.com/ncolesummers/loopworks/rules/20728131) | `pull_request`, `required_status_checks` |
+
+Changes must arrive through a pull request — direct pushes to `main` are
+rejected — and these contexts must pass before it can merge:
+
+| Context | Published by | Covers |
+| --- | --- | --- |
+| `validate` | `ci.yml` | The full gate chain, scanners included |
+| `seeded-postgres-e2e` | `ci.yml` | Native Postgres admission and seeded journeys |
+| `commit-provenance` | `commit-provenance.yml` | GitHub-resolved signed provenance (ADR 0026) |
+
+Each is pinned to `integration_id` 15368, the GitHub Actions app, so a context
+of the same name published by any other app does not satisfy the requirement.
+`required_approving_review_count` is 0: the rule forces changes through a pull
+request, it does not require a second reviewer. There are no bypass actors, so
+an emergency direct push means disabling the ruleset deliberately rather than
+slipping past it.
+
+`commit-provenance` is a commit *status* rather than a check run, published by
+the workflow's own `gh api` steps. `validate` had to be made unique before it
+could be required at all: `ci.yml` and `commit-provenance.yml` both defined a
+job of that name and both run on every pull request, so two check runs shared
+one context and the rule could not express which had to pass.
+`tests/unit/ci/ci-workflow.test.ts` now fails if any two pull-request jobs
+collide on a check-run name.
+
+Two ADR 0026 follow-ups remain unconfigured and need explicit authorization,
+because both change what a contributor can push: `required_signatures` on the
+default branch, and disabling rebase-and-merge. Until the second lands, ruleset
+20728131 still allows all three merge methods, which ADR 0026 does not want.
+
 ### Scanner inventory
 
 | Scanner | Version | Command | Covers | Enforcement |
