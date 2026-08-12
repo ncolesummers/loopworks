@@ -38,6 +38,15 @@ rolled back. Loopworks does not currently author a channel or call the Eve
 client from application source, so no live message path silently changes in
 this migration.
 
+The existing Vercel project previously built only the Next.js portal even
+though the repository also contained the Eve agent. Eve 0.33's `withEve()`
+integration can emit the portal and agent as sibling Build Output services in
+the same Vercel preview, routing `/eve/v1/**` to Eve before Next.js filesystem
+routing. A separate staging project would add hostname, configuration, and
+promotion drift. It would provide stronger project-identity, environment, and
+blast-radius isolation, but that separation is not needed for this repository's
+intended same-origin portal-and-agent topology.
+
 ## Decision
 
 1. Pin `eve@0.33.2` and its required AI SDK peer `ai@7.0.58` exactly in
@@ -61,6 +70,15 @@ this migration.
    tested product behavior. Use `turnPolicy: "steer"` only when retaining
    partial output and already-completed side effects is acceptable. Approval
    responses remain separate and never steer.
+7. Wrap the existing Next.js configuration with `withEve(nextConfig)`. Keep the
+   portal as the default service and mount the unnamed root agent at
+   `/eve/v1/*` in every Vercel preview and production build.
+8. Build both processes for local production with `bunx eve build && next
+   build`. On Vercel, run `next build` for the host; `withEve()` declares the
+   sibling service and Vercel runs its generated Eve build command separately.
+9. Exclude `/eve/*` from the portal's Auth.js proxy. Eve owns authentication on
+   that route family: health is public, while session and inspection routes use
+   Eve's fail-closed route policy.
 
 ## Consequences
 
@@ -80,6 +98,20 @@ accepted durable work over low-latency replacement. A feature that deliberately
 adopts steering must test cancellation boundaries, recursive subagent
 cancellation, approval state, and idempotency of any side effects.
 
+Portal and agent staging now share one deployment identity and commit. The Eve
+route remains fail-closed under its default Vercel OIDC, local-development, and
+placeholder authentication chain; mounting the service does not make session
+routes anonymous. That default does not authenticate an ordinary Loopworks
+Auth.js browser session. Issue #181 validates operator/server access through
+Vercel OIDC; any future portal chat surface must add and test an Auth.js-backed
+Eve `AuthFn` before sending browser requests.
+
+`GET /eve/v1/health` is intentionally public and bypasses the portal proxy.
+Because the previous Vercel deployment exposed no Eve service, it has no
+remotely persisted 0.22.5 sessions to drain. Any local 0.22.5 development
+session is unsupported migration input and must be replaced rather than
+presented as resumed.
+
 ## Validation
 
 1. The red-first dependency/runtime contract asserts the exact package and
@@ -91,8 +123,9 @@ cancellation, approval state, and idempotency of any side effects.
    discovery diagnostics, and `bunx eve eval --list` finds every authored eval.
 4. Staging evidence must identify the deployment and selected Eve version, then
    cover a new session, a subagent handoff, cancellation and approval handling,
-   and the old-session replacement. Fixture-only evidence does not satisfy this
-   item.
+   and the old-session disposition. It must also show the public health route,
+   protected session route, and unchanged portal route. Fixture-only evidence
+   does not satisfy this item. The pull request remains draft until this passes.
 5. `bun run validate` and `bun run build` pass before merge.
 
 ## Follow-Ups

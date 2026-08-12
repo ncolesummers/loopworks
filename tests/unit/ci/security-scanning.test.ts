@@ -178,6 +178,18 @@ describe("scanner rulesets", () => {
     expect(ignore).not.toContain("tests/");
     expect(ignore).not.toContain("tests");
   });
+
+  it("keeps generated Eve build output out of working-tree scans", () => {
+    const gitleaks = readFileSync(path.join(repoRoot, ".gitleaks.toml"), "utf8");
+    expect(gitleaks).toContain("'''^\\.eve/'''");
+    expect(gitleaks).toContain("'''^\\.output/'''");
+
+    const semgrep = readFileSync(path.join(repoRoot, ".semgrepignore"), "utf8")
+      .split("\n")
+      .map((line) => line.trim());
+    expect(semgrep).toContain(".eve/");
+    expect(semgrep).toContain(".output/");
+  });
 });
 
 describe("scanner installation", () => {

@@ -184,6 +184,6 @@ describe("Neon migration configuration", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.["vercel-build"]).toBe("bun run db:migrate && bun run build");
+    expect(packageJson.scripts?.["vercel-build"]).toBe("bun run db:migrate && bun run build:next");
   });
 });
