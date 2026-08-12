@@ -16,8 +16,14 @@ type WorkflowStep = {
   with?: Record<string, string>;
 };
 
+type WorkflowJob = {
+  "continue-on-error"?: boolean;
+  if?: string;
+  steps: WorkflowStep[];
+};
+
 type Workflow = {
-  jobs: Record<string, { steps: WorkflowStep[] }>;
+  jobs: Record<string, WorkflowJob>;
 };
 
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -115,6 +121,18 @@ describe("security scanning gates", () => {
     // way to disable a gate is to add `continue-on-error` to it.
     const escaped = allSteps.filter((step) => step["continue-on-error"] !== undefined);
     expect(escaped.map((step) => step.name ?? step.run ?? step.uses)).toEqual([]);
+  });
+
+  it("never marks any workflow job non-blocking", () => {
+    // The step-level check above misses the cheaper bypass by one level:
+    // `continue-on-error` or `if` on the *job* disables every gate inside it at
+    // once, and a step-only assertion passes while the whole scanner set is
+    // advisory. Verified: adding `continue-on-error: true` to `jobs.validate`
+    // left the entire CI contract suite green before this test existed.
+    const escaped = Object.entries(workflow.jobs).filter(
+      ([, job]) => job["continue-on-error"] !== undefined || job.if !== undefined,
+    );
+    expect(escaped.map(([name]) => name)).toEqual([]);
   });
 
   it("names the OSV workflow step as a blocking dependency gate", () => {
