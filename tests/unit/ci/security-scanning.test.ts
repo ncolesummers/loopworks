@@ -521,3 +521,193 @@ describe("baseline hygiene", () => {
     }
   });
 });
+
+/**
+ * Returns the body of a Markdown section: the lines after `heading`, up to the
+ * next heading at the same or a shallower level.
+ *
+ * Stopping at a heading of *any* level would silently truncate the section at a
+ * `####` subsection, so deferred work filed under one would never be read. It
+ * stays in the body instead, where `deferralProblems` rejects it. Fenced blocks
+ * are skipped so a Markdown example earlier in the file cannot shadow the real
+ * heading; a duplicated real heading is markdownlint's MD024 to catch.
+ */
+function sectionBody(source: string, heading: string): string {
+  const level = (/^#+/.exec(heading)?.[0] ?? "").length;
+  const lines = source.split("\n");
+  let fenced = false;
+  let start = -1;
+  for (const [index, line] of lines.entries()) {
+    if (/^\s*(?:```|~~~)/.test(line)) fenced = !fenced;
+    else if (!fenced && line.trim() === heading) {
+      start = index;
+      break;
+    }
+  }
+  if (start === -1) return "";
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => new RegExp(`^#{1,${level}}\\s`).test(line));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
+const listMarker = /^\s*(?:[-*+]|\d+[.)])\s+/;
+
+/**
+ * Folds a section into logical items. Checking raw lines would fail every entry
+ * long enough to wrap at this repository's 80-column margin.
+ *
+ * A wrapped continuation is indented under its list item, so an *unindented*
+ * line always starts a new item — that is what stops a paragraph appended below
+ * a bullet from inheriting the bullet's issue link. Indented sub-bullets fold
+ * into their parent, which already carries the tracker for that lane.
+ *
+ * Known limit: text indented directly beneath a tracked bullet is
+ * indistinguishable from that bullet's own wrapped continuation, so it inherits
+ * the tracker. This check is a guard against the prose deferral that actually
+ * occurred, not a defence against an author working to evade it.
+ */
+function markdownItems(section: string): string[] {
+  const items: string[] = [];
+  let inList = false;
+  for (const line of section.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      items.push("");
+      inList = false;
+      continue;
+    }
+    const isListItem = listMarker.test(line);
+    const previous = items.at(-1);
+    const continues =
+      previous !== undefined && previous !== "" && (inList ? /^\s/.test(line) : !isListItem);
+    if (continues) {
+      items[items.length - 1] = `${previous} ${trimmed}`;
+    } else {
+      items.push(trimmed);
+      inList = isListItem;
+    }
+  }
+  return items.filter((item) => item.length > 0);
+}
+
+const excerpt = (item: string) => (item.length > 60 ? `${item.slice(0, 60)}…` : item);
+
+/**
+ * A resolvable link to an issue in this repository, rather than a bare `#123`.
+ * `#\d+` alone also matches a hex colour, a heading anchor, and a number inside
+ * a code span, none of which track anything. The label and the URL must name
+ * the same issue, so a link cannot say one thing and point at another.
+ */
+const issueLink = /\[#(\d+)\]\(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/(\d+)\)/g;
+
+const tracksAnIssue = (item: string) =>
+  [...item.matchAll(issueLink)].some((match) => match[1] === match[2]);
+
+/**
+ * Deferred work must be a list item linking the issue that carries it. A lead-in
+ * ending in `:` immediately before the list introduces it and makes no claim of
+ * its own; anything else outside the list is an untracked deferral.
+ *
+ * Requiring a *list item with a link* rather than merely some `#N` in the
+ * section is load-bearing: the prose this replaced already mentioned #175, the
+ * issue it was deferred *from*, so a looser check would have passed while the
+ * deferred work had no tracker at all.
+ *
+ * Known limit: nothing here proves the linked issue exists or is still open —
+ * `tests/AGENTS.md` rule 6 forbids a test reaching the network. Tracker rot
+ * after the fact is a review concern, not one this check can see.
+ */
+function deferralProblems(section: string): string[] {
+  const items = markdownItems(section);
+  if (items.length === 0) return ["the Deferred section is empty"];
+
+  const problems: string[] = [];
+  items.forEach((item, index) => {
+    if (!listMarker.test(item)) {
+      const introducesList = item.endsWith(":") && listMarker.test(items[index + 1] ?? "");
+      if (!introducesList) {
+        // Name both accepted shapes: the commonest cause of this failure is a
+        // lead-in that lost its colon, not an untracked deferral.
+        problems.push(
+          `deferred work must be a list item linking its issue, or a lead-in ending in ":" directly above the list: ${excerpt(item)}`,
+        );
+      }
+      return;
+    }
+    if (!tracksAnIssue(item)) {
+      problems.push(`deferred item links no tracking issue: ${excerpt(item)}`);
+    }
+  });
+  if (!items.some((item) => listMarker.test(item))) {
+    problems.push("the Deferred section lists no tracked items");
+  }
+  return problems;
+}
+
+const trackedExample =
+  "- Broad Semgrep ([#231](https://github.com/ncolesummers/loopworks/issues/231)).";
+
+describe("deferred lanes", () => {
+  it("binds every deferred security lane to a tracking issue", () => {
+    // The advisory broad-Semgrep and ZAP lanes were deferred from #175 as prose
+    // here and in ADR 0024. Prose is not a commitment: once #175 closes, a
+    // deferral that names no tracker is indistinguishable from abandoned work.
+    const section = sectionBody(securityReviewSource, "### Deferred");
+    expect(section.trim(), "docs/security-review.md has no `### Deferred` section").not.toBe("");
+    expect(deferralProblems(section)).toEqual([]);
+  });
+
+  it("rejects a deferral that names no tracker", () => {
+    // Control cases, so the assertion above cannot pass vacuously.
+    expect(deferralProblems("")).toEqual(["the Deferred section is empty"]);
+    expect(
+      deferralProblems(
+        "Broad Semgrep rules and ZAP against a production-mode deployment\nare deferred until their baselines have been reviewed.",
+      ),
+    ).not.toEqual([]);
+    expect(deferralProblems(`Tracked separately:\n\n${trackedExample}`)).toEqual([]);
+
+    // A bullet with no link at all.
+    expect(deferralProblems("Tracked separately:\n\n- Something deferred.")).toEqual([
+      "deferred item links no tracking issue: - Something deferred.",
+    ]);
+    // A bullet ending in `:` must not inherit the lead-in exemption.
+    expect(
+      deferralProblems(`Tracked separately:\n\n- Deferred for these reasons:\n\n${trackedExample}`),
+    ).toContainEqual("deferred item links no tracking issue: - Deferred for these reasons:");
+    // A reference that is not a resolvable issue link.
+    for (const fake of ["#231000", "[section](#2-scope)", "`#231`", "[#231](https://x)"]) {
+      expect(
+        deferralProblems(`Tracked separately:\n\n- Something deferred ${fake}.`),
+        fake,
+      ).not.toEqual([]);
+    }
+    // A label that points at a different issue than it names.
+    expect(
+      deferralProblems(
+        "Tracked separately:\n\n- Deferred ([#231](https://github.com/ncolesummers/loopworks/issues/999)).",
+      ),
+    ).not.toEqual([]);
+    // Prose appended below the list, and prose under a nested sub-heading.
+    expect(
+      deferralProblems(`${trackedExample}\n\nZAP is deferred with no tracker.`),
+    ).toContainEqual(
+      `deferred work must be a list item linking its issue, or a lead-in ending in ":" directly above the list: ZAP is deferred with no tracker.`,
+    );
+    expect(
+      deferralProblems(`${trackedExample}\n\n#### Also deferred\n\nZAP, tracked nowhere.`),
+    ).not.toEqual([]);
+  });
+
+  it("accepts the ordinary Markdown shapes a maintainer would reach for", () => {
+    // The section must stay editable. An ordered list, a `+` marker, and an
+    // indented sub-bullet under a tracked lane are all correct Markdown, and a
+    // check that rejected them would be worked around rather than satisfied.
+    const link = "[#232](https://github.com/ncolesummers/loopworks/issues/232)";
+    expect(deferralProblems(`1. Broad Semgrep ${link}.`)).toEqual([]);
+    expect(deferralProblems(`+ Broad Semgrep ${link}.`)).toEqual([]);
+    expect(
+      deferralProblems(`- Broad Semgrep ${link}.\n  - Needs a baseline review first.`),
+    ).toEqual([]);
+  });
+});
