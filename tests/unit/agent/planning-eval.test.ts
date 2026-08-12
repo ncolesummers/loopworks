@@ -1,3 +1,5 @@
+/** @vitest-environment node */
+
 import { describe, expect, it } from "vitest";
 import { createPlanningAgentSeedPlan } from "../../../agent/planning-agent";
 import sandbox from "../../../agent/sandbox";
