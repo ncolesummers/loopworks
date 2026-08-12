@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -285,5 +285,46 @@ describe("ci workflow", () => {
       "bun run test:integration:postgres",
       "bun run test:e2e:seeded",
     ]);
+  });
+});
+
+describe("check-run names", () => {
+  it("keeps every pull-request job name unique across workflows", () => {
+    // A job with no `name:` publishes a check run named after its job id, and a
+    // required status check selects by that name alone. Two workflows that both
+    // run on a pull request and both define `validate` therefore publish two
+    // check runs under one name, and requiring it cannot express which must
+    // pass — a red CI run and a green provenance run look the same to the rule.
+    // #235 requires these contexts on `main`, so uniqueness is a precondition
+    // rather than a style preference.
+    const directory = path.join(repoRoot, ".github/workflows");
+    const owners = new Map<string, string[]>();
+
+    for (const file of readdirSync(directory).filter((name) => name.endsWith(".yml"))) {
+      const parsed = parse(readFileSync(path.join(directory, file), "utf8")) as {
+        on?: Record<string, unknown> | string[] | string;
+        jobs?: Record<string, { name?: string }>;
+      };
+      // `pull_request_target` publishes onto the pull-request head exactly as
+      // `pull_request` does, so both feed the same context namespace.
+      const triggers = parsed.on ?? {};
+      const triggerNames = Array.isArray(triggers)
+        ? triggers
+        : typeof triggers === "string"
+          ? [triggers]
+          : Object.keys(triggers);
+      if (!triggerNames.some((name) => name.startsWith("pull_request"))) continue;
+
+      for (const [id, job] of Object.entries(parsed.jobs ?? {})) {
+        const context = job.name ?? id;
+        owners.set(context, [...(owners.get(context) ?? []), file]);
+      }
+    }
+
+    expect(owners.size, "no pull-request jobs found to check").toBeGreaterThan(0);
+    const collisions = [...owners.entries()]
+      .filter(([, files]) => files.length > 1)
+      .map(([context, files]) => `${context} <- ${files.join(", ")}`);
+    expect(collisions, "two pull-request jobs publish the same check-run name").toEqual([]);
   });
 });

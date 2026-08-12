@@ -42,9 +42,13 @@ describe("commit provenance CI contract", () => {
   it("keeps ordinary CI dispatch manual and moves provenance to pull_request_target", () => {
     expect(workflow.on?.workflow_dispatch).toEqual({});
     expect(workflow.permissions).toEqual({ contents: "read" });
-    expect(workflow.jobs?.validate?.steps?.some((step) => step.name === "Commit provenance")).toBe(
-      false,
-    );
+    // Across every job in ci.yml rather than one named job: the provenance gate
+    // must not reappear in ordinary CI under any job name.
+    expect(
+      Object.values(workflow.jobs ?? {}).some((job) =>
+        job.steps?.some((step) => step.name === "Commit provenance"),
+      ),
+    ).toBe(false);
 
     expect(trustedWorkflow.on?.pull_request_target).toEqual({
       types: ["opened", "reopened", "synchronize"],
@@ -55,7 +59,7 @@ describe("commit provenance CI contract", () => {
     });
     expect(trustedWorkflow.permissions).toEqual({});
 
-    const job = trustedWorkflow.jobs?.validate;
+    const job = trustedWorkflow.jobs?.provenance;
     expect(job?.if).toContain("github.ref_name == github.event.repository.default_branch");
     expect(job?.permissions).toEqual({
       contents: "read",
@@ -89,10 +93,10 @@ describe("commit provenance CI contract", () => {
     expect(status?.run).toContain("STATE=failure");
     expect(status?.run).toContain("commit-provenance");
     expect(
-      trustedWorkflow.jobs?.validate?.steps?.some((step) => step.uses === "actions/checkout@v5"),
+      trustedWorkflow.jobs?.provenance?.steps?.some((step) => step.uses === "actions/checkout@v5"),
     ).toBe(true);
     expect(
-      trustedWorkflow.jobs?.validate?.steps?.some((step) => step.run?.includes("head.sha")),
+      trustedWorkflow.jobs?.provenance?.steps?.some((step) => step.run?.includes("head.sha")),
     ).toBe(true);
     expect(packageJson.scripts["commit:provenance"]).toBe(
       "bun run scripts/check-commit-provenance.ts",
