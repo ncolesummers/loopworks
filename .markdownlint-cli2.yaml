@@ -6,6 +6,8 @@ globs:
 ignores:
   - "node_modules"
   - ".next"
+  - ".eve"
+  - ".output"
   - "storybook-static"
   - "coverage"
   - "playwright-report"

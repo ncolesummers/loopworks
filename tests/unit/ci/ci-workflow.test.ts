@@ -31,6 +31,7 @@ const workflow = parse(
 ) as Workflow;
 
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+  engines: { node: string };
   scripts: Record<string, string>;
 };
 
@@ -144,6 +145,32 @@ describe("ci workflow", () => {
     // step fails in minutes rather than at GitHub's six-hour default.
     expect(timeout).toBeGreaterThanOrEqual(10);
     expect(timeout).toBeLessThanOrEqual(60);
+  });
+
+  it.each(cachingJobs)("pins the required Node major before Bun in `%s`", (jobName) => {
+    const requiredNodeMajor = packageJson.engines.node.match(/^>=(\d+)$/)?.[1];
+    expect(requiredNodeMajor, "package.json must declare an exact minimum Node major").toBeTruthy();
+
+    const nodeSteps = stepsOf(jobName).filter((step) =>
+      step.uses?.startsWith("actions/setup-node@"),
+    );
+    expect(nodeSteps, `job \`${jobName}\` must configure Node exactly once`).toHaveLength(1);
+    const node = nodeSteps[0];
+    expect(node).toBeDefined();
+    if (!node) return;
+    expect(node.uses).toBe("actions/setup-node@v6");
+    expect(node.with?.["node-version"]).toBe(requiredNodeMajor);
+    expect(node.if, "Node setup must not be conditional").toBeUndefined();
+    expect(node["continue-on-error"], "Node setup must be blocking").toBeUndefined();
+
+    const nodeIndex = stepsOf(jobName).indexOf(node);
+    const bunIndex = indexOfStep(
+      jobName,
+      (step) => step.uses === "oven-sh/setup-bun@v2",
+      "oven-sh/setup-bun@v2 step",
+    );
+
+    expect(nodeIndex).toBeLessThan(bunIndex);
   });
 
   it.each(cachingJobs)("caches the Bun install store in `%s`", (jobName) => {

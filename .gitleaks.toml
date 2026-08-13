@@ -44,6 +44,7 @@ paths = [
   '''^node_modules/''',
   '''^\.next/''',
   '''^\.eve/''',
+  '''^\.output/''',
   # Scratch checkouts only. Deliberately not all of `.claude/` — `.claude/
   # skills/` is tracked and must be scanned.
   '''^\.claude/worktrees/''',
