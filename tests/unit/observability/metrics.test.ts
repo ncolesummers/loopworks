@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 import { approvals, loopRuns, observabilityEvents, repositories } from "@/db/schema";
 import {

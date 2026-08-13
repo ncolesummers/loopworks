@@ -50,6 +50,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0027](0027-isolated-preview-environment-and-stable-alias.md) | Proposed | Share one registry-derived configuration contract across Preview and Production, isolate preview behind its own GitHub App, and verify through a CI-assigned stable alias. |
 | [0028](0028-app-owned-sign-in-entry-point.md) | Proposed | Serve sign-in from an app-owned route, alias the Auth.js error page to it because AccessDenied routes there, and map every failure code to non-disclosing copy. |
 | [0029](0029-eve-runtime-migration-and-session-cutover.md) | Proposed | Pin Eve and its AI SDK peer together, use fixed session IDs, and replace pre-0.31 sessions after a drain-first cutover. |
+| [0030](0030-typescript-7-cli-and-typescript-6-compatibility-api.md) | Proposed | Use native TypeScript 7 for `tsc` while retaining the TypeScript 6 compatibility API for programmatic consumers. |
 
 ## Template
 
