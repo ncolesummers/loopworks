@@ -4,7 +4,9 @@ Status: Proposed
 Date: 2026-08-02
 Issue: [#123](https://github.com/ncolesummers/loopworks/issues/123)
 Parent epic: [#122](https://github.com/ncolesummers/loopworks/issues/122)
-Updated by: [#126](https://github.com/ncolesummers/loopworks/issues/126)
+Updated by: [#126](https://github.com/ncolesummers/loopworks/issues/126),
+[#155](https://github.com/ncolesummers/loopworks/issues/155),
+[#158](https://github.com/ncolesummers/loopworks/issues/158)
 
 ## Context
 
@@ -113,14 +115,93 @@ on every surface at once — the failure #155 exists to fix.
 `hasPortalProjectionIntegrity` remains as a predicate asserted by tests over
 real reads, which catches a projection regression in CI instead of production.
 
-One silent failure remains out of scope and unaddressed: a store that answers
-successfully with data from the wrong or freshly-reset database is
-indistinguishable from a new install, and renders as "Live database" with empty
+One silent failure was left out of scope by #155 and is now closed by
+[#158](https://github.com/ncolesummers/loopworks/issues/158): a store that
+answers successfully with data from the wrong or freshly-reset database was
+indistinguishable from a new install, and rendered as "Live database" with empty
 collections. The superseded global gate caught that case only incidentally, by
 also breaking every legitimate fresh install — which is the defect #155 exists
-to fix. Detecting it needs store-identity evidence rather than row counts, and
-is not solvable inside this read. Tracked as
-[#158](https://github.com/ncolesummers/loopworks/issues/158).
+to fix. Detecting it needs store-identity evidence rather than row counts, so
+row counts are not what answers it.
+
+A singleton `store_identity` row records the identity of the store itself,
+issued by migration `0003` when the database is created and reissuable with
+`bun run db:provision`. Production reads compare it against
+`LOOPWORKS_EXPECTED_STORE_ID` before reading anything else, and a store that
+does not verify returns `source: "unavailable"` with the distinct error
+`Portal data store identity is unverified.` Three states fail closed and are
+separated in the structured log event `portal_store_identity_unverified` by an
+`identityStatus` field: `mismatch` (another database answered), `unprovisioned`
+(the expected one was emptied), and `not_configured` (the deployment never
+declared which store to expect). Only digests of the two identifiers are
+logged, never the identifiers themselves.
+
+Three properties of that decision are load-bearing:
+
+- **Production only, and not Preview.** Development and the fixture and seeded
+  lanes are not production runtimes at all. Vercel Previews are — they build
+  with `NODE_ENV=production`, which is why `resolveConfigRuntimeContext`
+  classifies them as production — but ADR 0018 requires each Preview to receive
+  a provider-created branch that is destroyed with the Preview lifecycle, so no
+  project-level variable can name the store a given preview will be handed and
+  enforcing there would fail every preview rather than catch anything.
+  `isPreviewRuntime` opts them out. This is a trade-off, not a free choice:
+  preview and production still share project-level database variables until
+  [#70](https://github.com/ncolesummers/loopworks/issues/70) finishes the Neon
+  wiring, so today a preview could in principle be verified against the same
+  identity as production. Binding the gate to that arrangement would make it
+  break the moment #70 lands, and the checked-in behavior would then have to
+  change under a deployment migration. Preview keeps its prior behavior, and its
+  runbook's Stage E "No production data" step remains a *manual* check of the
+  inverse property; it is not a substitute for this one.
+- **Checked before the read**, because there is nothing worth reading from a
+  store that cannot be identified.
+- **Never reissued over an existing identity.** Provisioning a store that
+  already has one is a no-op, so an emptied database cannot quietly re-earn the
+  trust the wipe should have cost it.
+
+Because the row lives in `public`, a truncate of the schema takes it too. That
+is deliberate: it is what makes "provisioned, then emptied" observable instead
+of silent. The reset procedure in
+`docs/runbooks/github-repository-selection-verification.md` names three tables
+rather than the whole schema, so it leaves the identity intact and a
+deliberately emptied expected store still renders its own first-run empty
+states — which remains the correct reading of that operator action.
+
+### What this does not catch
+
+The mechanism proves a store is *the one named*, not that it is current. Three
+gaps are known and accepted rather than overlooked:
+
+- **A branch or restore of the same database carries the identity row with it.**
+  Neon branching copies data, so pointing production at a stale branch of itself
+  verifies clean. On this stack that is arguably the most plausible wrong
+  database, and no comparison of a copied value can detect it. Only a database
+  built from scratch gets a new identity.
+- **Reads outside the two gated functions.** `getPortalRecordsForPortal` and
+  `getRunRecordsForPortal` cover the six navigable portal surfaces.
+  `/settings/repositories` and `/loops/register` read through the GitHub
+  repository-selection runtime instead, and still render their own
+  connect-the-App affordance against an unverified store.
+- **Writes.** The gate is read-side only. `/api/github/webhooks`, the
+  installation callback, repository apply, and approval transitions still write
+  to whatever store answers.
+
+The first is inherent to identity-by-comparison. The other two are scope: #158
+asks that a production *read* not render as a normal empty state and that
+`/settings` not offer the connect action, and both hold. Extending the boundary
+to the selection runtime and the write paths needs its own issue, because each
+needs an error contract of its own rather than a shared "unavailable" record
+shape.
+
+`LOOPWORKS_EXPECTED_STORE_ID` is declared in the config registry but is
+deliberately *not* `requiredIn: production`. The registry has no Preview context
+to exempt, so marking it production-required would demand a value from every
+preview that could never be the right one. The production read is the
+enforcement instead: unset, it fails closed as `not_configured`. The cost is
+that the gap surfaces at the first production read rather than at
+`bun run config:check`, which is why the deployment runbook makes reading and
+setting the value part of the rollout.
 
 Issue [#127](https://github.com/ncolesummers/loopworks/issues/127) retains
 actionable routing for the portal empty states this relaxation now makes
@@ -152,6 +233,31 @@ cannot distinguish no runs from a preferred run with no recorded steps and
 must not be used as a run count, audit fact, or durable completion claim.
 
 ## Validation
+
+`tests/unit/portal/store-identity.test.ts` covers the four verification states
+over a real store, that a re-run cannot reissue an identity, and that only
+digests leave the module. `tests/unit/portal/pages-production-gate.test.tsx`
+renders all five surfaces through the real production gate three ways —
+provisioned and matching, pointed at another store, and emptied — so the case
+that must still render its own empty states and the two that must not are
+asserted side by side. That suite mints its expected identity from the store
+rather than sharing a literal with the environment fixture, so the fresh-install
+case cannot pass by construction. Its Settings cases prove the connect-the-App
+action is absent whenever the identity is unverified.
+
+`tests/unit/portal/portal-records.test.ts` covers the log events, that a
+verified store stays silent, that raw identifiers never reach the log, and that
+neither a non-production runtime nor a Vercel Preview runs the check.
+`tests/unit/runs/run-record.test.ts` covers the same gate on `/runs`, which
+reads through a different function. `tests/unit/scripts/provision-store-identity.test.ts`
+covers the recovery CLI.
+
+Two tests exist because their absence would let a silent regression through:
+one reads a freshly migrated database to prove migration 0003's hand-added
+`INSERT` provisions anything at all — every other suite truncates and re-inserts
+by hand, so deleting that line would otherwise leave the suite green — and one
+drops the identity table to prove a database that never ran the migration is
+reported as `unreadable` rather than as a generic outage.
 
 `tests/unit/onboarding/first-run-state.test.ts` covers all onboarding stages,
 the installation/repository/registered-loop boundaries, the separation from
