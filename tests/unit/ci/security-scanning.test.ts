@@ -234,12 +234,7 @@ type OsvIgnore = {
   reason: string;
 };
 
-const expectedOsvIgnoreIds = [
-  "GHSA-5p2g-fcmc-qvqq",
-  "GHSA-67mh-4wv8-2f99",
-  "GHSA-8988-4f7v-96qf",
-  "GHSA-w3rx-r6r6-pgpr",
-];
+const expectedOsvIgnoreIds = ["GHSA-5p2g-fcmc-qvqq", "GHSA-67mh-4wv8-2f99", "GHSA-w3rx-r6r6-pgpr"];
 
 function parseOsvIgnores(content: string): { entries: OsvIgnore[]; problems: string[] } {
   const problems: string[] = [];

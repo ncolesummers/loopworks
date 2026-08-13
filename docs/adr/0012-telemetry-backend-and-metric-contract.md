@@ -89,6 +89,33 @@ The active W3C trace id is persisted into the `trace_id` columns at development-
 3. Retention: the 30-day free-tier window is sufficient because durable state lives in the control-plane database; paid retention is a later decision only if operational investigation demands it.
 4. Pino logs continue to stdout for Vercel log capture; shipping them to Axiom (OTLP logs or pino transport, without requiring Vercel Pro log drains) is a follow-up decision.
 
+### OpenTelemetry 2 migration
+
+On 2026-08-12, issue #180 migrated the runtime distribution to
+`@vercel/otel` 2.x, the OpenTelemetry 2.x stable SDK family, and the matching
+0.2xx experimental/exporter family. The OpenTelemetry API remains on 1.x, as
+required by the SDK's compatibility contract, so application instrumentation
+continues to depend on the stable API rather than SDK implementations.
+
+The distribution configuration now supplies `metricReaders` as an array. The
+metrics exporter is also built from the supplied configuration environment so
+tests and callers do not silently fall back to global process state. Metric
+names, application-supplied resource attributes, trace propagation, and the
+local-safe no-export behavior remain unchanged. The distribution's final
+resource now adds `cloud.provider="vercel"` and no longer supplies its former
+`NEXT_PUBLIC_VERCEL_*` fallbacks; dashboards must use the server-side Vercel
+attributes already supplied by Loopworks.
+
+The coordinated upgrade removes vulnerable `@opentelemetry/core` 1.x from the
+lock graph. Adversarial runtime testing found that `@vercel/otel` 2.1.3 still
+bundles an older baggage propagator that OSV cannot see. Until Vercel publishes
+the upstream fix, the distribution is pinned exactly and a Bun-managed package
+patch substitutes the fixed core 2.10 propagator in both its Node and Edge
+entrypoints. This preserves Vercel's private runtime-context propagator while
+enforcing the W3C baggage size and entry-count limits. Runtime regression tests
+cover both exports, and the exact patch allows the
+`GHSA-8988-4f7v-96qf` version-only OSV exception to be deleted.
+
 ## Consequences
 
 Loop stages and agents get a stable instrumentation vocabulary before any of them are built, which was the blocking risk. The backend stays swappable: leaving Axiom means changing exporter env vars, not call sites. Costs stay at zero until volume grows well beyond a solo control plane.
@@ -102,6 +129,9 @@ Constraints accepted: OTLP over HTTP/protobuf only (no gRPC — irrelevant on se
 3. `trace_id` columns are populated on run and step creation and match the trace visible in Axiom.
 4. Metric names emitted in code match this contract exactly; a unit test asserts the exported name set.
 5. Redaction tests still pass; no telemetry attribute carries tokens, secrets, or raw payloads.
+6. A dependency-family contract rejects any unreviewed resolved OTel package,
+   a changed unpatched Vercel distribution, or a reintroduced
+   `GHSA-8988-4f7v-96qf` exception.
 
 ## Follow-Ups
 

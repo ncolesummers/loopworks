@@ -320,14 +320,23 @@ Current suppressions:
   before review caught it.
 - `.semgrepignore` — replaces Semgrep's bundled default, which excluded
   `tests/` and silently took 119 files out of scope.
-- `osv-scanner.toml` — four exceptions reviewed on 2026-08-08:
+- `osv-scanner.toml` — three residual exceptions reviewed on 2026-08-12:
 
 | Advisory | Severity | Package / dependency path | Reachability / justification | Tracking | Expires |
 | --- | --- | --- | --- | --- | --- |
-| `GHSA-8988-4f7v-96qf` | Moderate | `@opentelemetry/core@1.30.1` through the OTel 0.57/1.x runtime stack | The only published fix requires the separately reviewed OTel 2.x migration. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
 | `GHSA-67mh-4wv8-2f99` | Moderate | `esbuild@0.18.20` through development-only `drizzle-kit` → `@esbuild-kit/esm-loader` | Application and production build paths use patched esbuild versions; remove this exception when Drizzle Kit drops the legacy loader. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
 | `GHSA-5p2g-fcmc-qvqq` | High, locally fixed | `image-size@2.0.2` through `@storybook/nextjs-vite` | No upstream patched release exists. `patches/image-size@2.0.2.patch` rejects undersized JXL and HEIF boxes, and child-process regression tests prove crafted inputs terminate. The OSV entry filters version-only metadata after the vulnerable behavior is fixed. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
 | `GHSA-w3rx-r6r6-pgpr` | High, locally fixed | `image-size@2.0.2` through `@storybook/nextjs-vite` | No upstream patched release exists. `patches/image-size@2.0.2.patch` rejects undersized ICNS entries, and a child-process regression test proves crafted input terminates. The OSV entry filters version-only metadata after the vulnerable behavior is fixed. | [#180](https://github.com/ncolesummers/loopworks/issues/180) | 2026-11-06 |
+
+`GHSA-8988-4f7v-96qf` was removed on 2026-08-12 after the coordinated
+`@vercel/otel` 2.1.3, OpenTelemetry stable 2.10.0, and experimental/exporter
+0.221.0 migration removed `@opentelemetry/core` 1.x from the lock graph.
+Adversarial testing found that Vercel's distribution still bundled the
+vulnerable baggage implementation even though OSV reported the visible graph as
+fixed. The exact-version `patches/@vercel%2Fotel@2.1.3.patch` replaces both
+published runtime call sites with the fixed core 2.10 propagator. Node and Edge
+subprocess tests enforce the 180-entry and per-entry limits while proving
+Vercel runtime trace-context extraction remains active.
 
 The two High advisories are fixed in the installed package with a Bun-managed
 repository patch because upstream has not published a release. Their OSV
@@ -342,9 +351,10 @@ The fresh 2026-08-08 baseline with OSV-Scanner 2.5.0 was 98 vulnerabilities
 across 32 packages: 5 Critical, 45 High, 40 Moderate, 6 Low, and 2 Unknown.
 Targeted parent upgrades, the Storybook Vite migration, removal of the unused
 repository-local Vercel CLI, same-major overrides, and the reviewed
-`image-size` patch reduced that to two unresolved Moderate exceptions plus two
-locally fixed High advisories that OSV still matches by version. With those
-exact entries applied, the blocking scan reports zero unhandled findings.
+`image-size` patch and OpenTelemetry 2 migration reduced that to one unresolved
+Moderate exception plus two locally fixed High advisories that OSV still
+matches by version. With those exact entries applied, the blocking scan reports
+zero unhandled findings.
 
 ### Triage
 

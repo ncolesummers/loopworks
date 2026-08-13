@@ -2,6 +2,7 @@
 import {
   buildLoopworksResourceAttributes,
   createLoopworksOtelConfig,
+  resolveLoopworksMetricExporterConfig,
   resolveLoopworksOtelMode,
 } from "@/lib/observability/otel";
 
@@ -71,7 +72,7 @@ describe("Loopworks OTel configuration", () => {
       NODE_ENV: "development",
     });
 
-    expect(localConfig).not.toHaveProperty("metricReader");
+    expect(localConfig).not.toHaveProperty("metricReaders");
     expect(localConfig).toMatchObject({
       spanProcessors: [],
     });
@@ -85,9 +86,36 @@ describe("Loopworks OTel configuration", () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        metricReader: expect.any(Object),
+        metricReaders: [expect.any(Object)],
       }),
     );
+  });
+
+  it("resolves metric exporter endpoints and headers from the supplied environment", () => {
+    expect(
+      resolveLoopworksMetricExporterConfig({
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://api.axiom.co/",
+        OTEL_EXPORTER_OTLP_HEADERS: "authorization=Bearer%20shared,x-scope=shared",
+        OTEL_EXPORTER_OTLP_METRICS_HEADERS: "x-scope=metrics,x-dataset=loopworks",
+      }),
+    ).toEqual({
+      headers: {
+        authorization: "Bearer shared",
+        "x-dataset": "loopworks",
+        "x-scope": "metrics",
+      },
+      url: "https://api.axiom.co/v1/metrics",
+    });
+
+    expect(
+      resolveLoopworksMetricExporterConfig({
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://ignored.loopworks.dev",
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "https://metrics.loopworks.dev/custom",
+      }),
+    ).toEqual({
+      headers: {},
+      url: "https://metrics.loopworks.dev/custom",
+    });
   });
 
   it("enables trace export only when OTLP trace configuration is present", () => {
