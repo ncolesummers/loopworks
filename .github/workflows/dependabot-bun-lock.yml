@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout the immutable pull-request head
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.event.pull_request.head.sha }}
@@ -68,7 +68,7 @@ jobs:
       # Artifacts cross the privilege boundary as inert data. The privileged
       # workflow below validates every metadata field before creating a commit.
       - name: Upload lockfile artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dependabot-bun-lock
           path: ${{ runner.temp }}/dependabot-bun-lock
