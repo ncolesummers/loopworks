@@ -68,7 +68,7 @@ describe("commit provenance CI contract", () => {
     });
     const steps = job?.steps ?? [];
     const resolve = steps.find((step) => step.id === "resolve");
-    const checkout = steps.find((step) => step.uses === "actions/checkout@v5");
+    const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"));
     const provenance = steps.find((step) => step.name === "Run provenance check");
     const pendingStatus = steps.find((step) => step.name === "Publish pending status");
     const status = steps.find((step) => step.name === "Publish provenance status");
@@ -93,7 +93,9 @@ describe("commit provenance CI contract", () => {
     expect(status?.run).toContain("STATE=failure");
     expect(status?.run).toContain("commit-provenance");
     expect(
-      trustedWorkflow.jobs?.provenance?.steps?.some((step) => step.uses === "actions/checkout@v5"),
+      trustedWorkflow.jobs?.provenance?.steps?.some((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      ),
     ).toBe(true);
     expect(
       trustedWorkflow.jobs?.provenance?.steps?.some((step) => step.run?.includes("head.sha")),

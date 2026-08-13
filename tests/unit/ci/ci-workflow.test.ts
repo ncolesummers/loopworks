@@ -116,8 +116,9 @@ function indexOfStep(
 function cacheIndexFor(jobName: string, cachedPath: string): number {
   return indexOfStep(
     jobName,
-    (step) => step.uses === "actions/cache@v6" && step.with?.path?.trim() === cachedPath,
-    `actions/cache@v6 step for \`${cachedPath}\``,
+    (step) =>
+      step.uses?.startsWith("actions/cache@") === true && step.with?.path?.trim() === cachedPath,
+    `actions/cache step for \`${cachedPath}\``,
   );
 }
 
@@ -158,7 +159,7 @@ describe("ci workflow", () => {
     const node = nodeSteps[0];
     expect(node).toBeDefined();
     if (!node) return;
-    expect(node.uses).toBe("actions/setup-node@v6");
+    expect(node.uses).toMatch(/^actions\/setup-node@/);
     expect(node.with?.["node-version"]).toBe(requiredNodeMajor);
     expect(node.if, "Node setup must not be conditional").toBeUndefined();
     expect(node["continue-on-error"], "Node setup must be blocking").toBeUndefined();
@@ -166,8 +167,8 @@ describe("ci workflow", () => {
     const nodeIndex = stepsOf(jobName).indexOf(node);
     const bunIndex = indexOfStep(
       jobName,
-      (step) => step.uses === "oven-sh/setup-bun@v2",
-      "oven-sh/setup-bun@v2 step",
+      (step) => step.uses?.startsWith("oven-sh/setup-bun@") === true,
+      "oven-sh/setup-bun step",
     );
 
     expect(nodeIndex).toBeLessThan(bunIndex);

@@ -229,7 +229,11 @@ result from scratch. The explicit dispatch is necessary because GitHub does not
 emit ordinary workflow events for a push authenticated by the repository
 `GITHUB_TOKEN`.
 
-Integrity in CI is not uniform, and the difference is worth knowing:
+Third-party actions are pinned to immutable full commit SHAs in every workflow,
+with their reviewed release versions retained as trailing comments. Dependabot's
+GitHub Actions ecosystem proposes SHA updates, and a repository contract rejects
+mutable tags or abbreviated refs. Integrity among installed scanner tools still
+differs, and the difference is worth knowing:
 
 - Gitleaks and OSV-Scanner are downloaded and checked against a SHA-256 digest
   pinned **in `ci.yml` itself**, not against the publisher's manifest — fetching

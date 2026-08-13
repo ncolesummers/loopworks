@@ -67,7 +67,7 @@ describe("Dependabot Bun lockfile workflows", () => {
 
   it("regenerates bun.lock without executing pull-request lifecycle scripts", () => {
     const steps = generator.jobs?.generate?.steps ?? [];
-    const checkout = steps.find((step) => step.uses === "actions/checkout@v5");
+    const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"));
     expect(checkout?.with).toMatchObject({
       "persist-credentials": false,
       ref: githubExpression("github.event.pull_request.head.sha"),
@@ -91,7 +91,7 @@ describe("Dependabot Bun lockfile workflows", () => {
       'printf "%s\\n" "$PULL_REQUEST_NUMBER" > "$ARTIFACT_PATH/pull-request-number"',
     );
 
-    const upload = steps.find((step) => step.uses === "actions/upload-artifact@v4");
+    const upload = steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
     expect(upload?.with).toMatchObject({
       name: "dependabot-bun-lock",
       path: `${githubExpression("runner.temp")}/dependabot-bun-lock`,
