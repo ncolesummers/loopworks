@@ -53,6 +53,7 @@ const postgresUrlSchema = urlSchema.refine((value) => {
   const protocol = new URL(value).protocol;
   return protocol === "postgres:" || protocol === "postgresql:";
 });
+const storeIdSchema = z.string().trim().pipe(z.uuid());
 const logLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 const portalDataModeSchema = z.enum(["", "fixtures"]);
 
@@ -170,6 +171,24 @@ export const configRegistry = defineRegistry([
     secret: true,
     readOnly: false,
     exampleValue: localDatabaseUrl,
+  },
+  {
+    name: "LOOPWORKS_EXPECTED_STORE_ID",
+    schema: storeIdSchema,
+    group: "database",
+    description:
+      "Identity of the Postgres store production expects; read it with `bun run db:provision --check`.",
+    /*
+     * Enforced by the production portal read rather than declared production-
+     * required (#158). `resolveConfigRuntimeContext` classifies a Vercel Preview
+     * as production, and a preview cannot know the ephemeral database it will be
+     * handed (ADR 0018), so requiring it here would demand a value that is
+     * meaningless in preview. Production reads fail closed when it is unset.
+     */
+    requiredIn: notRequired,
+    secret: false,
+    readOnly: false,
+    exampleValue: "00000000-0000-0000-0000-000000000000",
   },
   {
     name: "LOOPWORKS_PUBLIC_URL",

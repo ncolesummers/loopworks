@@ -5,6 +5,7 @@ import { approvals, artifacts, loopRuns, repositories, runSteps } from "@/db/sch
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { findUnverifiedStoreIdentity } from "@/lib/portal/store-identity";
 import { isProductionRuntime } from "@/lib/runtime";
 import type {
   ArtifactKind,
@@ -500,6 +501,25 @@ export async function getRunRecordsForPortal(input: {
   }
 
   try {
+    /*
+     * `/runs` reads through this function rather than `getPortalRecordsForPortal`,
+     * so without the same gate a wrong or emptied store renders "Live runs" over an
+     * empty list while every other surface refuses to trust it (#158).
+     */
+    const unverifiedIdentity = await findUnverifiedStoreIdentity({
+      database: input.database,
+      env,
+      ...(input.logger ? { logger: input.logger } : {}),
+    });
+    if (unverifiedIdentity) {
+      return {
+        error: "Run data store identity is unverified.",
+        runs: [],
+        source: "unavailable",
+        usedFallback: false,
+      };
+    }
+
     return await readRunRecords({
       database: input.database,
       now: input.now,

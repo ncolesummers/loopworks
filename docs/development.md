@@ -27,6 +27,25 @@ bun run db:migrate
 bun run dev
 ```
 
+`bun run dev` needs nothing further. A local **production** server does:
+`next start` sets `NODE_ENV=production` with no `VERCEL_ENV`, so the portal
+verifies the store's identity before reading it (#158) and otherwise renders
+every surface as unavailable. To run one:
+
+```bash
+bun run db:provision --check     # prints the identity, or exits 1 if there is none
+```
+
+Set `LOOPWORKS_EXPECTED_STORE_ID` in `.env.local` to the value it reports, using
+`bun run db:provision` first if the store has none. Copying the placeholder out
+of `.env.example` does not work — it is treated as unconfigured on purpose, so a
+pasted example cannot masquerade as a verified store.
+
+`bun run scripts/seed-day-zero.ts reset` truncates every public table, which
+takes the identity row with it. `bun run db:migrate` will not restore it —
+migration `0003` is already recorded as applied — so re-run `bun run db:provision`
+and update the variable after a full reset.
+
 For hosted Preview and Production configuration, use the
 [Vercel and Neon runbook](runbooks/vercel-neon-deployment.md).
 

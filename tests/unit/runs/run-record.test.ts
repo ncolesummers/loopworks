@@ -1,16 +1,21 @@
 /** @vitest-environment node */
 import { eq } from "drizzle-orm";
 
-import { artifacts, loopRuns, repositories } from "@/db/schema";
+import { artifacts, loopRuns, repositories, storeIdentity } from "@/db/schema";
 import { createResearchLoopRun } from "@/lib/loops/research-run";
 import {
   createValidationReportArtifactMetadata,
   type ValidationReportV1,
 } from "@/lib/loops/validation-report";
+import {
+  provisionStoreIdentity,
+  type StoreIdentityProvisionDatabase,
+} from "@/lib/portal/store-identity";
 import { buildRunFixtureRecords } from "@/lib/runs/fixtures";
 import {
   getRunRecordsForPortal,
   getRunRecordsForResult,
+  getRunSourceLabel,
   readRunRecords,
 } from "@/lib/runs/run-record";
 import { demoSeedIds, type SeedDatabase, seedDemoData } from "@/lib/seed/demo-data";
@@ -474,6 +479,69 @@ describe("run records (pglite integration)", () => {
     });
   });
 
+  /**
+   * `/runs` reads through `getRunRecordsForPortal`, not the portal-records gate, so
+   * it needs its own coverage that a wrong or emptied store cannot render as a
+   * normal empty list of runs (#158). Without the gate this returns `source: "db"`
+   * and the page shows "Live runs" over "No runs available" while every other
+   * surface refuses the same store.
+   */
+  it.each([
+    ["is not the expected one", false],
+    ["was emptied", true],
+  ] as const)("fails closed on /runs when the store %s", async (_case, emptyTheStore) => {
+    const logger = { warn: vi.fn() };
+    const provisioned = await provisionStoreIdentity({
+      database: context.db as unknown as StoreIdentityProvisionDatabase,
+    });
+    if (emptyTheStore) {
+      await context.db.delete(storeIdentity);
+    }
+
+    const result = await getRunRecordsForPortal({
+      database: context.db,
+      env: {
+        LOOPWORKS_EXPECTED_STORE_ID: emptyTheStore
+          ? provisioned.storeId
+          : "018f7c2e-0000-7c3d-9e4f-2a6b8c0d1e2f",
+        NODE_ENV: "production",
+      },
+      fixtureRuns: buildRunFixtureRecords(),
+      logger: logger as never,
+    });
+
+    expect(result).toMatchObject({
+      error: "Run data store identity is unverified.",
+      source: "unavailable",
+      usedFallback: false,
+    });
+    expect(getRunSourceLabel(result)).toBe("Unavailable");
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityStatus: emptyTheStore ? "unprovisioned" : "mismatch",
+      }),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("still reads runs on /runs when the expected store answers", async () => {
+    const provisioned = await provisionStoreIdentity({
+      database: context.db as unknown as StoreIdentityProvisionDatabase,
+    });
+
+    const result = await getRunRecordsForPortal({
+      database: context.db,
+      env: {
+        LOOPWORKS_EXPECTED_STORE_ID: provisioned.storeId,
+        NODE_ENV: "production",
+      },
+      fixtureRuns: buildRunFixtureRecords(),
+    });
+
+    expect(result).toMatchObject({ source: "db" });
+    expect(getRunSourceLabel(result)).toBe("Live runs");
+  });
+
   it("never honors explicit run fixture mode in production", async () => {
     const fixtureRuns = buildRunFixtureRecords();
     const database = {
@@ -485,6 +553,10 @@ describe("run records (pglite integration)", () => {
     const result = await getRunRecordsForPortal({
       database: database as never,
       env: {
+        // Configured so the read is reached: a store whose identity cannot be
+        // verified fails before querying, which would satisfy the assertion below
+        // for the wrong reason (#158).
+        LOOPWORKS_EXPECTED_STORE_ID: "018f7c2e-5b1a-7c3d-9e4f-2a6b8c0d1e2f",
         LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
         NODE_ENV: "production",
       },

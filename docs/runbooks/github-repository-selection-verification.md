@@ -253,6 +253,13 @@ TRUNCATE repositories, github_installations, github_installation_flows
 `CASCADE` on `repositories` also removes loops, runs, artifacts, and approvals
 for those repositories. Delete `.env.production.local` when you are done.
 
+This statement names three tables rather than the whole schema, so it leaves
+`store_identity` intact and the portal still renders its first-run empty states
+afterwards. Truncating all of `public` instead would take the identity row with
+it, and every production read would then fail closed with
+`Portal data store identity is unverified.` until `bun run db:provision` issues a
+new identity and `LOOPWORKS_EXPECTED_STORE_ID` is updated to match (#158).
+
 To redo step 1, uninstall the App from the org:
 <https://github.com/organizations/loopworks-sandbox/settings/installations>
 

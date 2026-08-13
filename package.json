@@ -46,6 +46,7 @@
     "precommit:run": "uvx prek run --all-files",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate-database.ts",
+    "db:provision": "bun run scripts/provision-store-identity.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "bun run scripts/seed-demo-data.ts",
     "db:seed:reset": "bun run scripts/seed-demo-data.ts --reset",

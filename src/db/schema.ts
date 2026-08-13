@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -84,6 +85,32 @@ export const observabilitySeverityEnum = pgEnum("observability_severity", [
   "warn",
   "error",
 ]);
+
+/**
+ * The identity of the store itself, written once at provision time and compared
+ * against `LOOPWORKS_EXPECTED_STORE_ID` on every production portal read (#158).
+ *
+ * Row counts cannot tell a reachable wrong or freshly-reset database apart from a
+ * new install: both answer successfully with nothing in them. This row is the
+ * evidence that separates them, and it lives in `public` deliberately — a reset
+ * that truncates the schema takes it too, which is what makes "provisioned then
+ * emptied" observable rather than silent.
+ *
+ * Singleton by construction: `id` defaults to 1 and is the primary key, and the
+ * migration adds a `CHECK (id = 1)` so a second row cannot be inserted even with
+ * an explicit id.
+ */
+export const storeIdentity = pgTable(
+  "store_identity",
+  {
+    id: integer("id").default(1).primaryKey(),
+    storeId: uuid("store_id").defaultRandom().notNull(),
+    provisionedAt: timestamp("provisioned_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    singleRow: check("store_identity_single_row", sql`${table.id} = 1`),
+  }),
+);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
