@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-06-20
+Updated: 2026-08-12 by #250
 Supersedes: 0005
 
 ## Context
@@ -64,7 +65,35 @@ interactive elements; a subtle spin or pulse only for in-progress states
 ### Token System
 
 Tokens are implemented as HSL CSS variables in `src/app/globals.css` and surfaced
-through `tailwind.config.ts`.
+to Tailwind through a CSS-first `@theme inline` block in that same file.
+
+### Tailwind CSS 4 Integration
+
+Tailwind CSS 4 is the design-system compiler. Next.js and Storybook both compile
+the shared `src/app/globals.css` entry point through `@tailwindcss/postcss`.
+Tailwind's legacy JavaScript configuration and standalone Autoprefixer plugin are
+removed: v4 handles imports and vendor prefixing in its supported PostCSS
+integration.
+
+The stylesheet owns the remaining compiler contract:
+
+- `@theme inline` maps generated color, font, radius, and shadow utilities to the
+  runtime HSL and `next/font` variables;
+- `@custom-variant dark` preserves `next-themes` class-based dark mode;
+- the forms and typography packages are loaded with `@plugin`;
+- automatic source discovery covers application, component, library, and story
+  files, while a CSS `container` utility retains the centered one-rem gutters and
+  1440px cap from the v3 configuration.
+
+The migration renames v3 `shadow-sm` usages to v4 `shadow-xs`, whose value is the
+v3 small shadow, and `outline-none` to `outline-hidden`, which preserves a native
+outline in forced-colors mode while the branded focus ring remains active.
+
+Tailwind CSS 4 requires Safari 16.4, Chrome 111, and Firefox 128 or newer. That
+modern-browser floor is accepted for the pre-release Loopworks operator portal.
+Supporting older browsers would require reverting this decision and pinning
+Tailwind 3; mixing the v3 compiler or compatibility stylesheet into the v4 path
+is not supported.
 
 **Neutral ramp** (each pair includes a `-foreground` companion where noted):
 `background`, `foreground`, `card`, `card-foreground`, `popover`,
@@ -154,6 +183,10 @@ in one place and immediately inherit correct visual treatment across all surface
 
 Self-hosting GitHub fonts avoids network dependencies but adds an explicit font
 asset maintenance obligation when upstream releases new versions.
+
+CSS-first configuration keeps the runtime token definition and compiler mapping
+co-located, but compiler upgrades now require reviewing CSS directives and
+browser support rather than only a TypeScript configuration file.
 
 Future UI expansion (catalog, loops, runs, approvals, Vercel) must use these
 tokens and the status vocabulary before introducing new visual patterns.

@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { captureBrowserErrors } from "../helpers/browser-errors";
 
 const portalRoutes = [
   {
@@ -30,6 +31,15 @@ const loopRegistrationPath = "/loops/register";
 
 const portalSourceLabel = "Fixture fallback";
 const dbBackedPortalPaths = ["/", "/catalog", "/loops", "/approvals", "/settings"] as const;
+const browserErrors = new WeakMap<object, string[]>();
+
+test.beforeEach(({ page }) => {
+  browserErrors.set(page, captureBrowserErrors(page));
+});
+
+test.afterEach(({ page }) => {
+  expect(browserErrors.get(page), "portal emitted a browser runtime error").toEqual([]);
+});
 
 test.describe("Loopworks portal", () => {
   test("renders the dashboard surface", async ({ page }) => {
@@ -57,6 +67,54 @@ test.describe("Loopworks portal", () => {
     await expect(page.getByRole("link", { name: "Preview URL" })).toBeVisible();
     await expect(page.getByText("Ready", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Preview", { exact: true }).first()).toBeVisible();
+  });
+
+  test("keeps semantic borders, link hover, and keyboard focus above base styles", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const cssColor = (variable: string) =>
+      page.evaluate((name) => {
+        const probe = document.createElement("span");
+        probe.style.color = `hsl(${getComputedStyle(document.documentElement).getPropertyValue(name)})`;
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      }, variable);
+
+    const healthy = page.locator(".border-success-border").filter({ hasText: "Healthy" }).first();
+    await expect(healthy).toBeVisible();
+    expect(await healthy.evaluate((node) => getComputedStyle(node).borderColor)).toBe(
+      await cssColor("--success-border"),
+    );
+
+    const repoLink = page.getByRole("link", { name: "ncolesummers/loopworks-web" });
+    await repoLink.hover();
+    expect(await repoLink.evaluate((node) => getComputedStyle(node).textDecorationLine)).toContain(
+      "underline",
+    );
+
+    const artifactLink = page.getByRole("link", { name: "Plan artifact" });
+    await artifactLink.hover();
+    expect(await artifactLink.evaluate((node) => getComputedStyle(node).color)).toBe(
+      await cssColor("--brand"),
+    );
+
+    const baselineShadow = await repoLink.evaluate((node) => getComputedStyle(node).boxShadow);
+    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    for (
+      let tab = 0;
+      tab < 30 && !(await repoLink.evaluate((node) => node === document.activeElement));
+      tab++
+    ) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(repoLink).toBeFocused();
+    const focusedShadow = await repoLink.evaluate((node) => getComputedStyle(node).boxShadow);
+    expect(focusedShadow, "portal keyboard focus must add a ring").not.toBe(baselineShadow);
+    expect(focusedShadow).toContain(await cssColor("--ring"));
   });
 
   test("lets the operator toggle a loop and open settings", async ({ page }) => {

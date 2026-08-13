@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { captureBrowserErrors } from "../helpers/browser-errors";
 
 /**
  * The sign-in surface (#214), personas P06 and S07.
@@ -12,6 +13,15 @@ import { expect, type Page, test } from "@playwright/test";
 
 const signInPath = "/sign-in";
 const primaryAction = "Continue with GitHub";
+const browserErrors = new WeakMap<object, string[]>();
+
+test.beforeEach(({ page }) => {
+  browserErrors.set(page, captureBrowserErrors(page));
+});
+
+test.afterEach(({ page }) => {
+  expect(browserErrors.get(page), "sign-in emitted a browser runtime error").toEqual([]);
+});
 
 /**
  * What the operator actually reads. `textContent` would also return the contents of `<script>`
@@ -133,8 +143,29 @@ test.describe("Loopworks sign-in surface", () => {
     }
     await expect(action).toBeFocused();
 
-    const ring = await action.evaluate((node) => getComputedStyle(node).boxShadow);
-    expect(ring, "keyboard focus must render the ring token").not.toBe("none");
+    const baseline = await action.evaluate((node) => {
+      node.blur();
+      return getComputedStyle(node).boxShadow;
+    });
+    await action.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(action).toBeFocused();
+    const { ring, ringColor } = await action.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.color = `hsl(${getComputedStyle(document.documentElement).getPropertyValue("--ring")})`;
+      document.body.append(probe);
+      const result = {
+        ring: getComputedStyle(node).boxShadow,
+        ringColor: getComputedStyle(probe).color,
+      };
+      probe.remove();
+      return result;
+    });
+    expect(ring, "keyboard focus must add a ring beyond the ordinary button shadow").not.toBe(
+      baseline,
+    );
+    expect(ring).toContain(ringColor);
   });
 
   /**

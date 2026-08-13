@@ -8,7 +8,7 @@ enforce.
 
 ## Tokens and Primitives
 
-- [ ] Uses design tokens from `src/app/globals.css` / `tailwind.config.ts` — no
+- [ ] Uses design tokens from `src/app/globals.css` — no
   hardcoded color values or one-off utility color classes.
 - [ ] Builds on existing shared primitives (Button, Badge, Card, Table, etc.)
   before introducing a new component.

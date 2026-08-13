@@ -9,14 +9,14 @@ import localFont from "next/font/local";
 
 export const monaSans = localFont({
   src: "../app/fonts/MonaSans.woff2",
-  variable: "--font-sans",
+  variable: "--font-mona-sans",
   display: "swap",
   weight: "200 900",
 });
 
 export const monaspace = localFont({
   src: "../app/fonts/MonaspaceNeon.woff2",
-  variable: "--font-mono",
+  variable: "--font-monaspace-neon",
   display: "swap",
   weight: "200 800",
 });

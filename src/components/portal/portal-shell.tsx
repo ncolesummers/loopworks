@@ -60,7 +60,7 @@ export function PortalShell({
       <div className="grid min-h-screen lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="border-r bg-card/80 px-4 py-5 backdrop-blur">
           <div className="flex items-center gap-3 px-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-background shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-background shadow-xs">
               <Layers3 className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
