@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 
-import { repositories } from "@/db/schema";
+import { repositories, storeIdentity } from "@/db/schema";
 import { portalFixture } from "@/lib/fixtures";
 import {
   findUnmetPortalRequirements,
@@ -9,6 +9,10 @@ import {
   hasPortalProjectionIntegrity,
   readPortalRecords,
 } from "@/lib/portal/records";
+import {
+  provisionStoreIdentity,
+  type StoreIdentityProvisionDatabase,
+} from "@/lib/portal/store-identity";
 import { type SeedDatabase, seedDemoData } from "@/lib/seed/demo-data";
 
 import {
@@ -20,12 +24,23 @@ import {
 describe("portal records (pglite integration)", () => {
   let context: PgliteTestDatabase;
 
+  const expectedStoreId = "018f7c2e-5b1a-7c3d-9e4f-2a6b8c0d1e2f";
+  const otherStoreId = "018f7c2e-0000-7c3d-9e4f-2a6b8c0d1e2f";
+
   beforeAll(async () => {
     context = await createPgliteTestDatabase();
   }, pgliteTestHookTimeoutMs);
 
   beforeEach(async () => {
     await context.reset();
+    // `reset` truncates every public table, which takes the identity row with it
+    // and leaves a store that reads as emptied rather than provisioned (#158).
+    // Production reads below are about a correctly-provisioned store, so each
+    // starts by reissuing the identity the deployment expects.
+    await provisionStoreIdentity({
+      database: context.db as unknown as StoreIdentityProvisionDatabase,
+      storeId: expectedStoreId,
+    });
   }, pgliteTestHookTimeoutMs);
 
   afterAll(async () => {
@@ -50,7 +65,11 @@ describe("portal records (pglite integration)", () => {
     });
   }
 
-  const productionEnv = { GITHUB_APP_ID: "800000", NODE_ENV: "production" } as const;
+  const productionEnv = {
+    GITHUB_APP_ID: "800000",
+    LOOPWORKS_EXPECTED_STORE_ID: expectedStoreId,
+    NODE_ENV: "production",
+  } as const;
 
   it("materializes the five portal page surfaces from seeded database rows", async () => {
     await seedDemoData(testDatabase());
@@ -262,6 +281,186 @@ describe("portal records (pglite integration)", () => {
     );
   });
 
+  /**
+   * #158. A reachable database that is not the expected one answers every query
+   * successfully and empty, so the read below would otherwise be indistinguishable
+   * from the legitimately-empty production read two tests above. These assert the
+   * difference is now observable in both the result and the log stream.
+   */
+  it("fails closed and names the mismatch when a reachable store is not the expected one", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: { ...productionEnv, LOOPWORKS_EXPECTED_STORE_ID: otherStoreId },
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({
+      error: "Portal data store identity is unverified.",
+      source: "unavailable",
+      usedFallback: false,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ identityStatus: "mismatch" }),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("fails closed and names the emptied store when the identity row was truncated", async () => {
+    const logger = { warn: vi.fn() };
+    await context.db.delete(storeIdentity);
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: productionEnv,
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({
+      error: "Portal data store identity is unverified.",
+      source: "unavailable",
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ identityStatus: "unprovisioned" }),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("fails closed in production when no expected store identity is configured", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: { GITHUB_APP_ID: "800000", NODE_ENV: "production" },
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({
+      error: "Portal data store identity is unverified.",
+      source: "unavailable",
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ identityStatus: "not_configured" }),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("emits no identity warning for a verified store, so a new install stays silent", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: productionEnv,
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({ source: "db" });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("keeps the raw store identifiers out of the identity warning", async () => {
+    const logger = { warn: vi.fn() };
+
+    await getPortalRecordsForPortal({
+      database: context.db,
+      env: { ...productionEnv, LOOPWORKS_EXPECTED_STORE_ID: otherStoreId },
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    const logged = JSON.stringify(logger.warn.mock.calls);
+    expect(logged).not.toContain(expectedStoreId);
+    expect(logged).not.toContain(otherStoreId);
+  });
+
+  /**
+   * A Vercel Preview builds with `NODE_ENV=production`, so it reaches every other
+   * production gate. Its database is provider-owned and turns over with the
+   * Preview lifecycle (ADR 0018), so no project-level value can name it and the
+   * check would fail every preview rather than catch anything. Asserted with a
+   * store that would fail both ways — wrong id *and* no identity row — so the
+   * exclusion cannot pass by accident.
+   */
+  it("does not verify store identity in a Vercel preview", async () => {
+    const logger = { warn: vi.fn() };
+    await context.db.delete(storeIdentity);
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: {
+        GITHUB_APP_ID: "800000",
+        LOOPWORKS_EXPECTED_STORE_ID: otherStoreId,
+        NODE_ENV: "production",
+        VERCEL_ENV: "preview",
+      },
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({ source: "db" });
+    expect(getPortalSourceLabel(result)).toBe("Live database");
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("still verifies store identity when VERCEL_ENV names production", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: {
+        GITHUB_APP_ID: "800000",
+        LOOPWORKS_EXPECTED_STORE_ID: otherStoreId,
+        NODE_ENV: "production",
+        VERCEL_ENV: "production",
+      },
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({ source: "unavailable" });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ identityStatus: "mismatch" }),
+      "portal_store_identity_unverified",
+    );
+  });
+
+  it("does not verify store identity outside production runtime", async () => {
+    const logger = { warn: vi.fn() };
+    await context.db.delete(storeIdentity);
+
+    const result = await getPortalRecordsForPortal({
+      database: context.db,
+      env: { GITHUB_APP_ID: "800000", NODE_ENV: "development" },
+      logger: logger as never,
+      now: new Date("2026-06-30T09:10:00.000Z"),
+      requires: [],
+    });
+
+    expect(result).toMatchObject({ source: "db" });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "portal_store_identity_unverified",
+    );
+  });
+
   it("does not gate a surface whose declared requirement is met", async () => {
     await seedSelectedRepositoryOnly();
 
@@ -420,6 +619,9 @@ describe("portal records (pglite integration)", () => {
       database: unavailableDatabase as never,
       env: {
         GITHUB_APP_ID: "800000",
+        // Configured so the read is reached: an unidentifiable store fails before
+        // querying, which would satisfy the assertion below for the wrong reason.
+        LOOPWORKS_EXPECTED_STORE_ID: expectedStoreId,
         LOOPWORKS_PORTAL_DATA_MODE: "fixtures",
         NODE_ENV: "production",
       },

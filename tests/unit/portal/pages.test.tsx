@@ -222,7 +222,12 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
     render(
       await RunsPageContent({
         database: unavailableDatabase as never,
-        env: { NODE_ENV: "production" },
+        env: {
+          // Identity configured so this still covers a *failed read*; without it
+          // the run would fail closed on the identity gate instead (#158).
+          LOOPWORKS_EXPECTED_STORE_ID: "018f7c2e-5b1a-7c3d-9e4f-2a6b8c0d1e2f",
+          NODE_ENV: "production",
+        },
       }),
     );
 

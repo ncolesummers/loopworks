@@ -15,6 +15,7 @@ import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { portalFixture } from "@/lib/fixtures";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { findUnverifiedStoreIdentity } from "@/lib/portal/store-identity";
 import { type RunRecordDatabase, readRunRecords } from "@/lib/runs/run-record";
 import { isProductionRuntime } from "@/lib/runtime";
 import type {
@@ -482,9 +483,9 @@ export function hasPortalProjectionIntegrity(records: PortalRecords): boolean {
   return githubSettingKeys.every((key) => projected.has(key));
 }
 
-function unavailableResult(): PortalRecordsResult {
+function unavailableResult(error = "Portal data store unavailable."): PortalRecordsResult {
   return {
-    error: "Portal data store unavailable.",
+    error,
     records: unavailablePortalRecords(),
     source: "unavailable",
     usedFallback: false,
@@ -620,6 +621,23 @@ export async function getPortalRecordsForPortal(input: {
     if (isProductionRuntime(env) && !hasValidGithubAppId) {
       throw new Error("github_app_id_configuration_invalid");
     }
+
+    /*
+     * A reachable but wrong or freshly-reset store answers every query below
+     * successfully and empty, which reads as a new install and routes the operator
+     * to reinstall an App that was never the problem (#158). Row counts cannot tell
+     * the two apart, so the store's own identity is checked first — before the read,
+     * because there is nothing worth reading from a store we cannot identify.
+     */
+    const unverifiedIdentity = await findUnverifiedStoreIdentity({
+      database: input.database,
+      env,
+      ...(input.logger ? { logger: input.logger } : {}),
+    });
+    if (unverifiedIdentity) {
+      return unavailableResult("Portal data store identity is unverified.");
+    }
+
     const result = await readPortalRecords({
       database: input.database,
       githubAppId: hasValidGithubAppId ? githubAppId : undefined,

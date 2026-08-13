@@ -22,6 +22,13 @@
       "when": 1786233234182,
       "tag": "0002_giant_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786597419005,
+      "tag": "0003_left_meteorite",
+      "breakpoints": true
     }
   ]
 }
