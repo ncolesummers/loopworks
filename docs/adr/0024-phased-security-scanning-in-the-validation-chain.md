@@ -4,7 +4,8 @@ Status: Accepted
 Date: 2026-08-08
 Issue: [#175](https://github.com/ncolesummers/loopworks/issues/175)
 Updated by: [#177](https://github.com/ncolesummers/loopworks/issues/177),
-[#184](https://github.com/ncolesummers/loopworks/issues/184)
+[#184](https://github.com/ncolesummers/loopworks/issues/184),
+[#234](https://github.com/ncolesummers/loopworks/issues/234)
 
 ## Context
 
@@ -86,6 +87,12 @@ blocking source of truth. Routine non-major changes may be grouped; Eve,
 Next.js, Auth.js, OpenTelemetry, and the Vercel OTel integration remain isolated
 because their migrations require focused review.
 
+**Every third-party action is pinned to an immutable full commit SHA.** A
+trailing release-version comment preserves reviewability, while Dependabot's
+`github-actions` ecosystem remains responsible for proposing newer SHAs. A
+repository-wide contract test rejects a tag, floating major, abbreviated SHA,
+or missing readable version comment in any workflow.
+
 **Dependabot lockfile repair uses a two-stage privilege boundary.** GitHub gives
 Dependabot-authored `pull_request` and `pull_request_target` runs a read-only
 token even when a job requests write access, and privileged PR-target workflows
@@ -122,6 +129,11 @@ Pinning means a scanner upgrade is a deliberate change touching the registry,
 the CI install step, and the cache key together — more friction than a floating
 tag, and the point.
 
+The same deliberate-review rule now applies to action upgrades. Workflow jobs
+cannot change underneath a repository commit through a mutable tag; accepting a
+new action release changes the pinned SHA and its adjacent version comment in a
+reviewed pull request.
+
 Dependabot PRs from package-manager ecosystems that do not understand Bun no
 longer stop at the frozen-lockfile install. The repair adds an extra workflow
 run and artifact handoff, but preserves the read-only boundary of PR execution,
@@ -151,6 +163,8 @@ normal frozen install as the gate that verifies the committed result.
 - `tests/unit/ci/dependabot-lockfile.test.ts` — the PR actor/repository guard,
   read-only generator, scripts-disabled install, immutable artifact binding,
   minimal privileged permissions, stale-head guard, and changed-only commit.
+- `tests/unit/ci/github-actions-pinning.test.ts` — every `uses:` reference in
+  every workflow is a full commit SHA with a readable release-version comment.
 - All three scanners run against this repository at their pinned versions;
   Gitleaks (tree and history), Semgrep, and blocking OSV are clean after the
   exact expiring OSV exceptions are applied.
