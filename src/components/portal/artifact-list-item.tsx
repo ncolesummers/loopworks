@@ -21,7 +21,7 @@ export function ArtifactListItem({ artifact }: Readonly<{ artifact: ArtifactReco
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-brand focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {artifact.label}
               <ArrowUpRight className="h-3.5 w-3.5" />

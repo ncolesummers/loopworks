@@ -39,7 +39,7 @@ export default async function SignInPage({
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-background shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-background shadow-xs">
             <Layers3 aria-hidden="true" className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0">

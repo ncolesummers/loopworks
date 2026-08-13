@@ -67,7 +67,7 @@ function RepoIdentity({ repo }: Readonly<{ repo: RepoRecord }>) {
       href={safeHref}
       target="_blank"
       rel="noreferrer"
-      className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       {label}
     </a>
@@ -205,7 +205,7 @@ export function RepoCatalog({
                   id="repo-catalog-health"
                   value={healthFilter}
                   onChange={(event) => setHealthFilter(event.target.value as RepoHealthFilter)}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {healthFilterOptions.map((option) => (
                     <option key={option.value} value={option.value}>

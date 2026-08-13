@@ -237,7 +237,7 @@ export function LoopRegistrationView({
               <li className="flex items-center gap-3 px-4 py-3" key={repository.id}>
                 <input
                   checked={repositoryId === repository.id}
-                  className="h-4 w-4 border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="h-4 w-4 border-input accent-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   id={`${fieldId}-repository-${repository.id}`}
                   name={`${fieldId}-repository`}
                   onChange={() => setRepositoryId(repository.id)}
@@ -293,7 +293,7 @@ export function LoopRegistrationView({
         <div className="mt-4 flex items-center gap-3">
           <input
             checked={enabled}
-            className="h-4 w-4 rounded border-input accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="h-4 w-4 rounded border-input accent-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             id={`${fieldId}-enabled`}
             onChange={(event) => setEnabled(event.target.checked)}
             type="checkbox"
