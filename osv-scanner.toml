@@ -9,11 +9,6 @@
 # fix the finding or open a separately prioritized issue instead.
 #
 [[IgnoredVulns]]
-id = "GHSA-8988-4f7v-96qf"
-ignoreUntil = 2026-11-06
-reason = "OpenTelemetry 1.x has no compatible patched release; migrate the telemetry stack to 2.x under #180."
-
-[[IgnoredVulns]]
 id = "GHSA-67mh-4wv8-2f99"
 ignoreUntil = 2026-11-06
 reason = "The affected esbuild is development-only under Drizzle Kit's legacy loader; track upstream removal under #180."

@@ -1,3 +1,4 @@
+import { parseKeyPairsIntoRecord } from "@opentelemetry/core";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { type MetricReader, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { type Configuration, registerOTel } from "@vercel/otel";
@@ -90,8 +91,33 @@ export function createLoopworksMetricReader(env: Env = process.env): MetricReade
   }
 
   return new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter(),
+    exporter: new OTLPMetricExporter(resolveLoopworksMetricExporterConfig(env)),
   });
+}
+
+function metricsEndpoint(env: Env): string {
+  const specificEndpoint = envValue("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", env)?.trim();
+  if (specificEndpoint) {
+    return specificEndpoint;
+  }
+
+  const sharedEndpoint = envValue("OTEL_EXPORTER_OTLP_ENDPOINT", env)?.trim();
+  return `${sharedEndpoint?.replace(/\/+$/, "")}/v1/metrics`;
+}
+
+export function resolveLoopworksMetricExporterConfig(
+  env: Env,
+): NonNullable<ConstructorParameters<typeof OTLPMetricExporter>[0]> {
+  const sharedHeaders = envValue("OTEL_EXPORTER_OTLP_HEADERS", env);
+  const metricsHeaders = envValue("OTEL_EXPORTER_OTLP_METRICS_HEADERS", env);
+
+  return {
+    headers: {
+      ...(sharedHeaders ? parseKeyPairsIntoRecord(sharedHeaders) : {}),
+      ...(metricsHeaders ? parseKeyPairsIntoRecord(metricsHeaders) : {}),
+    },
+    url: metricsEndpoint(env),
+  };
 }
 
 export function createLoopworksOtelConfig(env: Env = process.env): Configuration {
@@ -99,7 +125,7 @@ export function createLoopworksOtelConfig(env: Env = process.env): Configuration
 
   return {
     attributes: buildLoopworksResourceAttributes(env),
-    ...(metricReader ? { metricReader } : {}),
+    ...(metricReader ? { metricReaders: [metricReader] } : {}),
     serviceName: loopworksServiceName,
     ...(hasOtlpTraceConfig(env) ? {} : { spanProcessors: [] }),
   };
