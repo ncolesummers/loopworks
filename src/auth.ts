@@ -4,11 +4,15 @@ import GitHub from "next-auth/providers/github";
 
 import { db } from "@/db/client";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
-import { readGithubAccessTokenForUser } from "@/lib/auth/accounts";
+import {
+  readGithubAccessTokenForUser,
+  readGithubProviderAccountIdForUser,
+} from "@/lib/auth/accounts";
 import { readAuthAllowlistConfig } from "@/lib/auth/allowlist";
 import { fetchGithubOrganizationLookup } from "@/lib/auth/github";
 import {
-  applyGithubLoginToSession,
+  applyGithubIdentityToSession,
+  getAuthUserId,
   mapGithubProfileToAuthUser,
   readGithubLoginFromProfile,
 } from "@/lib/auth/identity";
@@ -103,8 +107,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return decision.allowed;
     },
-    session({ session, user }) {
-      return applyGithubLoginToSession(session, user);
+    async session({ session, user }) {
+      const userId = getAuthUserId(user);
+      const githubProviderAccountId = userId
+        ? await readGithubProviderAccountIdForUser(userId)
+        : null;
+      return applyGithubIdentityToSession(session, user, githubProviderAccountId);
     },
   },
 });

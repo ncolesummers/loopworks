@@ -151,7 +151,14 @@ describe("Loopworks logger", () => {
         authorizationCode: "one-time-code",
         codeVerifier: "pkce-verifier",
         githubInstallationState: "opaque-state",
+        githubProviderAccountId: "22808397",
         pkceVerifier: "production-pkce-verifier",
+        providerAccountId: "22808397",
+        rawGithubUserResponse: {
+          id: 22_808_397,
+          login: "renamed-operator",
+          token: "ghu_raw-response-token",
+        },
         verifierCookie: "production-cookie-verifier",
         headers: {
           cookie: "loopworks-github-install-pkce=header-verifier",
@@ -170,6 +177,9 @@ describe("Loopworks logger", () => {
           authorization_code: "nested-code",
           code_verifier: "nested-verifier",
           github_installation_state: "nested-state",
+          github_provider_account_id: "22808397",
+          provider_account_id: "22808397",
+          raw_github_user_response: { id: 22_808_397 },
         },
       },
       "github_installation_redaction_test",
@@ -180,7 +190,10 @@ describe("Loopworks logger", () => {
       authorizationCode: "[redacted]",
       codeVerifier: "[redacted]",
       githubInstallationState: "[redacted]",
+      githubProviderAccountId: "[redacted]",
       pkceVerifier: "[redacted]",
+      providerAccountId: "[redacted]",
+      rawGithubUserResponse: "[redacted]",
       verifierCookie: "[redacted]",
       headers: { cookie: "[redacted]", Cookie: "[redacted]" },
       request: { headers: { Cookie: "[redacted]" } },
@@ -190,6 +203,35 @@ describe("Loopworks logger", () => {
         authorization_code: "[redacted]",
         code_verifier: "[redacted]",
         github_installation_state: "[redacted]",
+        github_provider_account_id: "[redacted]",
+        provider_account_id: "[redacted]",
+        raw_github_user_response: "[redacted]",
+      },
+    });
+  });
+
+  it("redacts provider identity and token material at arbitrary structured-log depth", () => {
+    const sink = createMemoryDestination();
+    const logger = createLogger({ level: "info", base: null }, sink.destination);
+
+    logger.info(
+      {
+        outer: {
+          inner: {
+            githubProviderAccountId: "22808397",
+            token: "ghu_deep_token_canary",
+          },
+        },
+      },
+      "deep_redaction_test",
+    );
+
+    expect(JSON.parse(sink.writes[0] ?? "{}")).toMatchObject({
+      outer: {
+        inner: {
+          githubProviderAccountId: "[redacted]",
+          token: "[redacted]",
+        },
       },
     });
   });

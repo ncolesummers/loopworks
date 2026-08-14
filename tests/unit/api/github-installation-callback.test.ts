@@ -53,13 +53,20 @@ describe("GitHub App installation callback route", () => {
       ),
       {
         processCallback,
-        requireSession: async () => ({ actorId: "ncolesummers", authenticated: true }),
+        requireSession: async () => ({
+          actorId: "ncolesummers",
+          authenticated: true,
+          mode: "github",
+          githubProviderAccountId: "22808397",
+        }),
       },
     );
 
     expect(processCallback).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: null,
         installationId: "124001",
@@ -70,6 +77,69 @@ describe("GitHub App installation callback route", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain("https://github.com/login/oauth/authorize");
     expect(response.headers.get("set-cookie")).toContain("loopworks-github-install-pkce");
+  });
+
+  it("fails closed before callback processing when the session lacks immutable identity", async () => {
+    const processCallback = vi.fn(async () => ({
+      kind: "settings" as const,
+      outcome: "connected" as const,
+    }));
+    const span = recordingSpan();
+
+    const response = await handleGithubInstallationCallback(
+      new Request(
+        "https://loopworks.local/api/github/install/callback?code=secret-code&state=secret-state",
+        { headers: { cookie: "loopworks-github-install-pkce=secret-verifier" } },
+      ),
+      {
+        processCallback,
+        requireSession: async () => ({
+          actorId: "ncolesummers",
+          authenticated: true,
+          mode: "github",
+          githubProviderAccountId: null,
+        }),
+        span: span as never,
+      },
+    );
+
+    expect(response.headers.get("location")).toBe("https://loopworks.local/settings?github=error");
+    expect(processCallback).not.toHaveBeenCalled();
+    expect(span.setStatus).toHaveBeenCalledWith({ code: SpanStatusCode.ERROR });
+    expect(
+      JSON.stringify({ response: [...response.headers], span: span.setAttribute.mock.calls }),
+    ).not.toMatch(/secret-code|secret-state|secret-verifier|22808397/);
+  });
+
+  it("preserves the explicit local fixture callback bypass without inventing provider identity", async () => {
+    const processCallback = vi.fn(async () => ({
+      kind: "settings" as const,
+      outcome: "connected" as const,
+    }));
+
+    const response = await handleGithubInstallationCallback(
+      new Request("https://loopworks.local/api/github/install/callback?state=fixture-state"),
+      {
+        processCallback,
+        requireSession: async () => ({
+          actorId: "local-fixture",
+          authenticated: true,
+          mode: "fixture",
+          githubProviderAccountId: null,
+        }),
+      },
+    );
+
+    expect(processCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: "local-fixture",
+        mode: "fixture",
+        githubProviderAccountId: null,
+      }),
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://loopworks.local/settings?github=connected",
+    );
   });
 
   it("clears transient PKCE material and redirects only a stable outcome to Settings", async () => {
@@ -84,7 +154,12 @@ describe("GitHub App installation callback route", () => {
           expect(input.pkceVerifier).toBe("secret-verifier");
           return { kind: "settings", outcome: "connected" };
         },
-        requireSession: async () => ({ actorId: "ncolesummers", authenticated: true }),
+        requireSession: async () => ({
+          actorId: "ncolesummers",
+          authenticated: true,
+          mode: "github",
+          githubProviderAccountId: "22808397",
+        }),
         span: span as never,
       },
     );
@@ -112,7 +187,12 @@ describe("GitHub App installation callback route", () => {
       new Request("https://loopworks.local/api/github/install/callback?state=invalid"),
       {
         processCallback: async () => ({ kind: "settings", outcome: "error" }),
-        requireSession: async () => ({ actorId: "ncolesummers", authenticated: true }),
+        requireSession: async () => ({
+          actorId: "ncolesummers",
+          authenticated: true,
+          mode: "github",
+          githubProviderAccountId: "22808397",
+        }),
         span: span as never,
       },
     );
@@ -137,7 +217,12 @@ describe("GitHub App installation callback route", () => {
         processCallback: async () => {
           throw new Error("sensitive provider failure");
         },
-        requireSession: async () => ({ actorId: "ncolesummers", authenticated: true }),
+        requireSession: async () => ({
+          actorId: "ncolesummers",
+          authenticated: true,
+          mode: "github",
+          githubProviderAccountId: "22808397",
+        }),
         span: span as never,
       },
     );

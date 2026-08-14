@@ -2,7 +2,7 @@ import type { Session, User } from "next-auth";
 
 type UnknownRecord = Record<string, unknown>;
 
-export type AuthUserWithGithubLogin = Pick<User, "email" | "id" | "image" | "name"> & {
+export type AuthUserWithGithubIdentity = Pick<User, "email" | "id" | "image" | "name"> & {
   githubLogin?: string | null;
 };
 
@@ -46,24 +46,26 @@ export function mapGithubProfileToAuthUser(profile: unknown): User {
   };
 }
 
-export function getGithubLoginFromAuthUser(user: AuthUserWithGithubLogin | null): string | null {
+export function getGithubLoginFromAuthUser(user: AuthUserWithGithubIdentity | null): string | null {
   return typeof user?.githubLogin === "string" && user.githubLogin.length > 0
     ? user.githubLogin
     : null;
 }
 
-export function getAuthUserId(user: AuthUserWithGithubLogin | null): string | null {
+export function getAuthUserId(user: AuthUserWithGithubIdentity | null): string | null {
   return typeof user?.id === "string" && user.id.length > 0 ? user.id : null;
 }
 
-export function applyGithubLoginToSession(
+export function applyGithubIdentityToSession(
   session: Session,
-  user: AuthUserWithGithubLogin | null,
+  user: AuthUserWithGithubIdentity | null,
+  githubProviderAccountId: string | null,
 ): Session {
   session.user = {
     ...session.user,
     id: getAuthUserId(user) ?? session.user.id,
     githubLogin: getGithubLoginFromAuthUser(user),
+    githubProviderAccountId,
   };
 
   return session;
