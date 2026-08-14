@@ -29,22 +29,31 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 
 1. Real portal sessions use Auth.js GitHub SSO with database-backed Drizzle
    sessions.
-2. The GitHub `login` is persisted as `users.github_login` and is the operator
-   identity used for approval and future run attribution.
+2. The GitHub `login` is persisted as `users.github_login` for human-readable
+   approval and future run attribution. Authorization binds to the immutable
+   provider account id projected from the Auth.js account row into the session;
+   the session projection never includes the provider access token.
 3. Username and organization allowlists fail closed when
    `LOOPWORKS_AUTH_BYPASS` is not active.
 4. Active organization-allowlist sessions revalidate membership through the
    persisted GitHub OAuth token with a short successful-result cache and fail
    closed when token or org evidence is unavailable.
 5. `LOOPWORKS_AUTH_BYPASS` is a local fixture path only and must remain disabled
-   in production.
+   in production. It has no Auth.js provider account row, so callback identity
+   matching is skipped only when the authenticated session explicitly reports
+   fixture mode.
 6. OAuth access tokens may exist in the Auth.js accounts table; logs and UI must
    never expose tokens, raw OAuth profiles, or authorization headers.
 7. GitHub App installation callbacks use expiring actor-bound state and PKCE.
-   The transient GitHub App user token verifies the active operator and
-   installation association, then is discarded without persistence or logging.
+   The transient GitHub App user token verifies that `/user.id` matches the
+   active session's immutable provider account id before installation discovery,
+   access checks, App verification, or persistence, then is discarded without
+   persistence or logging. Mutable login changes do not break that binding, and
+   historical login reuse by a different account fails closed.
 8. Callback state, authorization codes, PKCE verifiers, cookies, client secrets,
-   private keys, tokens, and raw GitHub error objects are excluded from logs.
+   private keys, tokens, provider account ids, and raw GitHub user or error
+   objects are excluded from logs and OTel attributes. Structured logger
+   sanitization applies recursively rather than assuming a fixed object depth.
 9. Sign-in and sign-in failure are served from the app-owned `/sign-in` route
    (ADR 0028). The `error` query parameter is attacker-controlled — the proxy
    carries the original request's query string onto the redirect, and
@@ -69,6 +78,9 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 8. Username/org allowlist coverage for allowed and denied GitHub identities.
 9. Forged, expired, cross-actor, concurrent, and replayed installation callback
    coverage, including zero durable installation writes on rejection.
+10. Callback identity coverage for same-account login renames, different-account
+    historical login reuse, missing session bindings, gateway id normalization,
+    and rejection before discovery or durable writes.
 
 ## Approval Audit Notes
 
