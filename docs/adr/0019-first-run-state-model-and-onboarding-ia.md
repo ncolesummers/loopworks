@@ -1,7 +1,10 @@
 # ADR 0019: First-Run State Model and Onboarding IA
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-02
+Accepted: 2026-08-13 after parent epic
+[#122](https://github.com/ncolesummers/loopworks/issues/122) review and closure
+and [PR #223](https://github.com/ncolesummers/loopworks/pull/223) merge
 Issue: [#123](https://github.com/ncolesummers/loopworks/issues/123)
 Parent epic: [#122](https://github.com/ncolesummers/loopworks/issues/122)
 Updated by: [#126](https://github.com/ncolesummers/loopworks/issues/126),
@@ -283,8 +286,8 @@ the gap that neither runs Biome assists. `bun run check` replaced both in
 ### #122 validation evidence
 
 The following validation checks for [#122](https://github.com/ncolesummers/loopworks/issues/122)
-passed on the current `main`. This evidence does not by itself close the parent
-epic; #122 remains open until its acceptance checklist is reviewed.
+passed on the then-current `main`. PR #223 recorded this evidence before the
+epic was closed as completed.
 
 - `bun run validate` — 133 Vitest files / 1,098 tests, Storybook build, security
   scanners, and 34 Playwright tests.
@@ -407,4 +410,3 @@ described above and in `docs/development.md`.
   it is deliberately not part of this lane.
 - Revisit `hasRunActivity` when portal records expose an authoritative run
   signal.
-- Move this ADR from Proposed to Accepted after this documentation PR is reviewed.

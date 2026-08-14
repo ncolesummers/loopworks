@@ -1,7 +1,9 @@
 # ADR 0030: TypeScript 7 CLI And TypeScript 6 Compatibility API
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-12
+Accepted: 2026-08-13 after issue [#245](https://github.com/ncolesummers/loopworks/issues/245)
+review and [PR #247](https://github.com/ncolesummers/loopworks/pull/247) merge
 
 ## Context
 
@@ -66,4 +68,3 @@ removal condition is satisfied.
    the repository maintainers, tracks TypeScript 7's stable compiler API and
    removal of the TypeScript 6 compatibility package when both AST consumers
    can migrate.
-2. Move this ADR to Accepted only after issue #245 review and merge.

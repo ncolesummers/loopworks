@@ -1,7 +1,11 @@
 # ADR 0020: Central Validated Configuration Registry
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-02
+Accepted: 2026-08-13 after issue [#109](https://github.com/ncolesummers/loopworks/issues/109)
+review, direct ADR backlink, and [PR #138](https://github.com/ncolesummers/loopworks/pull/138)
+merge
+Updated by: [#178](https://github.com/ncolesummers/loopworks/issues/178)
 
 ## Context
 
@@ -97,4 +101,3 @@ reviewed and opted in.
    registry metadata.
 2. Issue #16 should use the registry secret inventory during the MVP security
    review.
-3. Accept this ADR after review and link the accepted decision from issue #109.
