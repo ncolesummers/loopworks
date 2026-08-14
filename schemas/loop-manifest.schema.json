@@ -237,7 +237,7 @@
           "minItems": 1,
           "default": ["opened", "reopened", "labeled"],
           "items": {
-            "enum": ["opened", "reopened", "labeled", "edited"]
+            "enum": ["opened", "reopened", "labeled", "edited", "milestoned"]
           }
         },
         "manual": {

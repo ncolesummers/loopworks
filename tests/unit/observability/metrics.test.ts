@@ -277,7 +277,7 @@ describe("ADR 0012 observability metric contract", () => {
       {
         action: "labeled",
         event: "issues",
-        outcome: "accepted",
+        outcome: "authorized",
       },
       meter,
     );
@@ -301,7 +301,7 @@ describe("ADR 0012 observability metric contract", () => {
         attributes: {
           action: "labeled",
           event: "issues",
-          outcome: "accepted",
+          outcome: "authorized",
         },
         name: "loopworks.webhook.outcome",
         type: "counter",
@@ -325,6 +325,39 @@ describe("ADR 0012 observability metric contract", () => {
         value: 1,
       },
     ]);
+  });
+
+  it("bounds every GitHub activation outcome and attacker-controlled action", () => {
+    const recordings: Record<string, unknown>[] = [];
+    const meter = {
+      createCounter() {
+        return {
+          add(_value: number, attributes?: Record<string, unknown>) {
+            recordings.push(attributes ?? {});
+          },
+        };
+      },
+    };
+    const outcomes = [
+      "authorized",
+      "unauthorized",
+      "indeterminate",
+      "duplicate",
+      "manifest_drift",
+      "ignored",
+      "invalid_signature",
+      "error",
+    ] as const;
+
+    for (const outcome of outcomes) {
+      recordGithubWebhookOutcomeMetric(
+        { action: "attacker-controlled-unbounded-action", event: "issues", outcome },
+        meter,
+      );
+    }
+
+    expect(recordings.map((recording) => recording.outcome)).toEqual(outcomes);
+    expect(recordings.every((recording) => recording.action === "unsupported")).toBe(true);
   });
 
   it("records lifecycle metrics with ADR attributes and cancellation spelling", () => {

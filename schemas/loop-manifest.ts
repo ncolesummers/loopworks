@@ -58,7 +58,13 @@ export const labelCategoryValues = [
   "custom",
 ] as const;
 
-export const issueTriggerStateValues = ["opened", "reopened", "labeled", "edited"] as const;
+export const issueTriggerStateValues = [
+  "opened",
+  "reopened",
+  "labeled",
+  "edited",
+  "milestoned",
+] as const;
 
 export const toolCategoryValues = [
   "repo-read",

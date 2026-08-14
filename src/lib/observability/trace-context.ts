@@ -125,6 +125,26 @@ export function markGithubInstallationSpanOutcome(
   });
 }
 
+export function markGithubWebhookActivationSpanOutcome(
+  input: { action: string; outcome: string },
+  span: Span | undefined = trace.getActiveSpan(),
+): void {
+  if (!span) return;
+
+  try {
+    span.setAttribute("loopworks.github.webhook.action", input.action);
+    span.setAttribute("loopworks.github.webhook.outcome", input.outcome);
+    span.setStatus({
+      code:
+        input.outcome === "error" || input.outcome === "indeterminate"
+          ? SpanStatusCode.ERROR
+          : SpanStatusCode.OK,
+    });
+  } catch {
+    // Webhook authorization must not depend on telemetry sink health.
+  }
+}
+
 export function isValidW3cTraceId(traceId: unknown): traceId is string {
   return typeof traceId === "string" && w3cTraceIdPattern.test(traceId) && traceId !== emptyTraceId;
 }

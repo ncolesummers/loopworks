@@ -41,7 +41,7 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
       triggers: {
         issueLabels: ["agent-ready"],
         blockedLabels: ["status:blocked"],
-        issueStates: ["opened", "reopened", "labeled"],
+        issueStates: ["opened", "reopened", "labeled", "milestoned"],
         manual: true,
         schedule: {
           enabled: false,
@@ -181,7 +181,7 @@ export const defaultLoopManifest: LoopManifest = loopManifestSchema.parse({
       triggers: {
         issueLabels: ["agent-ready", "spike"],
         blockedLabels: ["status:blocked"],
-        issueStates: ["opened", "reopened", "labeled"],
+        issueStates: ["opened", "reopened", "labeled", "milestoned"],
         manual: false,
         schedule: { enabled: false, timezone: "UTC" },
       },

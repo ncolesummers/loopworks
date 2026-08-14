@@ -1,6 +1,6 @@
 import {
   handleGithubWebhookPost,
-  POST as postGithubWebhook,
+  runGithubWebhookPostRoute,
 } from "@/app/api/github/webhooks/route";
 import {
   canUseInMemoryGithubWebhookDeliveryStore,
@@ -12,15 +12,25 @@ import {
   type GithubWebhookDeliveryStore,
   getAgentReadyTriggerFromIssuesWebhook,
   getLoopAwareAgentReadyTriggerFromIssuesWebhook,
+  normalizeGithubDeliveryId,
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
+import { defaultLoopManifest } from "@/lib/loops/manifest";
 import { createGithubWebhookFixture } from "../../../scripts/github-webhook-fixture";
 
 function createWebhookOutcomeRecorder() {
   const recordings: {
     action?: string | null;
     event: string;
-    outcome: "accepted" | "rejected" | "duplicate" | "invalid_signature" | "error";
+    outcome:
+      | "authorized"
+      | "unauthorized"
+      | "indeterminate"
+      | "duplicate"
+      | "manifest_drift"
+      | "ignored"
+      | "invalid_signature"
+      | "error";
   }[] = [];
 
   return {
@@ -31,11 +41,56 @@ function createWebhookOutcomeRecorder() {
   };
 }
 
+function authorizedActivationDependencies() {
+  return {
+    resolveIssueActivationPermission: vi.fn(async () => ({
+      decision: "authorized" as const,
+      permission: "read",
+      roleName: "triage",
+    })),
+    resolveTrackedRepositoryBinding: vi.fn(async () => ({
+      decision: "bound" as const,
+      installationId: 124_001,
+      owner: "ncolesummers",
+      repo: "loopworks",
+      repositoryId: 11_000_001,
+    })),
+  };
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 describe("GitHub webhook helpers", () => {
+  it("rejects unbounded or unsafe delivery identifiers", () => {
+    expect(() => normalizeGithubDeliveryId("x".repeat(129))).toThrow(
+      "GitHub delivery id must be a bounded identifier.",
+    );
+    expect(() => normalizeGithubDeliveryId("Bearer credential-material")).toThrow(
+      "GitHub delivery id must be a bounded identifier.",
+    );
+  });
+
+  it("owns and ends an active authorization span around route ingress", async () => {
+    const span = { end: vi.fn() };
+    const handlePost = vi.fn(async () => new Response(null, { status: 204 }));
+    const withSpan = vi.fn(
+      async (_name: string, callback: (ownedSpan: never) => Promise<unknown>) =>
+        callback(span as never),
+    );
+
+    const response = await runGithubWebhookPostRoute(
+      new Request("https://loopworks.local/api/github/webhooks", { method: "POST" }),
+      { handlePost: handlePost as never, withSpan: withSpan as never },
+    );
+
+    expect(response.status).toBe(204);
+    expect(withSpan).toHaveBeenCalledWith("github.webhook.activation", expect.any(Function));
+    expect(handlePost).toHaveBeenCalledOnce();
+    expect(span.end).toHaveBeenCalledOnce();
+  });
+
   it("verifies the webhook signature", () => {
     const payload = JSON.stringify({ hello: "world" });
     const signature = createGithubWebhookSignature("secret", payload);
@@ -308,6 +363,10 @@ describe("GitHub webhook helpers", () => {
   it("rejects an invalid signature before parsing the webhook payload with bounded metric attributes", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
     const webhookOutcome = createWebhookOutcomeRecorder();
+    const claim = vi.fn();
+    const complete = vi.fn();
+    const resolveIssueActivationPermission = vi.fn();
+    const resolveTrackedRepositoryBinding = vi.fn();
 
     const response = await handleGithubWebhookPost(
       new Request("https://loopworks.local/api/github/webhooks", {
@@ -321,6 +380,9 @@ describe("GitHub webhook helpers", () => {
       }),
       {
         recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
+        resolveIssueActivationPermission,
+        resolveTrackedRepositoryBinding,
+        webhookDeliveryStore: { claim, complete },
       },
     );
 
@@ -335,6 +397,30 @@ describe("GitHub webhook helpers", () => {
         outcome: "invalid_signature",
       },
     ]);
+    expect(claim).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(resolveTrackedRepositoryBinding).not.toHaveBeenCalled();
+    expect(resolveIssueActivationPermission).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsafe delivery header before logging or persistence", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
+    const claim = vi.fn();
+    const response = await handleGithubWebhookPost(
+      new Request("https://loopworks.local/api/github/webhooks", {
+        body: "{}",
+        headers: {
+          "x-github-delivery": "Bearer credential-material",
+          "x-github-event": "issues",
+          "x-hub-signature-256": createGithubWebhookSignature("secret", "{}"),
+        },
+        method: "POST",
+      }),
+      { webhookDeliveryStore: { claim, complete: vi.fn() } },
+    );
+
+    expect(response.status).toBe(400);
+    expect(claim).not.toHaveBeenCalled();
   });
 
   it("skips a disabled development loop at the route boundary before queueing", async () => {
@@ -342,15 +428,20 @@ describe("GitHub webhook helpers", () => {
     vi.stubEnv("LOOPWORKS_DEVELOPMENT_LOOP_ENABLED", "false");
     const payload = JSON.stringify({
       action: "labeled",
+      installation: { id: 124_001 },
+      label: { name: "agent-ready" },
       repository: {
         full_name: "ncolesummers/loopworks",
+        id: 11_000_001,
       },
+      sender: { id: 22_808_397, login: "ncolesummers" },
       issue: {
         number: 58,
         title: "Route disabled loop skips",
         body: "Exercise disabled loop behavior before queueing.",
         state: "open",
         milestone: {
+          id: 31,
           title: "M3 Durable Loop MVP",
         },
         labels: [{ name: "agent-ready" }, { name: "area:loop" }, { name: "priority:p0" }],
@@ -358,7 +449,7 @@ describe("GitHub webhook helpers", () => {
     });
     const signature = createGithubWebhookSignature("secret", payload);
 
-    const response = await postGithubWebhook(
+    const response = await handleGithubWebhookPost(
       new Request("https://loopworks.local/api/github/webhooks", {
         method: "POST",
         headers: {
@@ -368,6 +459,10 @@ describe("GitHub webhook helpers", () => {
         },
         body: payload,
       }),
+      {
+        ...authorizedActivationDependencies(),
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      },
     );
 
     expect(response.status).toBe(202);
@@ -394,15 +489,20 @@ describe("GitHub webhook helpers", () => {
     const webhookOutcome = createWebhookOutcomeRecorder();
     const payload = JSON.stringify({
       action: "labeled",
+      installation: { id: 124_001 },
+      label: { name: "agent-ready" },
       repository: {
         full_name: "ncolesummers/loopworks",
+        id: 11_000_001,
       },
+      sender: { id: 22_808_397, login: "ncolesummers" },
       issue: {
         number: 57,
         title: "Implement persona coverage",
         body: "Exercise webhook idempotency.",
         state: "open",
         milestone: {
+          id: 31,
           title: "M1 Design System Direction + App Shell",
         },
         labels: [{ name: "agent-ready" }, { name: "area:validation" }, { name: "priority:p0" }],
@@ -420,9 +520,15 @@ describe("GitHub webhook helpers", () => {
         body: payload,
       });
 
-    const first = await postGithubWebhook(makeRequest());
+    const store = createInMemoryGithubWebhookDeliveryStore();
+    const first = await handleGithubWebhookPost(makeRequest(), {
+      ...authorizedActivationDependencies(),
+      webhookDeliveryStore: store,
+    });
     const second = await handleGithubWebhookPost(makeRequest(), {
+      ...authorizedActivationDependencies(),
       recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
+      webhookDeliveryStore: store,
     });
 
     expect(first.status).toBe(202);
@@ -490,12 +596,16 @@ describe("GitHub webhook helpers", () => {
       url: "https://loopworks.local/api/github/webhooks",
     });
 
-    const response = await postGithubWebhook(
+    const response = await handleGithubWebhookPost(
       new Request(fixture.url, {
         body: fixture.payloadText,
         headers: fixture.headers,
         method: "POST",
       }),
+      {
+        ...authorizedActivationDependencies(),
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      },
     );
 
     expect(response.status).toBe(202);
@@ -524,12 +634,16 @@ describe("GitHub webhook helpers", () => {
       url: "https://loopworks.local/api/github/webhooks",
     });
 
-    const response = await postGithubWebhook(
+    const response = await handleGithubWebhookPost(
       new Request(fixture.url, {
         body: fixture.payloadText,
         headers: fixture.headers,
         method: "POST",
       }),
+      {
+        ...authorizedActivationDependencies(),
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      },
     );
 
     expect(response.status).toBe(202);
@@ -573,6 +687,7 @@ describe("GitHub webhook helpers", () => {
           method: "POST",
         }),
         {
+          ...authorizedActivationDependencies(),
           getAgentReadyTrigger() {
             throw new Error("classification failed");
           },
@@ -586,6 +701,14 @@ describe("GitHub webhook helpers", () => {
     expect(complete).toHaveBeenCalledWith("github:failed-processing-route-delivery", {
       deliveryId: "failed-processing-route-delivery",
       metadata: {
+        authorization: expect.objectContaining({
+          action: "labeled",
+          actor: { id: 22_808_397, login: "ncolesummers" },
+          bindingDecision: expect.objectContaining({ decision: "bound" }),
+          outcome: "authorized",
+          permission: expect.objectContaining({ decision: "authorized" }),
+          transition: expect.objectContaining({ outcome: "eligible" }),
+        }),
         failureType: "Error",
         nextAction: "record_and_ignore",
         triggerWorkflow: "none",
@@ -624,6 +747,7 @@ describe("GitHub webhook helpers", () => {
         method: "POST",
       }),
       {
+        ...authorizedActivationDependencies(),
         now: () => new Date("2026-06-28T01:00:04.000Z"),
         recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
         webhookDeliveryStore: store,
@@ -631,31 +755,35 @@ describe("GitHub webhook helpers", () => {
     );
 
     expect(response.status).toBe(202);
-    expect(complete).toHaveBeenCalledWith("github:successful-processing-route-delivery", {
-      deliveryId: "successful-processing-route-delivery",
-      metadata: {
-        developmentRun: {
-          artifactCount: 10,
-          mode: "simulated",
-          stageCount: 8,
-        },
-        nextAction: "queue_planning_agent",
-        triggerReason: "issue_became_agent_ready",
-        triggerWorkflow: "development",
-      },
-      processedAt: "2026-06-28T01:00:04.000Z",
-      status: "processed",
-    });
+    expect(complete).toHaveBeenCalledWith(
+      "github:successful-processing-route-delivery",
+      expect.objectContaining({
+        deliveryId: "successful-processing-route-delivery",
+        metadata: expect.objectContaining({
+          authorization: expect.objectContaining({ outcome: "authorized" }),
+          developmentRun: {
+            artifactCount: 10,
+            mode: "simulated",
+            stageCount: 8,
+          },
+          nextAction: "queue_planning_agent",
+          triggerReason: "issue_became_agent_ready",
+          triggerWorkflow: "development",
+        }),
+        processedAt: "2026-06-28T01:00:04.000Z",
+        status: "processed",
+      }),
+    );
     expect(webhookOutcome.recordings).toEqual([
       {
         action: "labeled",
         event: "issues",
-        outcome: "accepted",
+        outcome: "authorized",
       },
     ]);
   });
 
-  it("records a rejected outcome when a valid webhook is ignored", async () => {
+  it("retains authorized audit evidence when an injected loop classifier declines", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
     const webhookOutcome = createWebhookOutcomeRecorder();
     const complete = vi.fn();
@@ -677,6 +805,7 @@ describe("GitHub webhook helpers", () => {
         method: "POST",
       }),
       {
+        ...authorizedActivationDependencies(),
         getAgentReadyTrigger: () => ({ shouldTrigger: false, reason: "missing_ready_label" }),
         now: () => new Date("2026-06-28T01:00:05.000Z"),
         recordGithubWebhookOutcomeMetric: webhookOutcome.recordGithubWebhookOutcomeMetric,
@@ -685,22 +814,279 @@ describe("GitHub webhook helpers", () => {
     );
 
     expect(response.status).toBe(202);
-    expect(complete).toHaveBeenCalledWith("github:ignored-processing-route-delivery", {
-      deliveryId: "ignored-processing-route-delivery",
-      metadata: {
-        nextAction: "record_and_ignore",
-        triggerReason: "missing_ready_label",
-        triggerWorkflow: "none",
-      },
-      processedAt: "2026-06-28T01:00:05.000Z",
-      status: "ignored",
-    });
+    expect(complete).toHaveBeenCalledWith(
+      "github:ignored-processing-route-delivery",
+      expect.objectContaining({
+        deliveryId: "ignored-processing-route-delivery",
+        metadata: expect.objectContaining({
+          authorization: expect.objectContaining({ outcome: "authorized" }),
+          nextAction: "record_and_ignore",
+          triggerReason: "missing_ready_label",
+          triggerWorkflow: "none",
+        }),
+        processedAt: "2026-06-28T01:00:05.000Z",
+        status: "processed",
+      }),
+    );
     expect(webhookOutcome.recordings).toEqual([
       {
         action: "labeled",
         event: "issues",
-        outcome: "rejected",
+        outcome: "authorized",
       },
     ]);
+  });
+});
+
+describe("authorized GitHub issue activation route", () => {
+  function activationPayload(input: {
+    action: string;
+    issue?: Record<string, unknown>;
+    label?: Record<string, unknown> | null;
+    milestone?: Record<string, unknown> | null;
+  }) {
+    return {
+      action: input.action,
+      installation: { id: 124_001 },
+      issue: {
+        body: "hostile model-readable issue content must remain outside run construction",
+        labels: [{ name: "agent-ready" }, { name: "area:github" }, { name: "priority:p0" }],
+        milestone: { id: 31, title: "M5 Security" },
+        number: 256,
+        state: "open",
+        title: "Authorize exact issue activation",
+        ...input.issue,
+      },
+      ...(input.label === undefined ? {} : { label: input.label }),
+      ...(input.milestone === undefined ? {} : { milestone: input.milestone }),
+      repository: { full_name: "ncolesummers/loopworks", id: 81_000_001 },
+      sender: { id: 90_000_001, login: "outside-contributor" },
+    };
+  }
+
+  function signedRequest(deliveryId: string, rawPayload: Record<string, unknown>) {
+    const body = JSON.stringify(rawPayload);
+    return new Request("https://loopworks.local/api/github/webhooks", {
+      body,
+      headers: {
+        "x-github-delivery": deliveryId,
+        "x-github-event": "issues",
+        "x-hub-signature-256": createGithubWebhookSignature("activation-secret", body),
+      },
+      method: "POST",
+    });
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "activation-secret");
+  });
+
+  it("bounds unsupported action evidence in the durable ignored audit", async () => {
+    const complete = vi.fn();
+    const oversizedAction = "x".repeat(65);
+    const response = await handleGithubWebhookPost(
+      signedRequest(
+        "oversized-action-delivery",
+        activationPayload({ action: oversizedAction, label: null }),
+      ),
+      {
+        webhookDeliveryStore: { claim: vi.fn(() => true), complete },
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      authorization: { action: "unsupported", outcome: "ignored" },
+    });
+    expect(JSON.stringify(complete.mock.calls)).not.toContain(oversizedAction);
+  });
+
+  it.each([
+    ["opened", { label: null }],
+    ["reopened", { label: null }],
+    ["edited", { label: null }],
+  ])("does not construct a run for an unauthorized %s delivery", async (action, overrides) => {
+    const resolvePermission = vi.fn(async () => ({
+      decision: "unauthorized" as const,
+      permission: "read",
+      roleName: "read",
+    }));
+    const response = await handleGithubWebhookPost(
+      signedRequest(`unauthorized-${action}-delivery`, activationPayload({ action, ...overrides })),
+      {
+        resolveIssueActivationPermission: resolvePermission,
+        resolveTrackedRepositoryBinding: vi.fn(async () => ({
+          decision: "bound" as const,
+          installationId: 124_001,
+          owner: "ncolesummers",
+          repo: "loopworks",
+          repositoryId: 81_000_001,
+        })),
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      } as Parameters<typeof handleGithubWebhookPost>[1],
+    );
+
+    expect(response.status).toBe(202);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      accepted: true,
+      authorization: { outcome: action === "edited" ? "ignored" : "unauthorized" },
+      nextAction: "record_and_ignore",
+    });
+    expect(body).not.toHaveProperty("developmentRun");
+    expect(body).not.toHaveProperty("researchRun");
+    if (action === "edited") expect(resolvePermission).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["unrelated label", { label: { name: "area:github" } }],
+    ["missing changed label", { label: null }],
+    ["mismatched changed label", { label: { name: "agent-ready" }, issue: { labels: [] } }],
+  ])("ignores %s without permission lookup or run construction", async (_name, overrides) => {
+    const resolvePermission = vi.fn();
+    const response = await handleGithubWebhookPost(
+      signedRequest(
+        `ignored-${_name.replaceAll(" ", "-")}-delivery`,
+        activationPayload({ action: "labeled", ...overrides }),
+      ),
+      {
+        resolveIssueActivationPermission: resolvePermission,
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      } as Parameters<typeof handleGithubWebhookPost>[1],
+    );
+
+    expect(response.status).toBe(202);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      accepted: true,
+      authorization: { outcome: "ignored" },
+      nextAction: "record_and_ignore",
+    });
+    expect(body).not.toHaveProperty("developmentRun");
+    expect(resolvePermission).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["labeled", { label: { name: "agent-ready" } }],
+    ["milestoned", { milestone: { id: 31, title: "M5 Security" } }],
+  ])("constructs one run only after authorized final %s readiness", async (action, overrides) => {
+    const resolvePermission = vi.fn(async () => ({
+      decision: "authorized" as const,
+      permission: "read",
+      roleName: "triage",
+    }));
+    const response = await handleGithubWebhookPost(
+      signedRequest(`authorized-${action}-delivery`, activationPayload({ action, ...overrides })),
+      {
+        resolveIssueActivationPermission: resolvePermission,
+        resolveTrackedRepositoryBinding: vi.fn(async () => ({
+          decision: "bound" as const,
+          installationId: 124_001,
+          owner: "ncolesummers",
+          repo: "loopworks",
+          repositoryId: 81_000_001,
+        })),
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      } as Parameters<typeof handleGithubWebhookPost>[1],
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: true,
+      authorization: { outcome: "authorized" },
+      developmentRun: { mode: "simulated" },
+      nextAction: "queue_planning_agent",
+    });
+    expect(resolvePermission).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 503 and leaves no run when permission resolution is indeterminate", async () => {
+    const store = createInMemoryGithubWebhookDeliveryStore();
+    const response = await handleGithubWebhookPost(
+      signedRequest(
+        "indeterminate-permission-delivery",
+        activationPayload({ action: "labeled", label: { name: "agent-ready" } }),
+      ),
+      {
+        resolveIssueActivationPermission: vi.fn(async () => ({
+          decision: "indeterminate" as const,
+          reason: "github_permission_unavailable",
+        })),
+        resolveTrackedRepositoryBinding: vi.fn(async () => ({
+          decision: "bound" as const,
+          installationId: 124_001,
+          owner: "ncolesummers",
+          repo: "loopworks",
+          repositoryId: 81_000_001,
+        })),
+        webhookDeliveryStore: store,
+      } as Parameters<typeof handleGithubWebhookPost>[1],
+    );
+
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      accepted: false,
+      authorization: { outcome: "indeterminate" },
+      retryable: true,
+    });
+    expect(body).not.toHaveProperty("developmentRun");
+  });
+
+  it("fails closed as manifest drift when an injected manifest declares no evaluator", async () => {
+    const permission = vi.fn();
+    const development = defaultLoopManifest.loops.find((loop) => loop.key === "development-loop");
+    if (!development) throw new Error("missing development-loop manifest");
+    const response = await handleGithubWebhookPost(
+      signedRequest(
+        "declared-action-drift-delivery",
+        activationPayload({ action: "edited", label: null }),
+      ),
+      {
+        issueActivationManifests: [
+          {
+            ...development,
+            triggers: { ...development.triggers, issueStates: ["edited"] },
+          },
+        ],
+        resolveIssueActivationPermission: permission,
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      authorization: {
+        outcome: "manifest_drift",
+        reason: "missing_transition_evaluator",
+      },
+      nextAction: "record_and_ignore",
+    });
+    expect(permission).not.toHaveBeenCalled();
+  });
+
+  it("returns retryable indeterminate before permission lookup on immutable binding mismatch", async () => {
+    const permission = vi.fn();
+    const response = await handleGithubWebhookPost(
+      signedRequest(
+        "binding-mismatch-delivery",
+        activationPayload({ action: "labeled", label: { name: "agent-ready" } }),
+      ),
+      {
+        resolveIssueActivationPermission: permission,
+        resolveTrackedRepositoryBinding: vi.fn(async () => ({
+          decision: "indeterminate" as const,
+          reason: "repository_binding_missing_or_mismatched" as const,
+        })),
+        webhookDeliveryStore: createInMemoryGithubWebhookDeliveryStore(),
+      },
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      authorization: { outcome: "indeterminate" },
+      retryable: true,
+    });
+    expect(permission).not.toHaveBeenCalled();
   });
 });

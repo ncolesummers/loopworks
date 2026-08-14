@@ -43,7 +43,7 @@ Research fact sheets with sources are recorded on issue #21.
 | `loopworks.step.retries` | counter | `{retry}` | `loop.key`, `stage`, `reason` |
 | `loopworks.validation.outcome` | counter | `{check}` | `gate`, `command`, `status` (`pass`, `fail`) |
 | `loopworks.validation.duration` | histogram | `s` | `gate`, `command` |
-| `loopworks.webhook.outcome` | counter | `{delivery}` | `event`, `action`, `outcome` (`accepted`, `rejected`, `duplicate`, `invalid_signature`, `error`) |
+| `loopworks.webhook.outcome` | counter | `{delivery}` | `event`, bounded `action`, `outcome` (`authorized`, `unauthorized`, `indeterminate`, `duplicate`, `manifest_drift`, `ignored`, `invalid_signature`, `error`) |
 | `loopworks.github.installation.outcome` | counter | `{attempt}` | `phase`, `outcome` |
 | `loopworks.loop.registration.outcome` | counter | `{attempt}` | `outcome` (`unauthenticated`, `invalid-request`, `invalid`, `duplicate-key`, `repository-missing`, `registered`, `error`) |
 | `loopworks.agent.tool.outcome` | counter | `{request}` | `agent`, `tool`, `provider`, `outcome` |

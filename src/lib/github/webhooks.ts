@@ -137,6 +137,9 @@ export function normalizeGithubDeliveryId(deliveryId: string): string {
   if (!normalized) {
     throw new Error("GitHub delivery id is required.");
   }
+  if (normalized.length > 128 || !/^[a-z0-9._:-]+$/.test(normalized)) {
+    throw new Error("GitHub delivery id must be a bounded identifier.");
+  }
 
   return normalized;
 }

@@ -224,6 +224,7 @@ export function createDrizzleGithubWebhookDeliveryStore(
         await tx
           .update(webhookDeliveries)
           .set({
+            ...(record.metadata ? { payload: record.metadata } : {}),
             processedAt,
             status: record.status,
           })

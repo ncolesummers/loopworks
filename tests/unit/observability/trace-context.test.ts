@@ -2,12 +2,46 @@
 import { type Context, type Span, type Tracer, trace } from "@opentelemetry/api";
 
 import {
+  markGithubWebhookActivationSpanOutcome,
   startDevelopmentLoopDispatchSpan,
   startDevelopmentLoopRetrySpan,
   startLoopworksSpan,
 } from "@/lib/observability/trace-context";
 
 describe("Loopworks trace context helpers", () => {
+  it("records bounded GitHub webhook activation outcomes on spans", () => {
+    const span = { setAttribute: vi.fn(), setStatus: vi.fn() } as unknown as Span;
+
+    markGithubWebhookActivationSpanOutcome({ action: "labeled", outcome: "authorized" }, span);
+    markGithubWebhookActivationSpanOutcome(
+      { action: "milestoned", outcome: "indeterminate" },
+      span,
+    );
+
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      1,
+      "loopworks.github.webhook.action",
+      "labeled",
+    );
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      2,
+      "loopworks.github.webhook.outcome",
+      "authorized",
+    );
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      3,
+      "loopworks.github.webhook.action",
+      "milestoned",
+    );
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      4,
+      "loopworks.github.webhook.outcome",
+      "indeterminate",
+    );
+    expect(span.setStatus).toHaveBeenNthCalledWith(1, { code: 1 });
+    expect(span.setStatus).toHaveBeenNthCalledWith(2, { code: 2 });
+  });
+
   it("starts spans through the centralized Loopworks tracer helper", () => {
     const span = { end: vi.fn() } as unknown as Span;
     const starts: { name: string; options: unknown }[] = [];

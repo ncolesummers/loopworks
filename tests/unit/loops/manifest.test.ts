@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
 import {
+  issueTriggerStateValues,
   loopManifestSchema,
   personaTestIdValues,
   retryableStatusValues,
@@ -11,12 +12,34 @@ import {
 import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
 
 type JsonSchemaObject = {
+  enum?: string[];
+  items?: JsonSchemaObject;
   required?: string[];
   properties?: Record<string, JsonSchemaObject>;
   $defs?: Record<string, JsonSchemaObject>;
 };
 
 describe("loop manifest schema", () => {
+  it("keeps shipped executable issue actions equal and explicitly includes milestoned", () => {
+    const expectedActions = ["opened", "reopened", "labeled", "milestoned"];
+
+    expect(issueTriggerStateValues).toEqual([
+      "opened",
+      "reopened",
+      "labeled",
+      "edited",
+      "milestoned",
+    ]);
+    expect(defaultLoopManifest.loops.map((loop) => loop.triggers.issueStates)).toEqual([
+      expectedActions,
+      expectedActions,
+    ]);
+    expect(
+      (loopManifestJsonSchema as JsonSchemaObject).$defs?.triggers?.properties?.issueStates?.items
+        ?.enum,
+    ).toEqual([...issueTriggerStateValues]);
+  });
+
   it("parses the default manifest", () => {
     const manifest = parseLoopManifest(defaultLoopManifest);
 

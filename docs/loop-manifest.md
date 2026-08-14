@@ -82,6 +82,13 @@ Each loop definition includes:
 12. `cancellation` for disabled or superseded work.
 13. `githubWriteback` for approved comments, labels, or status checks.
 
+The shipped development and research manifests declare `opened`, `reopened`,
+`labeled`, and `milestoned` as executable issue actions. `edited` remains a
+schema-valid vocabulary value for future contracts but is not executable in a
+shipped manifest. Runtime activation must have an exact transition evaluator
+for every declared action; otherwise it records `manifest_drift` and creates no
+run.
+
 The sample `development-loop` covers the `agent-ready` trigger and the first
 durable issue-backed implementation skeleton. The stage sequence is stable:
 planning, test-writing, development, validation, code review, commit, PR, and

@@ -58,8 +58,19 @@ bun run github:webhook-fixture -- --kind agent-ready
 bun run github:webhook-fixture -- --kind spike-agent-ready
 ```
 
-Add `--send` to post to the local webhook route. The script refuses non-loopback
-targets.
+Sending must use the immutable tuple for an active tracked repository and an
+actor whose live repository permission is triage or higher. The local server
+also needs GitHub App credentials so it can perform the installation-authenticated
+permission read:
+
+```bash
+bun run github:webhook-fixture -- --kind agent-ready --send \
+  --repository owner/repository --repository-id 123456 \
+  --installation-id 789012 --sender-id 345678 --sender-login operator
+```
+
+The script refuses non-loopback targets and refuses `--send` when any tuple
+field is implicit. Dry runs retain deterministic realistic sample values.
 
 ## Local Database Data
 
