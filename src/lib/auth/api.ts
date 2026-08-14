@@ -12,6 +12,7 @@ export type ApiSession =
   | {
       authenticated: true;
       actorId: string;
+      githubProviderAccountId: string | null;
       mode: "github" | "fixture";
       session: Session | null;
     }
@@ -70,6 +71,7 @@ export async function requireApiSession(input: {
     return {
       authenticated: true,
       actorId: actorIdFromSession(session),
+      githubProviderAccountId: session.user.githubProviderAccountId ?? null,
       mode: "github",
       session,
     };
@@ -79,6 +81,7 @@ export async function requireApiSession(input: {
     return {
       authenticated: true,
       actorId: config.allowedGithubUsers[0] ?? "local-fixture",
+      githubProviderAccountId: null,
       mode: "fixture",
       session: null,
     };

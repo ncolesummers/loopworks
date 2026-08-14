@@ -1,4 +1,4 @@
-import { applyGithubLoginToSession, mapGithubProfileToAuthUser } from "@/lib/auth/identity";
+import { applyGithubIdentityToSession, mapGithubProfileToAuthUser } from "@/lib/auth/identity";
 
 describe("auth identity helpers", () => {
   it("maps GitHub OAuth profiles into persisted Auth.js users", () => {
@@ -19,8 +19,8 @@ describe("auth identity helpers", () => {
     });
   });
 
-  it("exposes persisted GitHub login on database-backed sessions", () => {
-    const session = applyGithubLoginToSession(
+  it("exposes persisted GitHub identity on database-backed sessions without token material", () => {
+    const session = applyGithubIdentityToSession(
       {
         expires: "2026-06-27T00:00:00.000Z",
         user: {
@@ -34,8 +34,14 @@ describe("auth identity helpers", () => {
         email: "nathan@example.com",
         githubLogin: "ncolesummers",
       },
+      "22808397",
     );
 
     expect(session.user.githubLogin).toBe("ncolesummers");
+    expect(
+      (session.user as typeof session.user & { githubProviderAccountId?: string })
+        .githubProviderAccountId,
+    ).toBe("22808397");
+    expect(JSON.stringify(session)).not.toMatch(/access[_-]?token|ghu_session_token/i);
   });
 });

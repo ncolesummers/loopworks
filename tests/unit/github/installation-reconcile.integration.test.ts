@@ -46,8 +46,8 @@ describe("GitHub App installation reconciliation over a real store", () => {
       async exchangeUserCode() {
         return "ghu_transient_user_token";
       },
-      async getAuthenticatedUserLogin() {
-        return "NColesummers";
+      async getAuthenticatedUserProviderAccountId() {
+        return "22808397";
       },
       async listInstallationRepositories() {
         return [];
@@ -110,6 +110,8 @@ describe("GitHub App installation reconciliation over a real store", () => {
       actorId: options.actorId ?? "ncolesummers",
       authorizationCode: "one-time-code",
       error: null,
+      mode: "github",
+      githubProviderAccountId: "22808397",
       installationId: null,
       pkceVerifier: `${label}-verifier`,
       setupAction: null,
@@ -208,7 +210,6 @@ describe("GitHub App installation reconciliation over a real store", () => {
 
     const second = flow(
       {
-        getAuthenticatedUserLogin: async () => "another-operator",
         listUserInstallations: async () => [{ appId, installationId: 900_001 }],
       },
       "second",

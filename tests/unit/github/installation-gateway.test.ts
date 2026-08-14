@@ -97,7 +97,7 @@ describe("GitHub installation verification gateway", () => {
         suspended_at: null,
       },
     }));
-    const userRequest = vi.fn(async () => ({ data: { login: "NColesummers" } }));
+    const userRequest = vi.fn(async () => ({ data: { id: 22_808_397, login: "NColesummers" } }));
     const paginate = vi.fn(async () => [{ id: 1 }, { id: 124_001 }]);
     const gateway = createGithubInstallationGateway({
       appId: 124,
@@ -116,9 +116,62 @@ describe("GitHub installation verification gateway", () => {
       repositorySelection: "selected",
       suspendedAt: null,
     });
-    await expect(gateway.getAuthenticatedUserLogin("ghu_token")).resolves.toBe("NColesummers");
+    await expect(gateway.getAuthenticatedUserProviderAccountId("ghu_token")).resolves.toBe(
+      "22808397",
+    );
     await expect(gateway.userCanAccessInstallation("ghu_token", 124_001)).resolves.toBe(true);
     expect(paginate).toHaveBeenCalledWith("GET /user/installations", { per_page: 100 });
+  });
+
+  it("reads only the immutable provider account id through the default user client", async () => {
+    const authorizations: (string | null)[] = [];
+    mswServer.use(
+      http.get("https://api.github.com/user", ({ request }) => {
+        authorizations.push(request.headers.get("authorization"));
+        return HttpResponse.json({
+          id: 22_808_397,
+          login: "renamed-operator",
+          access_token: "ghu_raw_response_canary",
+        });
+      }),
+    );
+    const gateway = createGithubInstallationGateway({
+      appId: 124,
+      privateKey: generateAppPrivateKey(),
+    }) as ReturnType<typeof createGithubInstallationGateway> & {
+      getAuthenticatedUserProviderAccountId(accessToken: string): Promise<string>;
+    };
+
+    await expect(
+      gateway.getAuthenticatedUserProviderAccountId("ghu_transient_user_token"),
+    ).resolves.toBe("22808397");
+    expect(authorizations).toEqual(["token ghu_transient_user_token"]);
+  });
+
+  it("rejects missing, non-positive, and unsafe provider account ids", async () => {
+    const responses = [{ login: "missing-id" }, { id: 0 }, { id: Number.MAX_SAFE_INTEGER + 1 }];
+    const gateway = createGithubInstallationGateway({
+      appId: 124,
+      createAppClient: () => ({ request: vi.fn() }),
+      createUserClient: () => ({
+        paginate: vi.fn(),
+        request: vi.fn(async () => ({ data: responses.shift() })),
+      }),
+      oauthFetchImpl: vi.fn(),
+      privateKey: "private-key",
+    }) as ReturnType<typeof createGithubInstallationGateway> & {
+      getAuthenticatedUserProviderAccountId(accessToken: string): Promise<string>;
+    };
+
+    await expect(gateway.getAuthenticatedUserProviderAccountId("ghu_token")).rejects.toThrow(
+      "github_user_verification_failed",
+    );
+    await expect(gateway.getAuthenticatedUserProviderAccountId("ghu_token")).rejects.toThrow(
+      "github_user_verification_failed",
+    );
+    await expect(gateway.getAuthenticatedUserProviderAccountId("ghu_token")).rejects.toThrow(
+      "github_user_verification_failed",
+    );
   });
 
   it("normalizes the operator's own installations and drops malformed entries", async () => {

@@ -20,7 +20,12 @@ import {
 } from "@/lib/observability/trace-context";
 
 type CallbackSession =
-  | { authenticated: true; actorId: string }
+  | {
+      authenticated: true;
+      actorId: string;
+      githubProviderAccountId: string | null;
+      mode: "github" | "fixture";
+    }
   | { authenticated: false; response: NextResponse };
 
 type GithubInstallationCallbackDependencies = {
@@ -63,6 +68,9 @@ export async function handleGithubInstallationCallback(
       });
       return session.response;
     }
+    if (session.mode === "github" && !session.githubProviderAccountId) {
+      throw new Error("github_session_provider_account_id_missing");
+    }
 
     const url = new URL(request.url);
     const result = await (
@@ -71,7 +79,9 @@ export async function handleGithubInstallationCallback(
       actorId: session.actorId,
       authorizationCode: url.searchParams.get("code"),
       error: url.searchParams.get("error"),
+      githubProviderAccountId: session.githubProviderAccountId,
       installationId: url.searchParams.get("installation_id"),
+      mode: session.mode,
       pkceVerifier: readGithubInstallationPkceCookie(request),
       setupAction: url.searchParams.get("setup_action"),
       githubInstallationState: url.searchParams.get("state"),

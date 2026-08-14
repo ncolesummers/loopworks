@@ -16,7 +16,9 @@ export type GithubInstallationCallbackInput = {
   actorId: string;
   authorizationCode: string | null;
   error: string | null;
+  githubProviderAccountId: string | null;
   installationId: string | null;
+  mode: "github" | "fixture";
   pkceVerifier: string | null;
   setupAction: string | null;
   githubInstallationState: string | null;
@@ -111,7 +113,7 @@ export type GithubInstallationGateway = {
     codeVerifier: string;
     redirectUri: string;
   }): Promise<string>;
-  getAuthenticatedUserLogin(accessToken: string): Promise<string>;
+  getAuthenticatedUserProviderAccountId(accessToken: string): Promise<string>;
   listInstallationRepositories(installationId: number): Promise<AvailableGithubRepository[]>;
   listUserInstallations(accessToken: string): Promise<AccessibleGithubInstallation[]>;
   userCanAccessInstallation(accessToken: string, installationId: number): Promise<boolean>;
@@ -336,8 +338,15 @@ export function createGithubInstallationFlow(dependencies: {
         codeVerifier: input.pkceVerifier,
         redirectUri: dependencies.config.callbackUrl,
       });
-      const githubLogin = await dependencies.gateway.getAuthenticatedUserLogin(accessToken);
-      if (githubLogin.toLowerCase() !== input.actorId.toLowerCase()) return settings("error");
+      const githubProviderAccountId =
+        await dependencies.gateway.getAuthenticatedUserProviderAccountId(accessToken);
+      if (
+        input.mode === "github" &&
+        (!input.githubProviderAccountId ||
+          githubProviderAccountId !== input.githubProviderAccountId)
+      ) {
+        return settings("error");
+      }
       // An authorization challenge carrying no candidate installation is an
       // operator-initiated reconciliation: GitHub never called the Setup URL, so
       // there is no candidate to bind and the operator's own token is what

@@ -49,8 +49,8 @@ function createHarness(options: { secrets?: string[] } = {}) {
     async exchangeUserCode() {
       return "ghu_transient_user_token";
     },
-    async getAuthenticatedUserLogin() {
-      return "ncolesummers";
+    async getAuthenticatedUserProviderAccountId() {
+      return "22808397";
     },
     async listInstallationRepositories() {
       return [];
@@ -115,6 +115,8 @@ describe("GitHub App installation flow", () => {
 
     const result = await flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -146,6 +148,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       flow.callback({
         actorId: "somebody-else",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: null,
         installationId: "124001",
@@ -166,6 +170,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: null,
         installationId: "124001",
@@ -178,6 +184,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: null,
         installationId: "124001",
@@ -194,6 +202,8 @@ describe("GitHub App installation flow", () => {
     await flow.start({ actorId: "ncolesummers" });
     await flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -205,6 +215,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: "one-time-code",
         error: null,
         installationId: null,
@@ -216,12 +228,118 @@ describe("GitHub App installation flow", () => {
     expect(connected).toEqual([{ installationId: 124_001, installedBy: "ncolesummers" }]);
   });
 
+  it("accepts a renamed GitHub login when the immutable provider account id still matches", async () => {
+    const { connected, flow } = createHarness();
+    await flow.start({ actorId: "historical-login" });
+    await flow.callback({
+      actorId: "historical-login",
+      authorizationCode: null,
+      error: null,
+      installationId: "124001",
+      pkceVerifier: null,
+      setupAction: "install",
+      githubInstallationState: "install-state",
+      mode: "github",
+      githubProviderAccountId: "22808397",
+    });
+    await expect(
+      flow.callback({
+        actorId: "historical-login",
+        authorizationCode: "one-time-code",
+        error: null,
+        installationId: null,
+        pkceVerifier: "pkce-verifier",
+        setupAction: null,
+        githubInstallationState: "oauth-state",
+        mode: "github",
+        githubProviderAccountId: "22808397",
+      }),
+    ).resolves.toEqual({ kind: "settings", outcome: "connected" });
+    expect(connected).toEqual([{ installationId: 124_001, installedBy: "historical-login" }]);
+  });
+
+  it("rejects a different provider account that presents the historical login before access or writes", async () => {
+    const { connected, flow, gateway } = createHarness();
+    Object.assign(gateway, {
+      getAuthenticatedUserProviderAccountId: vi.fn(async () => "99900001"),
+    });
+    const canAccess = vi.spyOn(gateway, "userCanAccessInstallation");
+    const verifyInstallation = vi.spyOn(gateway, "verifyAppInstallation");
+    await flow.start({ actorId: "ncolesummers" });
+    await flow.callback({
+      actorId: "ncolesummers",
+      authorizationCode: null,
+      error: null,
+      installationId: "124001",
+      pkceVerifier: null,
+      setupAction: "install",
+      githubInstallationState: "install-state",
+      mode: "github",
+      githubProviderAccountId: "22808397",
+    });
+    canAccess.mockClear();
+    verifyInstallation.mockClear();
+
+    await expect(
+      flow.callback({
+        actorId: "ncolesummers",
+        authorizationCode: "one-time-code",
+        error: null,
+        installationId: null,
+        pkceVerifier: "pkce-verifier",
+        setupAction: null,
+        githubInstallationState: "oauth-state",
+        mode: "github",
+        githubProviderAccountId: "22808397",
+      }),
+    ).resolves.toEqual({ kind: "settings", outcome: "error" });
+    expect(canAccess).not.toHaveBeenCalled();
+    expect(verifyInstallation).not.toHaveBeenCalled();
+    expect(connected).toEqual([]);
+  });
+
+  it("keeps the explicit local fixture bypass independent of database provider identity", async () => {
+    const { connected, flow, gateway } = createHarness();
+    Object.assign(gateway, {
+      getAuthenticatedUserProviderAccountId: vi.fn(async () => "99900001"),
+    });
+    await flow.start({ actorId: "local-fixture" });
+    await flow.callback({
+      actorId: "local-fixture",
+      authorizationCode: null,
+      error: null,
+      githubInstallationState: "install-state",
+      githubProviderAccountId: null,
+      installationId: "124001",
+      mode: "fixture",
+      pkceVerifier: null,
+      setupAction: "install",
+    });
+
+    await expect(
+      flow.callback({
+        actorId: "local-fixture",
+        authorizationCode: "one-time-code",
+        error: null,
+        githubInstallationState: "oauth-state",
+        githubProviderAccountId: null,
+        installationId: null,
+        mode: "fixture",
+        pkceVerifier: "pkce-verifier",
+        setupAction: null,
+      }),
+    ).resolves.toEqual({ kind: "settings", outcome: "connected" });
+    expect(connected).toEqual([{ installationId: 124_001, installedBy: "local-fixture" }]);
+  });
+
   it("handles pending approval, cancellation, and a fresh duplicate distinctly", async () => {
     const pending = createHarness();
     await pending.flow.start({ actorId: "ncolesummers" });
     await expect(
       pending.flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: null,
         installationId: null,
@@ -236,6 +354,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       cancelled.flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: null,
         installationId: null,
@@ -249,6 +369,8 @@ describe("GitHub App installation flow", () => {
     await duplicate.flow.start({ actorId: "ncolesummers" });
     await duplicate.flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -258,6 +380,8 @@ describe("GitHub App installation flow", () => {
     });
     await duplicate.flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: "first-code",
       error: null,
       installationId: null,
@@ -270,6 +394,8 @@ describe("GitHub App installation flow", () => {
     await second.flow.start({ actorId: "another-operator" });
     await second.flow.callback({
       actorId: "another-operator",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -277,10 +403,11 @@ describe("GitHub App installation flow", () => {
       setupAction: "install",
       githubInstallationState: "install-state",
     });
-    vi.spyOn(second.gateway, "getAuthenticatedUserLogin").mockResolvedValue("another-operator");
     await expect(
       second.flow.callback({
         actorId: "another-operator",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: "second-code",
         error: null,
         installationId: null,
@@ -297,6 +424,8 @@ describe("GitHub App installation flow", () => {
     await denied.flow.start({ actorId: "ncolesummers" });
     await denied.flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -307,6 +436,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       denied.flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: null,
         error: "access_denied",
         installationId: null,
@@ -318,6 +449,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       denied.flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: "replayed-code",
         error: null,
         installationId: null,
@@ -328,10 +461,14 @@ describe("GitHub App installation flow", () => {
     ).resolves.toEqual({ kind: "settings", outcome: "error" });
 
     const mismatched = createHarness();
-    vi.spyOn(mismatched.gateway, "getAuthenticatedUserLogin").mockResolvedValue("attacker");
+    vi.spyOn(mismatched.gateway, "getAuthenticatedUserProviderAccountId").mockResolvedValue(
+      "99900001",
+    );
     await mismatched.flow.start({ actorId: "ncolesummers" });
     await mismatched.flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -342,6 +479,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       mismatched.flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: "code",
         error: null,
         installationId: null,
@@ -356,6 +495,8 @@ describe("GitHub App installation flow", () => {
     await inaccessible.flow.start({ actorId: "ncolesummers" });
     await inaccessible.flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: null,
       error: null,
       installationId: "124001",
@@ -366,6 +507,8 @@ describe("GitHub App installation flow", () => {
     await expect(
       inaccessible.flow.callback({
         actorId: "ncolesummers",
+        mode: "github",
+        githubProviderAccountId: "22808397",
         authorizationCode: "code",
         error: null,
         installationId: null,
@@ -403,6 +546,8 @@ describe("GitHub App installation reconciliation", () => {
   ) {
     return flow.callback({
       actorId: "ncolesummers",
+      mode: "github",
+      githubProviderAccountId: "22808397",
       authorizationCode: "one-time-code",
       error: null,
       installationId: null,
@@ -450,6 +595,31 @@ describe("GitHub App installation reconciliation", () => {
     expect(connected).toEqual([{ installationId: 124_001, installedBy: "ncolesummers" }]);
   });
 
+  it("rejects reconciliation before discovery when the immutable provider account id differs", async () => {
+    const { connected, flow, gateway } = createReconcileHarness();
+    Object.assign(gateway, {
+      getAuthenticatedUserProviderAccountId: vi.fn(async () => "99900001"),
+    });
+    const listInstallations = vi.spyOn(gateway, "listUserInstallations");
+    await flow.startReconciliation({ actorId: "ncolesummers" });
+
+    await expect(
+      flow.callback({
+        actorId: "ncolesummers",
+        authorizationCode: "one-time-code",
+        error: null,
+        installationId: null,
+        pkceVerifier: "reconcile-verifier",
+        setupAction: null,
+        githubInstallationState: "reconcile-state",
+        mode: "github",
+        githubProviderAccountId: "22808397",
+      }),
+    ).resolves.toEqual({ kind: "settings", outcome: "error" });
+    expect(listInstallations).not.toHaveBeenCalled();
+    expect(connected).toEqual([]);
+  });
+
   it("reports no-installation-found when the operator controls no installation", async () => {
     const { connected, flow, gateway } = createReconcileHarness();
     vi.spyOn(gateway, "listUserInstallations").mockResolvedValue([]);
@@ -478,9 +648,9 @@ describe("GitHub App installation reconciliation", () => {
     expect(connected).toEqual([]);
   });
 
-  it("refuses reconciliation when the GitHub login does not match the session", async () => {
+  it("refuses reconciliation when the GitHub provider account does not match the session", async () => {
     const { connected, flow, gateway } = createReconcileHarness();
-    vi.spyOn(gateway, "getAuthenticatedUserLogin").mockResolvedValue("attacker");
+    vi.spyOn(gateway, "getAuthenticatedUserProviderAccountId").mockResolvedValue("99900001");
     await flow.startReconciliation({ actorId: "ncolesummers" });
 
     await expect(reconcileCallback(flow)).resolves.toEqual({

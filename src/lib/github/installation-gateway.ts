@@ -196,11 +196,12 @@ export function createGithubInstallationGateway(input: {
       return repositories.map(normalizeRepository);
     },
 
-    async getAuthenticatedUserLogin(accessToken) {
+    async getAuthenticatedUserProviderAccountId(accessToken) {
       const response = await createUserClient(accessToken).request("GET /user");
       const data = object(response.data);
-      if (typeof data?.login !== "string") throw new Error("github_user_verification_failed");
-      return data.login;
+      const providerAccountId = positiveInteger(data?.id);
+      if (!providerAccountId) throw new Error("github_user_verification_failed");
+      return providerAccountId.toString();
     },
 
     async listUserInstallations(accessToken) {

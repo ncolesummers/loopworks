@@ -39,6 +39,8 @@ const genericRedactionPaths = [
   "github_webhook_secret",
   "githubInstallationState",
   "github_installation_state",
+  "githubProviderAccountId",
+  "github_provider_account_id",
   "idToken",
   "id_token",
   "oauthAccessToken",
@@ -51,8 +53,12 @@ const genericRedactionPaths = [
   "private_key",
   "rawWebhookBody",
   "raw_webhook_body",
+  "rawGithubUserResponse",
+  "raw_github_user_response",
   "refreshToken",
   "refresh_token",
+  "providerAccountId",
+  "provider_account_id",
   "secret",
   "token",
   "verifierCookie",
@@ -73,6 +79,8 @@ const genericRedactionPaths = [
   "*.github_webhook_secret",
   "*.githubInstallationState",
   "*.github_installation_state",
+  "*.githubProviderAccountId",
+  "*.github_provider_account_id",
   "*.idToken",
   "*.id_token",
   "*.oauthAccessToken",
@@ -85,8 +93,12 @@ const genericRedactionPaths = [
   "*.private_key",
   "*.rawWebhookBody",
   "*.raw_webhook_body",
+  "*.rawGithubUserResponse",
+  "*.raw_github_user_response",
   "*.refreshToken",
   "*.refresh_token",
+  "*.providerAccountId",
+  "*.provider_account_id",
   "*.secret",
   "*.token",
   "*.verifierCookie",
@@ -102,6 +114,43 @@ export const loggerRedactionPaths = [
   ...new Set([...genericRedactionPaths, ...registrySecretRedactionPaths]),
 ];
 
+const recursivelyRedactedKeys = new Set([
+  ...genericRedactionPaths.filter(
+    (path) => !path.includes(".") && !path.includes("[") && !path.includes("*"),
+  ),
+  ...configRegistry.filter((definition) => definition.secret).map((definition) => definition.name),
+  "x-hub-signature-256",
+]);
+
+function redactNestedLogValue(
+  value: unknown,
+  seen: WeakMap<object, unknown> = new WeakMap(),
+): unknown {
+  if (typeof value !== "object" || value === null) return value;
+
+  const existing = seen.get(value);
+  if (existing) return existing;
+
+  if (Array.isArray(value)) {
+    const redacted: unknown[] = [];
+    seen.set(value, redacted);
+    for (const item of value) redacted.push(redactNestedLogValue(item, seen));
+    return redacted;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  const redacted: Record<string, unknown> = {};
+  seen.set(value, redacted);
+  for (const [key, nestedValue] of Object.entries(value)) {
+    redacted[key] = recursivelyRedactedKeys.has(key)
+      ? "[redacted]"
+      : redactNestedLogValue(nestedValue, seen);
+  }
+  return redacted;
+}
+
 export type LoopworksLogger = Logger;
 
 function defaultBaseBindings() {
@@ -113,11 +162,22 @@ function defaultBaseBindings() {
 }
 
 function buildLoggerOptions(options: LoggerOptions): LoggerOptions {
-  const { base, mixin, redact, ...rest } = options;
+  const { base, formatters, mixin, redact, ...rest } = options;
 
   return {
     level: readStringConfig("LOG_LEVEL") ?? "info",
     base: base === null ? null : { ...defaultBaseBindings(), ...(base ?? {}) },
+    formatters: {
+      ...formatters,
+      bindings(bindings) {
+        const formatted = formatters?.bindings?.(bindings) ?? bindings;
+        return redactNestedLogValue(formatted) as Record<string, unknown>;
+      },
+      log(object) {
+        const formatted = formatters?.log?.(object) ?? object;
+        return redactNestedLogValue(formatted) as Record<string, unknown>;
+      },
+    },
     redact: redact ?? {
       paths: loggerRedactionPaths,
       censor: "[redacted]",

@@ -3,7 +3,8 @@
 Status: Proposed
 Date: 2026-08-02
 Issue: [#124](https://github.com/ncolesummers/loopworks/issues/124)
-Updated by: [#151](https://github.com/ncolesummers/loopworks/issues/151)
+Updated by: [#151](https://github.com/ncolesummers/loopworks/issues/151),
+[#203](https://github.com/ncolesummers/loopworks/issues/203)
 
 ## Context
 
@@ -35,9 +36,21 @@ Use two verification phases:
 1. The Setup URL callback consumes the installation challenge and looks up the
    returned installation while authenticated as the configured GitHub App.
 2. Loopworks starts the GitHub App web authorization flow with fresh state and
-   PKCE. Its callback exchanges the code, confirms the GitHub user matches the
-   active Loopworks session, and confirms that user can access the candidate
-   installation before persistence. The transient user token is discarded.
+   PKCE. Its callback exchanges the code, confirms the immutable GitHub provider
+   account id from `/user.id` matches the account bound to the active Loopworks
+   session, and confirms that user can access the candidate installation before
+   persistence. The transient user token is discarded.
+
+The session projects only the GitHub account's immutable provider id from the
+Auth.js account row, never its access token or raw provider profile. Missing,
+malformed, or ambiguous account bindings fail closed for real GitHub sessions.
+The explicit local fixture auth mode has no provider account row and retains its
+existing callback bypass; production configuration forbids that mode. The
+mutable GitHub login remains the human-readable installer and audit attribution,
+but it is not an authorization proof: a renamed login with the same provider id
+is accepted, while another provider id presenting the historical login is
+rejected before installation discovery, access checks, App verification, or
+persistence.
 
 The Setup URL cannot be the only entry to phase 2. GitHub performs an
 installation from `/apps/<slug>/installations/new` only when an eligible target
@@ -58,8 +71,9 @@ schema change, and no second registered callback URL.
 
 Reconciliation discovers candidates from the operator's own token rather than
 from a query parameter, so the same two proofs still hold: the GitHub user must
-match the active Loopworks session, and the installation must be reachable by
-that user. Candidates are filtered to the configured App ID, deduplicated,
+match the active Loopworks session by immutable provider account id, and the
+installation must be reachable by that user. Candidates are filtered to the
+configured App ID, deduplicated,
 ordered newest first — GitHub installation ids increase monotonically, so the
 account the operator just configured must survive the bound rather than be the
 first thing it discards — and bounded so one callback cannot fan out unbounded
@@ -104,7 +118,10 @@ Expose only stable result vocabulary to Settings: `connected`,
 `already-connected`, `cancelled`, `no-installation-found`, `pending-approval`,
 and `error`. Logs and OTel attributes contain route, phase, actor, and outcome
 only. State, codes, verifiers, cookies, tokens, request bodies, and raw GitHub
-errors are excluded.
+errors or user responses are excluded. Provider account ids are excluded from
+telemetry even though they are not secrets, keeping identity data out of the
+callback's bounded attributes. Structured logger sanitization recursively
+redacts these identity fields and authentication material at any object depth.
 
 Settings derives its query-parameter allowlist from the one declared vocabulary,
 so an outcome cannot gain operator-facing copy yet be dropped before it reaches
@@ -149,7 +166,8 @@ unobservable.
    `no-installation` to `no-repositories`, replay and cross-actor callbacks write
    nothing, and revisiting a stored installation preserves the original
    installer.
-2. Flow and gateway tests cover wrong-app installations, login mismatch,
+2. Flow and gateway tests cover wrong-app installations, immutable provider
+   account mismatch, login rename without identity loss,
    inaccessible installations, PKCE exchange failures, cancellation, pending
    approval, and user-access pagination. Reconciliation adds coverage for
    foreign-app candidates, zero candidates, several candidates, skipped
@@ -157,8 +175,11 @@ unobservable.
    replayed reconciliation callbacks. `listUserInstallations` is exercised
    through the default Octokit client over MSW, not only an injected fake
    (ADR 0022).
-3. Logger tests redact installation state, authorization codes, PKCE verifiers,
-   and the registry-declared client secret.
+3. Auth account and session tests prove the provider id is projected without a
+   token. Logger tests redact installation state, authorization codes, PKCE
+   verifiers, provider ids, raw GitHub user responses, and the registry-declared
+   client secret. Metric and span tests keep callback attributes bounded to
+   phase and outcome.
 4. Component and browser tests cover real connected and disconnected states,
    result notices, keyboard navigation, responsive layout, and axe in both
    themes.
@@ -172,9 +193,11 @@ unobservable.
    selection.
 2. Confirm the Production GitHub App Setup URL and callback URL after the first
    deployment before accepting this ADR.
-3. [Issue #140](https://github.com/ncolesummers/loopworks/issues/140) binds
-   authorization to the immutable GitHub provider account id and adds bounded
-   retention for consumed and expired installation challenges.
+3. [Issue #203](https://github.com/ncolesummers/loopworks/issues/203) bound
+   callback authorization to the immutable GitHub provider account id.
+   [Issue #140](https://github.com/ncolesummers/loopworks/issues/140) retains the
+   separate follow-up for bounded retention of consumed and expired installation
+   challenges.
 4. [Issue #151](https://github.com/ncolesummers/loopworks/issues/151) added the
    reconciliation entry, the `no-installation-found` result, and the
    disconnected-surface affordances. Acceptance remains pending review and
