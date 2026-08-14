@@ -1,7 +1,10 @@
 # ADR 0013: Eve Planning Agent Contract
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-03
+Accepted: 2026-08-13 after issue [#13](https://github.com/ncolesummers/loopworks/issues/13)
+review, direct ADR backlink, [PR #61](https://github.com/ncolesummers/loopworks/pull/61)
+merge, and [PR #176](https://github.com/ncolesummers/loopworks/pull/176) security hardening
 
 ## Context
 
@@ -86,13 +89,12 @@ masking policy, metrics backend activation, and trace collector setup to ADR
 4. `bunx eve eval --list` discovers the planning eval harness without requiring
    a live model call.
 5. Aggregate validation and build pass before review.
+6. Issue #172 and [PR #176](https://github.com/ncolesummers/loopworks/pull/176)
+   removed the planner CLI override, installed the run-bound typed GitHub
+   backlog adapters, and passed two independent adversarial reviews.
 
 ## Follow-Ups
 
-1. Link this Proposed ADR from issue #13 before accepting or merging the
-   architecture decision.
-2. ADR 0012 implementation work will wire backend/exporter topology and
+1. ADR 0012 implementation work will wire backend/exporter topology and
    production filtering or masking policy.
-3. Issue #172 removed the planner CLI override on 2026-08-07 and replaced its
-   GitHub backlog capability with run-bound typed host-owned adapters.
-4. Issues #173 and #174 own Azure inventory and GitHub Projects V2 inspection.
+2. Issues #173 and #174 own Azure inventory and GitHub Projects V2 inspection.

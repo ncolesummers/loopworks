@@ -31,16 +31,16 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0008](0008-agent-instruction-scope-and-sync.md) | Accepted | Use directory-scoped AGENTS.md files as canonical agent guidance and generated Claude import shims. |
 | [0009](0009-design-system-direction-and-tokens.md) | Accepted | Adopt a monochrome neutral base with one blue accent, Mona Sans and Monaspace Neon typography, an HSL token system, and a centralized STATUS_META vocabulary as the M1 design system. |
 | [0010](0010-storybook-first-visual-regression-strategy.md) | Accepted | Use Storybook stories, native a11y review, and human review as the M1 visual-regression strategy before durable screenshot baselines. |
-| [0011](0011-approval-transition-audit-events.md) | Proposed | Store approval transition audit events alongside current approval state. |
+| [0011](0011-approval-transition-audit-events.md) | Accepted | Store approval transition audit events alongside current approval state. |
 | [0012](0012-telemetry-backend-and-metric-contract.md) | Proposed | Adopt Axiom as the OTel telemetry backend and define the metric, span, and correlation contract. |
-| [0013](0013-planning-agent-contract.md) | Proposed | Define the planning agent as a planning-only runtime with guarded CLI inspection, explicit fixtures, eval coverage, and ADR 0012-aligned telemetry boundaries. |
+| [0013](0013-planning-agent-contract.md) | Accepted | Define the planner as a planning-only subagent with bounded repository inspection, run-bound typed GitHub backlog tools, explicit fixtures, and eval coverage. |
 | [0014](0014-guarded-github-pr-write-reconciliation.md) | Proposed | Guard GitHub PR writes with digest-bound approval, deterministic branches, and two-phase reconciliation. |
 | [0015](0015-stage-orchestrator-and-isolated-subagent-handoffs.md) | Proposed | Use a neutral root orchestrator, independent sibling subagents, and typed artifact handoffs between isolated sandboxes. |
 | [0016](0016-run-reconciliation-and-terminal-reasons.md) | Proposed | Reconcile active runs with typed terminal reasons, read-only tracker refresh, and injected execution liveness. |
 | [0017](0017-durable-dispatch-leases-and-retry-backoff.md) | Proposed | Serialize manifest admission with durable leases and preserve bounded retry evidence across restarts. |
 | [0018](0018-vercel-managed-neon-deployment-migrations.md) | Proposed | Use Vercel-managed Neon with pooled runtime queries, direct deployment migrations, and provider-managed Preview branches. |
-| [0019](0019-first-run-state-model-and-onboarding-ia.md) | Proposed | Derive no-installation, no-repositories, and no-loops server-side while keeping unavailable data distinct. |
-| [0020](0020-central-validated-configuration-registry.md) | Proposed | Centralize validated environment metadata while preserving injected readers and build-safe startup policy. |
+| [0019](0019-first-run-state-model-and-onboarding-ia.md) | Accepted | Derive no-installation, no-repositories, and no-loops server-side while keeping unavailable data distinct. |
+| [0020](0020-central-validated-configuration-registry.md) | Accepted | Centralize validated environment metadata while preserving injected readers and build-safe startup policy. |
 | [0021](0021-secure-github-app-installation-callback.md) | Proposed | Verify GitHub App installations with one-time actor-bound state, PKCE, and transient user authorization before persistence. |
 | [0022](0022-msw-for-third-party-boundary-tests.md) | Proposed | Intercept HTTP with MSW so tests exercise real third-party client construction instead of injected fakes. |
 | [0023](0023-self-improving-loops-and-approved-memory.md) | Proposed | Derive exact run outcomes, use a sibling retrospector, and inject only approved, in-scope learned memory under deterministic decay and context limits. |
@@ -48,9 +48,9 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0025](0025-registered-loop-definitions.md) | Proposed | Persist validated loop definitions separately from the GitHub issue mirror and reuse manifest validation at registration. |
 | [0026](0026-github-bound-signed-commit-provenance.md) | Proposed | Require GitHub-resolved, verified signed commit provenance while preserving contributor identities and published history. |
 | [0027](0027-isolated-preview-environment-and-stable-alias.md) | Proposed | Share one registry-derived configuration contract across Preview and Production, isolate preview behind its own GitHub App, and verify through a CI-assigned stable alias. |
-| [0028](0028-app-owned-sign-in-entry-point.md) | Proposed | Serve sign-in from an app-owned route, alias the Auth.js error page to it because AccessDenied routes there, and map every failure code to non-disclosing copy. |
+| [0028](0028-app-owned-sign-in-entry-point.md) | Accepted | Serve sign-in from an app-owned route, alias the Auth.js error page to it because AccessDenied routes there, and map every failure code to non-disclosing copy. |
 | [0029](0029-eve-runtime-migration-and-session-cutover.md) | Proposed | Pin Eve and its AI SDK peer together, use fixed session IDs, and replace pre-0.31 sessions after a drain-first cutover. |
-| [0030](0030-typescript-7-cli-and-typescript-6-compatibility-api.md) | Proposed | Use native TypeScript 7 for `tsc` while retaining the TypeScript 6 compatibility API for programmatic consumers. |
+| [0030](0030-typescript-7-cli-and-typescript-6-compatibility-api.md) | Accepted | Use native TypeScript 7 for `tsc` while retaining the TypeScript 6 compatibility API for programmatic consumers. |
 
 ## Template
 

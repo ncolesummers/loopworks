@@ -1,7 +1,10 @@
 # ADR 0011: Approval Transition Audit Events
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-02
+Accepted: 2026-08-13 after issue [#12](https://github.com/ncolesummers/loopworks/issues/12)
+review, direct ADR backlink, and [PR #42](https://github.com/ncolesummers/loopworks/pull/42)
+merge
 
 ## Context
 
@@ -42,6 +45,5 @@ approval or an ad hoc note.
 
 ## Follow-Ups
 
-1. Move this ADR to Accepted after issue #12 review.
-2. Add richer transition history UI once operators need to inspect more than
+1. Add richer transition history UI once operators need to inspect more than
    the latest approval state.

@@ -1,7 +1,10 @@
 # ADR 0028: App-Owned Sign-In Entry Point And Safe Failure Surface
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-10
+Accepted: 2026-08-13 after issue [#214](https://github.com/ncolesummers/loopworks/issues/214)
+review, direct ADR backlink, and [PR #230](https://github.com/ncolesummers/loopworks/pull/230)
+merge
 Issue: [#214](https://github.com/ncolesummers/loopworks/issues/214)
 
 ## Context
@@ -167,4 +170,3 @@ that this change is presentational and widened no access.
   [#107](https://github.com/ncolesummers/loopworks/issues/107) and
   [#108](https://github.com/ncolesummers/loopworks/issues/108) ship. Until then
   the no-outbound-link rule is asserted by test.
-- Move this ADR from Proposed to Accepted after review.
