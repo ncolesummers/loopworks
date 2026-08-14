@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db/client";
 import { readStringConfig, readSuppliedBooleanConfig } from "@/lib/config/registry";
+import {
+  createGithubIssueActivationPermissionResolver,
+  evaluateGithubIssueActivationTransition,
+  type GithubIssueActivationPermissionDecision,
+  type NormalizedGithubIssueActivation,
+  normalizeGithubIssueActivationPayload,
+} from "@/lib/github/issue-activation-authorization";
+import {
+  createGithubIssueActivationRepositoryBindingResolver,
+  type GithubIssueActivationRepositoryBindingDecision,
+  type GithubIssueActivationRepositoryBindingResolver,
+} from "@/lib/github/issue-activation-store";
 import { createDrizzleGithubWebhookDeliveryStore } from "@/lib/github/webhook-store";
 import {
   canUseInMemoryGithubWebhookDeliveryStore,
@@ -12,6 +24,7 @@ import {
   type GithubIssuesWebhookPayload,
   type GithubWebhookDeliveryStore,
   getLoopAwareAgentReadyTriggerFromIssuesWebhook,
+  normalizeGithubDeliveryId,
   verifyGithubWebhookSignature,
 } from "@/lib/github/webhooks";
 import {
@@ -23,6 +36,7 @@ import {
   recordDevelopmentLoopNoop,
   simulateDevelopmentLoopRun,
 } from "@/lib/loops/development-run";
+import { defaultLoopManifest } from "@/lib/loops/manifest";
 import {
   createResearchLoopRun,
   type ResearchLoopNoopMetadata,
@@ -33,16 +47,29 @@ import {
 } from "@/lib/loops/research-run";
 import { createRequestLogger } from "@/lib/observability/logger";
 import {
+  type GithubWebhookOutcome,
   type GithubWebhookOutcomeMetricInput,
   recordGithubWebhookOutcomeMetric,
 } from "@/lib/observability/metrics";
-import { getActiveTraceId } from "@/lib/observability/trace-context";
+import {
+  getActiveTraceId,
+  markGithubWebhookActivationSpanOutcome,
+  withLoopworksActiveSpan,
+} from "@/lib/observability/trace-context";
+import type { LoopDefinition } from "../../../../../schemas/loop-manifest";
 
 const inMemoryWebhookDeliveryStore = createInMemoryGithubWebhookDeliveryStore();
 
 export const runtime = "nodejs";
 
 const supportedGithubWebhookMetricEvents = new Set(["issues"]);
+const supportedGithubWebhookMetricActions = new Set([
+  "edited",
+  "labeled",
+  "milestoned",
+  "opened",
+  "reopened",
+]);
 
 type GithubWebhookPostDependencies = {
   developmentRunDatabase?: DevelopmentLoopRunDatabase;
@@ -50,21 +77,32 @@ type GithubWebhookPostDependencies = {
     payload: GithubIssuesWebhookPayload,
     resolveLoop: GithubAgentReadyLoopResolver,
   ) => GithubAgentReadyTrigger;
+  issueActivationManifests?: readonly LoopDefinition[];
   now?: () => Date;
   recordGithubWebhookOutcomeMetric?: (input: GithubWebhookOutcomeMetricInput) => void;
+  resolveIssueActivationPermission?: (
+    input: Parameters<
+      ReturnType<typeof createGithubIssueActivationPermissionResolver>["resolve"]
+    >[0],
+  ) => Promise<GithubIssueActivationPermissionDecision>;
+  resolveTrackedRepositoryBinding?: GithubIssueActivationRepositoryBindingResolver;
   webhookDeliveryStore?: GithubWebhookDeliveryStore;
 };
 
 type GithubWebhookDeliveryStoreMode = "drizzle" | "injected" | "memory";
+type GithubWebhookRouteDependencies = {
+  handlePost: typeof handleGithubWebhookPost;
+  withSpan: typeof withLoopworksActiveSpan;
+};
 type DevelopmentRunOutcome = DevelopmentLoopRunMetadata | DevelopmentLoopNoopMetadata;
 type ResearchRunOutcome = ResearchLoopRunMetadata | ResearchLoopNoopMetadata;
 
-function asIssuesPayload(payload: unknown): GithubIssuesWebhookPayload | null {
-  if (typeof payload !== "object" || payload === null) {
-    return null;
-  }
+function object(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
 
-  return payload as GithubIssuesWebhookPayload;
+function string(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
 function getGithubWebhookDeliveryStore(): {
@@ -92,24 +130,26 @@ function compactRecord(record: Record<string, unknown>): Record<string, unknown>
 
 function summarizeGithubWebhookPayload(
   event: string,
-  payload: GithubIssuesWebhookPayload | null,
+  activation: NormalizedGithubIssueActivation | null,
+  action: string | null,
 ): Record<string, unknown> {
-  if (event !== "issues" || !payload?.issue) {
+  if (event !== "issues" || !activation) {
     return {
+      ...(action ? { action } : {}),
       event,
     };
   }
 
   return compactRecord({
-    action: payload.action,
+    action: activation.action,
+    actorId: activation.actor.id,
+    actorLogin: activation.actor.login,
+    changedInput: activation.changedInput,
     event,
-    issueNumber: payload.issue.number,
-    issueUrl: payload.issue.html_url,
-    labels: (payload.issue.labels ?? [])
-      .map((label) => label.name?.trim())
-      .filter((label): label is string => Boolean(label)),
-    milestoneTitle: payload.issue.milestone?.title,
-    repositoryFullName: payload.repository?.full_name,
+    installationId: activation.installationId,
+    issueNumber: activation.issue.number,
+    repositoryFullName: activation.repository.fullName,
+    repositoryId: activation.repository.id,
   });
 }
 
@@ -154,6 +194,13 @@ function getVerifiedGithubWebhookMetricEvent(event: string): string {
   return supportedGithubWebhookMetricEvents.has(normalizedEvent) ? normalizedEvent : "unsupported";
 }
 
+function getVerifiedGithubWebhookMetricAction(action: string | null | undefined): string {
+  const normalizedAction = action?.trim().toLowerCase() ?? "none";
+  return supportedGithubWebhookMetricActions.has(normalizedAction)
+    ? normalizedAction
+    : "unsupported";
+}
+
 function recordWebhookOutcomeSafely(
   recordMetric: (input: GithubWebhookOutcomeMetricInput) => void,
   input: GithubWebhookOutcomeMetricInput,
@@ -163,6 +210,10 @@ function recordWebhookOutcomeSafely(
   } catch {
     // Webhook request handling must not depend on telemetry sink health.
   }
+  markGithubWebhookActivationSpanOutcome({
+    action: getVerifiedGithubWebhookMetricAction(input.action),
+    outcome: input.outcome,
+  });
 }
 
 function getFixtureFallbackResponse(mode: GithubWebhookDeliveryStoreMode) {
@@ -175,49 +226,69 @@ function getFixtureFallbackResponse(mode: GithubWebhookDeliveryStoreMode) {
     : {};
 }
 
-function getIssueLabels(payload: GithubIssuesWebhookPayload): string[] {
-  return (payload.issue?.labels ?? [])
-    .map((label) => label.name?.trim())
-    .filter((label): label is string => Boolean(label));
+function getApplicableManifest(
+  activation: NormalizedGithubIssueActivation,
+  manifests: readonly LoopDefinition[] = defaultLoopManifest.loops,
+) {
+  const loopKey = activation.issue.labels.includes("spike") ? "research-loop" : "development-loop";
+  return manifests.find((loop) => loop.key === loopKey) ?? null;
 }
 
 function getDevelopmentLoopTrigger(
-  payload: GithubIssuesWebhookPayload | null,
+  payload: unknown,
+  activation: NormalizedGithubIssueActivation,
   deliveryId: string,
 ): DevelopmentLoopTrigger | null {
-  if (!payload?.issue?.number || !payload.repository?.full_name) {
-    return null;
-  }
+  const issue = object(object(payload)?.issue);
+  if (!issue) return null;
 
   return {
-    body: payload.issue.body ?? "",
+    body: string(issue.body) ?? "",
     deliveryId,
-    issueNumber: payload.issue.number,
-    issueUrl: payload.issue.html_url ?? undefined,
-    labels: getIssueLabels(payload),
-    milestone: payload.issue.milestone?.title ?? null,
-    repositoryFullName: payload.repository.full_name,
-    title: payload.issue.title ?? "",
+    issueNumber: activation.issue.number,
+    issueUrl: string(issue.html_url) ?? undefined,
+    labels: activation.issue.labels,
+    milestone: activation.issue.milestone?.title ?? null,
+    repositoryFullName: activation.repository.fullName,
+    title: string(issue.title) ?? "",
   };
 }
 
 function getResearchLoopTrigger(
-  payload: GithubIssuesWebhookPayload | null,
+  payload: unknown,
+  activation: NormalizedGithubIssueActivation,
   deliveryId: string,
 ): ResearchLoopTrigger | null {
-  return getDevelopmentLoopTrigger(payload, deliveryId);
+  return getDevelopmentLoopTrigger(payload, activation, deliveryId);
+}
+
+function getSanitizedIssuesPayload(
+  activation: NormalizedGithubIssueActivation,
+): GithubIssuesWebhookPayload {
+  return {
+    action: activation.action,
+    issue: {
+      body: activation.issue.bodyPresent ? "present" : "",
+      labels: activation.issue.labels.map((name) => ({ name })),
+      milestone: activation.issue.milestone ? { title: activation.issue.milestone.title } : null,
+      number: activation.issue.number,
+      ...(activation.issue.isPullRequest ? { pull_request: {} } : {}),
+      state: activation.issue.state,
+    },
+    repository: { full_name: activation.repository.fullName },
+  };
 }
 
 async function resolveDevelopmentRunOutcome(input: {
   agentReadyTrigger: GithubAgentReadyTrigger;
   database: DevelopmentLoopRunDatabase;
-  issuesPayload: GithubIssuesWebhookPayload | null;
+  trigger: DevelopmentLoopTrigger | null;
   normalizedDeliveryId: string;
   now: Date;
   persist: boolean;
   traceId?: string;
 }): Promise<DevelopmentRunOutcome | undefined> {
-  const trigger = getDevelopmentLoopTrigger(input.issuesPayload, input.normalizedDeliveryId);
+  const trigger = input.trigger;
 
   if (
     input.agentReadyTrigger.shouldTrigger &&
@@ -267,13 +338,13 @@ async function resolveDevelopmentRunOutcome(input: {
 async function resolveResearchRunOutcome(input: {
   agentReadyTrigger: GithubAgentReadyTrigger;
   database: DevelopmentLoopRunDatabase;
-  issuesPayload: GithubIssuesWebhookPayload | null;
+  trigger: ResearchLoopTrigger | null;
   normalizedDeliveryId: string;
   now: Date;
   persist: boolean;
   traceId?: string;
 }): Promise<ResearchRunOutcome | undefined> {
-  const trigger = getResearchLoopTrigger(input.issuesPayload, input.normalizedDeliveryId);
+  const trigger = input.trigger;
 
   if (
     input.agentReadyTrigger.shouldTrigger &&
@@ -318,7 +389,16 @@ export async function handleGithubWebhookPost(
 ) {
   const webhookSecret = readStringConfig("GITHUB_WEBHOOK_SECRET");
   const deliveryId = request.headers.get("x-github-delivery");
+  let normalizedHeaderDeliveryId: string | null = null;
+  if (deliveryId) {
+    try {
+      normalizedHeaderDeliveryId = normalizeGithubDeliveryId(deliveryId);
+    } catch {
+      // Never attach an untrusted, malformed delivery value to logs or durable state.
+    }
+  }
   const event = request.headers.get("x-github-event") ?? "unknown";
+  const metricEvent = getVerifiedGithubWebhookMetricEvent(event);
   const getAgentReadyTrigger =
     dependencies.getAgentReadyTrigger ?? getLoopAwareAgentReadyTriggerFromIssuesWebhook;
   const developmentRunDatabase = dependencies.developmentRunDatabase ?? db;
@@ -328,8 +408,8 @@ export async function handleGithubWebhookPost(
   const traceId = getActiveTraceId();
   const requestLogger = createRequestLogger({
     route: "api.github.webhooks",
-    githubDeliveryId: deliveryId,
-    githubEvent: event,
+    githubDeliveryId: normalizedHeaderDeliveryId ?? (deliveryId ? "invalid" : null),
+    githubEvent: metricEvent,
   });
 
   if (!webhookSecret) {
@@ -355,11 +435,26 @@ export async function handleGithubWebhookPost(
     recordWebhookOutcomeSafely(recordWebhookOutcome, {
       action: null,
       event: "unknown",
-      outcome: "rejected",
+      outcome: "ignored",
     });
     return NextResponse.json(
       {
         error: "Missing x-github-delivery header.",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!normalizedHeaderDeliveryId) {
+    requestLogger.warn("github_webhook_delivery_id_invalid");
+    recordWebhookOutcomeSafely(recordWebhookOutcome, {
+      action: null,
+      event: metricEvent,
+      outcome: "ignored",
+    });
+    return NextResponse.json(
+      {
+        error: "Invalid x-github-delivery header.",
       },
       { status: 400 },
     );
@@ -386,8 +481,6 @@ export async function handleGithubWebhookPost(
     );
   }
 
-  const metricEvent = getVerifiedGithubWebhookMetricEvent(event);
-
   let payload: unknown;
   try {
     payload = JSON.parse(payloadText) as unknown;
@@ -396,7 +489,7 @@ export async function handleGithubWebhookPost(
     recordWebhookOutcomeSafely(recordWebhookOutcome, {
       action: null,
       event: metricEvent,
-      outcome: "rejected",
+      outcome: "error",
     });
     return NextResponse.json(
       {
@@ -406,9 +499,15 @@ export async function handleGithubWebhookPost(
     );
   }
 
-  const issuesPayload = asIssuesPayload(payload);
-  const repositoryFullName = issuesPayload?.repository?.full_name ?? null;
-  const action = issuesPayload?.action ?? null;
+  const action = string(object(payload)?.action)?.trim().toLowerCase() ?? null;
+  const boundedAction = getVerifiedGithubWebhookMetricAction(action);
+  const normalization =
+    event === "issues"
+      ? normalizeGithubIssueActivationPayload(payload)
+      : ({ reason: "unsupported_event", success: false } as const);
+  const activation = normalization.success ? normalization.activation : null;
+  const normalizationFailureReason = normalization.success ? null : normalization.reason;
+  const repositoryFullName = activation?.repository.fullName ?? null;
   const selectedDeliveryStore = dependencies.webhookDeliveryStore
     ? {
         mode: "injected" as const,
@@ -417,7 +516,7 @@ export async function handleGithubWebhookPost(
     : getGithubWebhookDeliveryStore();
   const webhookDeliveryStore = selectedDeliveryStore.store;
   const webhookLogger = requestLogger.child({
-    githubAction: action,
+    githubAction: getVerifiedGithubWebhookMetricAction(action),
     repositoryFullName,
     webhookDeliveryStore: selectedDeliveryStore.mode,
   });
@@ -426,16 +525,15 @@ export async function handleGithubWebhookPost(
   try {
     claim = await claimGithubWebhookDelivery({
       store: webhookDeliveryStore,
-      deliveryId,
-      event,
-      action,
+      deliveryId: normalizedHeaderDeliveryId,
+      event: metricEvent,
+      action: boundedAction,
       repositoryFullName,
-      payload: summarizeGithubWebhookPayload(event, issuesPayload),
+      payload: summarizeGithubWebhookPayload(metricEvent, activation, boundedAction),
     });
   } catch (error) {
     webhookLogger.error(
       {
-        err: error,
         failureType: getFailureType(error),
       },
       "github_webhook_claim_failed",
@@ -472,38 +570,237 @@ export async function handleGithubWebhookPost(
     );
   }
 
+  let authorizationAudit: Record<string, unknown> | undefined;
   try {
-    const agentReadyTrigger: GithubAgentReadyTrigger =
-      event === "issues" && issuesPayload
-        ? getAgentReadyTrigger(issuesPayload, resolveAgentReadyLoopState)
-        : { shouldTrigger: false, reason: "unsupported_event" };
-    const deliveryStatus = agentReadyTrigger.shouldTrigger ? "processed" : "ignored";
+    const finishDecision = async (input: {
+      authorization: Record<string, unknown>;
+      deliveryStatus: "failed" | "ignored";
+      outcome: Extract<
+        GithubWebhookOutcome,
+        "ignored" | "indeterminate" | "manifest_drift" | "unauthorized"
+      >;
+      reason: string;
+      status: 202 | 503;
+    }) => {
+      authorizationAudit = input.authorization;
+      const processedAt = now();
+      await webhookDeliveryStore.complete(claim.key, {
+        deliveryId: claim.deliveryId,
+        metadata: {
+          authorization: input.authorization,
+          nextAction: "record_and_ignore",
+          triggerWorkflow: "none",
+        },
+        processedAt: processedAt.toISOString(),
+        status: input.deliveryStatus,
+      });
+      webhookLogger.info(
+        {
+          authorizationOutcome: input.outcome,
+          authorizationReason: input.reason,
+          idempotencyKey: claim.key,
+        },
+        "github_webhook_activation_decided",
+      );
+      recordWebhookOutcomeSafely(recordWebhookOutcome, {
+        action,
+        event: metricEvent,
+        outcome: input.outcome,
+      });
+      return NextResponse.json(
+        {
+          accepted: input.status === 202,
+          authorization: input.authorization,
+          deliveryId: claim.deliveryId,
+          duplicate: false,
+          idempotencyKey: claim.key,
+          nextAction: "record_and_ignore",
+          ...(input.status === 503 ? { retryable: true } : {}),
+          ...getFixtureFallbackResponse(selectedDeliveryStore.mode),
+        },
+        { status: input.status },
+      );
+    };
+
+    if (!activation) {
+      return finishDecision({
+        authorization: {
+          action: boundedAction,
+          outcome: "ignored",
+          reason: normalizationFailureReason ?? "invalid_activation_envelope",
+        },
+        deliveryStatus: "ignored",
+        outcome: "ignored",
+        reason: normalizationFailureReason ?? "invalid_activation_envelope",
+        status: 202,
+      });
+    }
+
+    const manifest = getApplicableManifest(
+      activation,
+      dependencies.issueActivationManifests ?? defaultLoopManifest.loops,
+    );
+    if (!manifest) {
+      return finishDecision({
+        authorization: {
+          action: activation.action,
+          actor: activation.actor,
+          outcome: "manifest_drift",
+          reason: "applicable_manifest_missing",
+        },
+        deliveryStatus: "ignored",
+        outcome: "manifest_drift",
+        reason: "applicable_manifest_missing",
+        status: 202,
+      });
+    }
+    const transition = evaluateGithubIssueActivationTransition({ activation, manifest });
+    const baseAudit = {
+      action: activation.action,
+      actor: activation.actor,
+      binding: {
+        deliveryId: claim.deliveryId,
+        installationId: activation.installationId,
+        repositoryFullName: activation.repository.fullName,
+        repositoryId: activation.repository.id,
+      },
+      transition,
+    };
+    authorizationAudit = baseAudit;
+    if (transition.outcome !== "eligible") {
+      return finishDecision({
+        authorization: {
+          ...baseAudit,
+          outcome: transition.outcome,
+          reason: transition.reason,
+        },
+        deliveryStatus: "ignored",
+        outcome: transition.outcome,
+        reason: transition.reason,
+        status: 202,
+      });
+    }
+
+    const resolveBinding =
+      dependencies.resolveTrackedRepositoryBinding ??
+      createGithubIssueActivationRepositoryBindingResolver();
+    let binding: GithubIssueActivationRepositoryBindingDecision;
+    try {
+      binding = await resolveBinding(activation);
+    } catch {
+      binding = { decision: "indeterminate", reason: "repository_binding_missing_or_mismatched" };
+    }
+    if (binding.decision === "indeterminate") {
+      return finishDecision({
+        authorization: {
+          ...baseAudit,
+          bindingDecision: binding,
+          outcome: "indeterminate",
+          reason: binding.reason,
+        },
+        deliveryStatus: "failed",
+        outcome: "indeterminate",
+        reason: binding.reason,
+        status: 503,
+      });
+    }
+    authorizationAudit = { ...baseAudit, bindingDecision: binding };
+
+    const resolvePermission =
+      dependencies.resolveIssueActivationPermission ??
+      createGithubIssueActivationPermissionResolver().resolve;
+    let permission: GithubIssueActivationPermissionDecision;
+    try {
+      permission = await resolvePermission({
+        actor: activation.actor,
+        installationId: activation.installationId,
+        owner: binding.owner,
+        repo: binding.repo,
+      });
+    } catch {
+      permission = { decision: "indeterminate", reason: "github_permission_unavailable" };
+    }
+    if (permission.decision === "indeterminate") {
+      return finishDecision({
+        authorization: {
+          ...baseAudit,
+          bindingDecision: binding,
+          outcome: "indeterminate",
+          permission,
+          reason: permission.reason,
+        },
+        deliveryStatus: "failed",
+        outcome: "indeterminate",
+        reason: permission.reason,
+        status: 503,
+      });
+    }
+    if (permission.decision === "unauthorized") {
+      return finishDecision({
+        authorization: {
+          ...baseAudit,
+          bindingDecision: binding,
+          outcome: "unauthorized",
+          permission,
+          reason: "permission_below_triage",
+        },
+        deliveryStatus: "ignored",
+        outcome: "unauthorized",
+        reason: "permission_below_triage",
+        status: 202,
+      });
+    }
+    authorizationAudit = {
+      ...baseAudit,
+      bindingDecision: binding,
+      outcome: "authorized",
+      permission,
+    };
+
+    const sanitizedIssuesPayload = getSanitizedIssuesPayload(activation);
+    const agentReadyTrigger = getAgentReadyTrigger(
+      sanitizedIssuesPayload,
+      resolveAgentReadyLoopState,
+    );
     const processedAt = now();
+    const developmentTrigger = getDevelopmentLoopTrigger(payload, activation, claim.deliveryId);
+    const researchTrigger = getResearchLoopTrigger(payload, activation, claim.deliveryId);
     const developmentRun = await resolveDevelopmentRunOutcome({
       agentReadyTrigger,
       database: developmentRunDatabase,
-      issuesPayload,
       normalizedDeliveryId: claim.deliveryId,
       now: processedAt,
       persist:
         selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
       traceId,
+      trigger: developmentTrigger,
     });
     const researchRun = await resolveResearchRunOutcome({
       agentReadyTrigger,
       database: developmentRunDatabase,
-      issuesPayload,
       normalizedDeliveryId: claim.deliveryId,
       now: processedAt,
       persist:
         selectedDeliveryStore.mode === "drizzle" || Boolean(dependencies.developmentRunDatabase),
       traceId,
+      trigger: researchTrigger,
     });
     const nextAction = getNextAction(agentReadyTrigger, developmentRun, researchRun);
+    const run = developmentRun ?? researchRun;
+    const runId = run && "runId" in run ? run.runId : undefined;
+    const authorization = {
+      ...baseAudit,
+      bindingDecision: binding,
+      outcome: "authorized",
+      permission,
+      ...(runId ? { runId } : {}),
+    };
+    authorizationAudit = authorization;
 
     await webhookDeliveryStore.complete(claim.key, {
       deliveryId: claim.deliveryId,
       metadata: {
+        authorization,
         ...(developmentRun ? { developmentRun } : {}),
         ...(researchRun ? { researchRun } : {}),
         nextAction,
@@ -511,15 +808,13 @@ export async function handleGithubWebhookPost(
         triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
       processedAt: processedAt.toISOString(),
-      status: deliveryStatus,
+      status: "processed",
     });
 
     webhookLogger.info(
       {
+        authorizationOutcome: "authorized",
         idempotencyKey: claim.key,
-        agentReadyTrigger,
-        developmentRun,
-        researchRun,
         nextAction,
         triggerWorkflow: agentReadyTrigger.workflow ?? "none",
       },
@@ -528,16 +823,17 @@ export async function handleGithubWebhookPost(
     recordWebhookOutcomeSafely(recordWebhookOutcome, {
       action,
       event: metricEvent,
-      outcome: deliveryStatus === "processed" ? "accepted" : "rejected",
+      outcome: "authorized",
     });
 
     return NextResponse.json(
       {
         accepted: true,
+        authorization,
         duplicate: false,
         deliveryId: claim.deliveryId,
         idempotencyKey: claim.key,
-        event,
+        event: metricEvent,
         agentReadyTrigger,
         ...(developmentRun ? { developmentRun } : {}),
         ...(researchRun ? { researchRun } : {}),
@@ -550,7 +846,6 @@ export async function handleGithubWebhookPost(
     const failureType = getFailureType(error);
     webhookLogger.error(
       {
-        err: error,
         failureType,
         idempotencyKey: claim.key,
       },
@@ -566,6 +861,7 @@ export async function handleGithubWebhookPost(
       await webhookDeliveryStore.complete(claim.key, {
         deliveryId: claim.deliveryId,
         metadata: {
+          ...(authorizationAudit ? { authorization: authorizationAudit } : {}),
           failureType,
           nextAction: "record_and_ignore",
           triggerWorkflow: "none",
@@ -576,7 +872,6 @@ export async function handleGithubWebhookPost(
     } catch (completionError) {
       webhookLogger.error(
         {
-          err: completionError,
           completionFailureType: getFailureType(completionError),
           failureType,
           idempotencyKey: claim.key,
@@ -589,6 +884,22 @@ export async function handleGithubWebhookPost(
   }
 }
 
+export async function runGithubWebhookPostRoute(
+  request: Request,
+  dependencies: Partial<GithubWebhookRouteDependencies> = {},
+) {
+  return (dependencies.withSpan ?? withLoopworksActiveSpan)(
+    "github.webhook.activation",
+    async (span) => {
+      try {
+        return await (dependencies.handlePost ?? handleGithubWebhookPost)(request);
+      } finally {
+        span.end();
+      }
+    },
+  );
+}
+
 export async function POST(request: Request) {
-  return handleGithubWebhookPost(request);
+  return runGithubWebhookPostRoute(request);
 }

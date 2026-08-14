@@ -89,12 +89,19 @@ Logs are not the event store. The control plane must still persist durable run, 
 
 1. Receive GitHub webhook.
 2. Verify signature using the configured webhook secret.
-3. Extract delivery id, event name, action, installation id, repository, issue/PR identifiers, labels, and sender.
-4. Create or check idempotency record by delivery id and normalized event key.
-5. Acquire a short-lived lock for repo plus issue plus trigger type.
-6. Normalize the event into Loopworks event tables.
-7. Evaluate loop triggers from the active manifest snapshot.
-8. Resolve the manifest concurrency group, lock its persistent guard row plus
+3. Normalize a bounded activation envelope containing immutable sender,
+   repository, and installation identity plus action-specific readiness
+   evidence. Keep issue title/body outside this envelope.
+4. Create or check the idempotency record by delivery id and normalized event key.
+5. Select allowed actions solely from the applicable shipped manifest and fail
+   closed on an action without an exact transition evaluator.
+6. Prove that the delivered action changes readiness from false to true.
+7. Bind the signed repository ID/full name and installation ID to one active
+   tracked repository, then resolve the signed sender's repository permission
+   with the installation token. Below-triage permission denies activation;
+   unavailable or ambiguous evidence is retryable and creates no run.
+8. Only after authorization, construct model-readable run input and resolve the
+   manifest concurrency group. Lock its persistent guard row plus
    the cross-loop repository/issue guard, and persist the run. Acquire a run
    lease when capacity exists; otherwise retain the run as queued without a
    lease. Stage transitions require that exact acquired lease.
@@ -156,7 +163,9 @@ MVP capabilities:
 3. GitHub App webhook skeleton with signature verification.
 4. Dev fixture path for signed issue events.
 5. Label and milestone bootstrap script.
-6. Issue trigger for `agent-ready`.
+6. Issue trigger for an exact, actor-authorized `agent-ready` readiness
+   transition, including final ready-label and milestone actions declared by
+   the shipped manifest.
 7. `spike` plus `agent-ready` classification for research workflows.
 8. Guarded draft-PR creation plus an offline PR-intent artifact path.
 

@@ -16,6 +16,7 @@ import {
   runSteps,
   webhookDeliveries,
 } from "@/db/schema";
+import { createGithubIssueActivationRepositoryBindingResolver } from "@/lib/github/issue-activation-store";
 import {
   createDrizzleGithubWebhookDeliveryStore,
   type GithubWebhookDatabase,
@@ -76,10 +77,56 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       owner: "ncolesummers",
       name: "loopworks",
       fullName: "ncolesummers/loopworks",
+      installationId: 124_001,
       enabledLoops: ["Agent-ready development loop"],
       validationGates: ["Focused tests", "Aggregate validation"],
     });
   }
+
+  function authorizationDependencies() {
+    return {
+      resolveIssueActivationPermission: vi.fn(async () => ({
+        decision: "authorized" as const,
+        permission: "read",
+        roleName: "triage",
+      })),
+      resolveTrackedRepositoryBinding: createGithubIssueActivationRepositoryBindingResolver(
+        context.db,
+      ),
+    };
+  }
+
+  it("rejects a corrupt owner/name binding even when immutable columns match", async () => {
+    await context.db.insert(repositories).values({
+      githubRepoId: 11_000_001,
+      owner: "other-owner",
+      name: "loopworks",
+      fullName: "ncolesummers/loopworks",
+      installationId: 124_001,
+    });
+    const resolveBinding = createGithubIssueActivationRepositoryBindingResolver(context.db);
+
+    await expect(
+      resolveBinding({
+        action: "opened",
+        actor: { id: 22_808_397, login: "ncolesummers" },
+        changedInput: null,
+        installationId: 124_001,
+        issue: {
+          bodyPresent: true,
+          isPullRequest: false,
+          labels: ["agent-ready", "area:loops", "priority:p0"],
+          milestone: { id: 31, title: "M3 Durable Loop MVP" },
+          number: 11,
+          state: "open",
+        },
+        repository: { fullName: "ncolesummers/loopworks", id: 11_000_001 },
+      }),
+    ).resolves.toEqual({
+      decision: "indeterminate",
+      reason: "repository_binding_missing_or_mismatched",
+    });
+  });
 
   it("claims once, rejects an in-flight duplicate, then completes and blocks reprocessing", async () => {
     const store = createStore();
@@ -309,6 +356,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
 
     const first = await withTestTrace(() =>
       handleGithubWebhookPost(makeRequest(), {
+        ...authorizationDependencies(),
         developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
         now,
         webhookDeliveryStore: store,
@@ -334,6 +382,31 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     expect(delivery.event).toBe("issues");
     expect(delivery.status).toBe("processed");
     expect(delivery.processedAt).toEqual(now());
+    expect(delivery.payload).toMatchObject({
+      authorization: {
+        action: "labeled",
+        actor: { id: 22_808_397, login: "ncolesummers" },
+        binding: {
+          deliveryId: fixture.deliveryId,
+          installationId: 124_001,
+          repositoryFullName: "ncolesummers/loopworks",
+          repositoryId: 11_000_001,
+        },
+        outcome: "authorized",
+        permission: { decision: "authorized", permission: "read", roleName: "triage" },
+        transition: {
+          changedInput: { kind: "label", name: "agent-ready" },
+          outcome: "eligible",
+          readinessAfter: true,
+          readinessBefore: false,
+        },
+      },
+      nextAction: "queue_planning_agent",
+      triggerWorkflow: "development",
+    });
+    expect(JSON.stringify(delivery.payload)).not.toMatch(
+      /first durable loop skeleton|private.?key|raw.?webhook|token|credential/i,
+    );
 
     const [lock] = await context.db
       .select()
@@ -341,6 +414,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
       .where(eq(idempotencyLocks.key, `github:${fixture.deliveryId}`));
     expect(lock.status).toBe("released");
     expect(lock.metadata).toMatchObject({
+      authorization: { outcome: "authorized" },
       nextAction: "queue_planning_agent",
       triggerWorkflow: "development",
       deliveryStatus: "processed",
@@ -351,6 +425,9 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     const artifactRows = await context.db.select().from(artifacts);
     const planRows = await context.db.select().from(agentPlans);
     expect(runRows).toHaveLength(1);
+    expect(delivery.payload).toMatchObject({
+      authorization: { runId: runRows[0]?.id },
+    });
     expect(runRows[0]).toMatchObject({
       githubIssueNumber: 11,
       loopKey: "development-loop",
@@ -369,6 +446,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
 
     // A replayed delivery is rejected at the route boundary without creating new rows.
     const second = await handleGithubWebhookPost(makeRequest(), {
+      ...authorizationDependencies(),
       developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
       now,
       webhookDeliveryStore: store,
@@ -399,6 +477,146 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     expect(await context.db.select().from(agentPlans)).toHaveLength(1);
   });
 
+  it("durably denies a below-triage actor without constructing model-readable run state", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "fixture-route-unauthorized-delivery",
+      kind: "agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        resolveIssueActivationPermission: vi.fn(async () => ({
+          decision: "unauthorized" as const,
+          permission: "read",
+          roleName: "read",
+        })),
+        resolveTrackedRepositoryBinding: createGithubIssueActivationRepositoryBindingResolver(
+          context.db,
+        ),
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      authorization: { outcome: "unauthorized" },
+      nextAction: "record_and_ignore",
+    });
+    const [delivery] = await context.db.select().from(webhookDeliveries);
+    expect(delivery).toMatchObject({
+      status: "ignored",
+      payload: {
+        authorization: {
+          actor: { id: 22_808_397, login: "ncolesummers" },
+          outcome: "unauthorized",
+          permission: { decision: "unauthorized", permission: "read", roleName: "read" },
+        },
+      },
+    });
+    expect(JSON.stringify(delivery.payload)).not.toContain(fixture.payload.issue.body);
+    expect(await context.db.select().from(loopRuns)).toHaveLength(0);
+    expect(await context.db.select().from(agentPlans)).toHaveLength(0);
+  });
+
+  it("creates at most one run for concurrent authorized deliveries for the same issue", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const makeRequest = (deliveryId: string) => {
+      const fixture = createGithubWebhookFixture({
+        deliveryId,
+        kind: "agent-ready",
+        secret: "dev-webhook-secret",
+        url: "https://loopworks.local/api/github/webhooks",
+      });
+      return new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      });
+    };
+    const dependencies = {
+      ...authorizationDependencies(),
+      developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
+      now: () => new Date("2026-06-28T02:03:00.000Z"),
+      webhookDeliveryStore: store,
+    };
+
+    const responses = await Promise.all([
+      handleGithubWebhookPost(makeRequest("concurrent-authorization-a"), dependencies),
+      handleGithubWebhookPost(makeRequest("concurrent-authorization-b"), dependencies),
+    ]);
+    const bodies = await Promise.all(responses.map((response) => response.json()));
+
+    expect(responses.map((response) => response.status)).toEqual([202, 202]);
+    expect(bodies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          authorization: expect.objectContaining({ outcome: "authorized" }),
+          developmentRun: expect.objectContaining({ mode: "dispatched" }),
+        }),
+        expect.objectContaining({
+          authorization: expect.objectContaining({ outcome: "authorized" }),
+          developmentRun: expect.objectContaining({ mode: "lease_contention" }),
+        }),
+      ]),
+    );
+    expect(await context.db.select().from(webhookDeliveries)).toHaveLength(2);
+    expect(await context.db.select().from(loopRuns)).toHaveLength(1);
+    expect(await context.db.select().from(agentPlans)).toHaveLength(1);
+  });
+
+  it("persists retryable indeterminate evidence, returns 503, and creates no run", async () => {
+    vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
+    await insertLoopworksRepository();
+    const store = createStore();
+    const fixture = createGithubWebhookFixture({
+      deliveryId: "fixture-route-indeterminate-delivery",
+      kind: "agent-ready",
+      secret: "dev-webhook-secret",
+      url: "https://loopworks.local/api/github/webhooks",
+    });
+    const response = await handleGithubWebhookPost(
+      new Request(fixture.url, {
+        body: fixture.payloadText,
+        headers: fixture.headers,
+        method: "POST",
+      }),
+      {
+        resolveIssueActivationPermission: vi.fn(async () => ({
+          decision: "indeterminate" as const,
+          reason: "github_permission_unavailable",
+        })),
+        resolveTrackedRepositoryBinding: createGithubIssueActivationRepositoryBindingResolver(
+          context.db,
+        ),
+        webhookDeliveryStore: store,
+      },
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: false,
+      authorization: { outcome: "indeterminate" },
+      retryable: true,
+    });
+    const [delivery] = await context.db.select().from(webhookDeliveries);
+    expect(delivery).toMatchObject({
+      status: "failed",
+      payload: { authorization: { outcome: "indeterminate" } },
+    });
+    expect(await context.db.select().from(loopRuns)).toHaveLength(0);
+  });
+
   it("reports deferred admission instead of telling a worker to start planning", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "dev-webhook-secret");
     await insertLoopworksRepository();
@@ -426,6 +644,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
           method: "POST",
         }),
         {
+          ...authorizationDependencies(),
           developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
           now: () => new Date("2026-06-28T02:00:00.000Z"),
           webhookDeliveryStore: store,
@@ -460,6 +679,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
 
     const first = await withTestTrace(() =>
       handleGithubWebhookPost(makeRequest(), {
+        ...authorizationDependencies(),
         developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
         now: () => new Date("2026-07-21T16:00:00.000Z"),
         webhookDeliveryStore: store,
@@ -498,6 +718,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     expect(event.traceId).toBe(runRows[0]?.traceId);
 
     const replay = await handleGithubWebhookPost(makeRequest(), {
+      ...authorizationDependencies(),
       developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
       now: () => new Date("2026-07-21T16:01:00.000Z"),
       webhookDeliveryStore: store,
@@ -526,6 +747,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         method: "POST",
       }),
       {
+        ...authorizationDependencies(),
         developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
         now: () => new Date("2026-06-28T02:05:00.000Z"),
         webhookDeliveryStore: store,
@@ -573,6 +795,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
         method: "POST",
       }),
       {
+        ...authorizationDependencies(),
         developmentRunDatabase: context.db as unknown as DevelopmentLoopRunDatabase,
         now: () => new Date("2026-06-28T02:06:00.000Z"),
         webhookDeliveryStore: store,

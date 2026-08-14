@@ -32,12 +32,16 @@ be queried consistently across local, preview, and production environments.
 4. Never log raw tokens, webhook payload bodies, private keys, authorization headers, OAuth profiles, or full unreviewed agent prompts.
 5. Log deterministic validation outcomes as structured summaries and store raw artifacts separately.
 6. Prefer explicit fallback reasons over silent fallback behavior.
+7. GitHub activation decisions log only bounded outcome/reason vocabulary and
+   correlation IDs. Do not attach raw Octokit errors or permission responses.
 
 ## MVP Events
 
 The MVP should emit structured logs for:
 
-1. GitHub webhook received, rejected, duplicated, processed, and trigger decision.
+1. GitHub webhook signature/error state and bounded activation outcomes:
+   `authorized`, `unauthorized`, `indeterminate`, `duplicate`,
+   `manifest_drift`, and `ignored`.
 2. Vercel deployment fetch success, API failure, exception, and fixture fallback reason.
 3. Approval transition applied or rejected.
 4. Loop manifest read and later manifest validation failures.
@@ -70,7 +74,8 @@ The internal control plane should eventually expose:
 2. Step duration and retry counts.
 3. Validation pass/fail/skip counts.
 4. Approval wait time and rejection rates.
-5. GitHub webhook duplicate/reject/process counts.
+5. GitHub webhook authorization, indeterminate, drift, ignore, duplicate,
+   signature, and error counts.
 6. Vercel deployment readiness and failure counts.
 7. Agent cost, token, model, and tool usage metrics.
 8. Queue depth, concurrency, lock contention, and cancellation counts.
@@ -91,6 +96,14 @@ The MVP logger is compatible with trace context. Development- and research-loop 
 persists the active W3C trace id into `loop_runs.trace_id`,
 `run_steps.trace_id`, and `observability_events.trace_id`, allowing Axiom traces,
 stdout logs, and durable run records to be correlated.
+
+The active webhook span carries only bounded action and authorization outcome
+attributes. Indeterminate and unexpected error outcomes mark the span as an
+error; expected denial, ignore, drift, duplicate, and authorized decisions do
+not. The matching delivery and idempotency-lock metadata durably correlate the
+actor, permission decision, exact transition, repository/installation binding,
+and created-or-existing run ID without retaining issue bodies, raw webhooks,
+tokens, credentials, or provider responses.
 
 ## Axiom Preview Configuration
 

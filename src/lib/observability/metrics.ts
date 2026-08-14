@@ -234,6 +234,13 @@ const loopRegistrationOutcomeCounters = new WeakMap<object, Counter<MetricAttrib
 const planningToolOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const planningToolDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const supportedGithubWebhookMetricEvents = new Set(["issues", "unknown", "unsupported"]);
+const supportedGithubWebhookMetricActions = new Set([
+  "edited",
+  "labeled",
+  "milestoned",
+  "opened",
+  "reopened",
+]);
 const sensitiveMetricCommandPattern =
   /\b(token|secret|password|authorization|credential|api[-_]?key|prompt)\b|Bearer\s+|gh[pousr]_|sk-[A-Za-z0-9_-]+/i;
 
@@ -243,9 +250,12 @@ export type HistogramMeter = Pick<Meter, "createHistogram">;
 export type ObservableGaugeMeter = Pick<Meter, "createObservableGauge">;
 
 export type GithubWebhookOutcome =
-  | "accepted"
-  | "rejected"
+  | "authorized"
+  | "unauthorized"
+  | "indeterminate"
   | "duplicate"
+  | "manifest_drift"
+  | "ignored"
   | "invalid_signature"
   | "error";
 
@@ -657,13 +667,18 @@ export function recordGithubWebhookOutcomeMetric(
 ): void {
   try {
     getWebhookOutcomeCounter(meter).add(1, {
-      action: normalizeMetricAttribute(input.action, "none"),
+      action: normalizeGithubWebhookActionAttribute(input.action),
       event: normalizeGithubWebhookEventAttribute(input.event),
       outcome: input.outcome,
     });
   } catch {
     // OTel emission must never affect webhook request handling.
   }
+}
+
+function normalizeGithubWebhookActionAttribute(value: string | null | undefined): string {
+  const normalized = normalizeMetricAttribute(value, "none");
+  return supportedGithubWebhookMetricActions.has(normalized) ? normalized : "unsupported";
 }
 
 export function recordGithubInstallationFlowOutcomeMetric(

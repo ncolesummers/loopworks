@@ -66,6 +66,28 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
     it re-sanitizes the submitted `callbackUrl` to a same-origin path rather than
     trusting the hidden field the page rendered.
 
+## Issue Activation Authorization
+
+1. A webhook signature authenticates GitHub delivery, not the actor's authority
+   to start repository compute.
+2. Verified ingress retains immutable sender ID/login, repository ID/full name,
+   installation ID, and exact changed-label or milestone evidence in a bounded
+   activation envelope. Issue title/body and raw payload remain outside it.
+3. The applicable shipped manifest is the sole action allowlist. `opened`,
+   `reopened`, `labeled`, and `milestoned` have exact not-ready to ready
+   evaluators; `edited` remains non-executable. Declared actions without an
+   evaluator fail as `manifest_drift`.
+4. Repository ID/full name and installation ID must match one active tracked
+   repository before the installation-authenticated permission read.
+5. Triage or higher authorizes activation. Below-triage permission denies it;
+   missing, malformed, rate-limited, unauthorized, unavailable, or
+   identity-mismatched evidence is indeterminate and returns retryable 503.
+6. No service actor bypass exists. A future exception requires an exact actor
+   ID, repository ID, and installation ID tuple and a separately reviewed
+   policy change.
+7. Unauthorized, ignored, drift, and indeterminate content never reaches run
+   construction. Delivery and issue guards still enforce at-most-one run.
+
 ## Required Checks
 
 1. Session validation and CSRF protections.
@@ -81,6 +103,11 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
 10. Callback identity coverage for same-account login renames, different-account
     historical login reuse, missing session bindings, gateway id normalization,
     and rejection before discovery or durable writes.
+11. Signed issue activation coverage for outsider open/reopen, unrelated or
+    missing changed fields, exact final label/milestone transitions,
+    repository/installation mismatch, permission API failure, duplicate and
+    concurrent deliveries, and raw-content exclusion from durable audit and
+    OTel.
 
 ## Approval Audit Notes
 

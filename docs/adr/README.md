@@ -51,6 +51,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0028](0028-app-owned-sign-in-entry-point.md) | Accepted | Serve sign-in from an app-owned route, alias the Auth.js error page to it because AccessDenied routes there, and map every failure code to non-disclosing copy. |
 | [0029](0029-eve-runtime-migration-and-session-cutover.md) | Proposed | Pin Eve and its AI SDK peer together, use fixed session IDs, and replace pre-0.31 sessions after a drain-first cutover. |
 | [0030](0030-typescript-7-cli-and-typescript-6-compatibility-api.md) | Accepted | Use native TypeScript 7 for `tsc` while retaining the TypeScript 6 compatibility API for programmatic consumers. |
+| [0031](0031-authorized-github-issue-activation.md) | Proposed | Authorize the signed actor and exact manifest-declared readiness transition before constructing an issue-triggered run. |
 
 ## Template
 
