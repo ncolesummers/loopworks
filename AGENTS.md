@@ -14,7 +14,11 @@ secure, and reviewable.
    observability, testing, fixtures, or workflow governance.
 5. Update docs, ADRs, personas, or backlog artifacts when those expectations
    change.
-6. Delegate with subagents only when tool policy allows it and scopes are
+6. Choose the pull request shape before implementation. Default to one PR and
+   preserve the request's publication authority; use
+   [the stacked-PR guide](docs/development.md#pull-request-shape) and the
+   `gh-stack` skill only when dependent PRs are authorized.
+7. Delegate with subagents only when tool policy allows it and scopes are
    concrete and disjoint.
 
 ## Commit provenance

@@ -1,6 +1,6 @@
 ---
 name: implement-issue-pr
-description: Implement a GitHub issue end to end in its own git worktree and branch, then commit and open a draft PR against main. Use when the request asks for a branch, commits, or a pull request as well as the implementation, or when the work must be isolated from the current checkout. Use implement-issue instead when the user wants to review before anything is committed.
+description: Implement a GitHub issue end to end in its own git worktree and branch, then commit and open one draft PR against main. Use when the delivery shape is a single PR and the request asks for a branch, commits, or a pull request as well as the implementation, or when the work must be isolated from the current checkout. Use gh-stack for dependent stacked PRs, or implement-issue when the user wants to review before anything is committed.
 ---
 
 # Implement Issue (worktree → draft PR)
@@ -9,6 +9,11 @@ Same TDD workflow as `implement-issue`, with one difference: this variant is
 authorized up front to isolate the work in a worktree, commit it, and open a
 draft PR. `AGENTS.md` and the nearest scoped guide still govern code, docs, ADR,
 observability, and validation expectations. Publication follows ADR 0026.
+
+This is the single-PR publication route. If the root guide's delivery-shape
+decision selects dependent stacked PRs, use the repository's `gh-stack` skill
+inside one issue worktree instead of combining that stack with this skill's
+single-branch publication steps.
 
 Invoke as `/implement-issue-pr <issue>` in Claude Code or `$implement-issue-pr
 <issue>` in Codex. The issue number or URL arrives as ordinary prompt context —
