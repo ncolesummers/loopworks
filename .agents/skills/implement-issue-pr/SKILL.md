@@ -1,19 +1,21 @@
 ---
 name: implement-issue-pr
-description: Implement a GitHub issue end to end in its own git worktree and branch, then commit and open one draft PR against main. Use when the delivery shape is a single PR and the request asks for a branch, commits, or a pull request as well as the implementation, or when the work must be isolated from the current checkout. Use gh-stack for dependent stacked PRs, or implement-issue when the user wants to review before anything is committed.
+description: Implement a GitHub issue end to end in its own git worktree, then commit and open one or more draft PRs. Use when the request authorizes a branch, commits, or pull requests as well as implementation, or when the work must be isolated from the current checkout. Default to one PR; add gh-stack when the root guide selects dependent stacked PRs. Use implement-issue when the user wants to review before anything is committed.
 ---
 
 # Implement Issue (worktree → draft PR)
 
 Same TDD workflow as `implement-issue`, with one difference: this variant is
 authorized up front to isolate the work in a worktree, commit it, and open a
-draft PR. `AGENTS.md` and the nearest scoped guide still govern code, docs, ADR,
-observability, and validation expectations. Publication follows ADR 0026.
+draft PR or stack of draft PRs. `AGENTS.md` and the nearest scoped guide still
+govern code, docs, ADR, observability, and validation expectations. Publication
+follows ADR 0026.
 
-This is the single-PR publication route. If the root guide's delivery-shape
-decision selects dependent stacked PRs, use the repository's `gh-stack` skill
-inside one issue worktree instead of combining that stack with this skill's
-single-branch publication steps.
+This is the issue-to-PR publication route and defaults to one PR. If the root
+guide selects dependent stacked PRs, every issue-resolution, test-plan, TDD,
+browser-validation, review, validation, and acceptance-evidence requirement in
+this skill still applies. Use the repository's `gh-stack` skill and stacked-PR
+guide for the layer-by-layer variant described in step 7.
 
 Invoke as `/implement-issue-pr <issue>` in Claude Code or `$implement-issue-pr
 <issue>` in Codex. The issue number or URL arrives as ordinary prompt context —
@@ -29,8 +31,9 @@ These are not boilerplate. They hold for the entire run:
    Every later step runs inside the worktree you created. Never switch, rebase,
    or reset a branch you did not create, and never delete a worktree you did
    not create.
-2. Commit and push only the branch you created, and only after step 6 passes.
-   The PR is a draft; never mark it ready and never merge it.
+2. Commit and push only the branch or stack branches created inside this issue
+   worktree, and only after step 6 passes. Every PR is a draft; never mark one
+   ready and never merge it.
 3. No unrelated refactors. Fix what the ACs require and nothing else.
 4. Preserve user work already in the tree.
 
@@ -95,9 +98,11 @@ green-only report is not evidence.
 
 ### 5. Adversarial review
 
-Run the adversarial review below after the first green, then resolve findings
-and re-run focused checks. Do not commit until every finding from both
-reviewers is fixed, or deferred with a stated reason.
+Run the universal adversarial review from root `AGENTS.md` after the first
+green, then resolve findings and re-run focused checks. For one PR, do not
+commit until both reviewers have reviewed the final diff and every finding is
+fixed or deferred with a stated reason. A stack repeats this review against its
+materialized layer diffs in step 7 before any branch is submitted.
 
 ### 6. Validate
 
@@ -113,7 +118,7 @@ Playwright spec fails, re-run that spec alone before believing it.
 
 ### 7. Commit and open the draft PR
 
-Stop on any mismatch:
+For one PR, stop on any mismatch:
 
 1. Confirm from the step 6 `commit:preflight` output that the effective author
    and committer are the actual contributor identity represented by the GitHub
@@ -146,6 +151,19 @@ Stop on any mismatch:
    handoff occurs before this verification passes; retain its output as
    handoff evidence.
 
+For a stack, keep steps 1 through 6 and the acceptance-evidence section intact,
+but apply them per layer: resolve the issue and plan the whole stack once in
+steps 2 and 3, then repeat TDD, adversarial review, validation, preflight, and a
+signed locally verified commit for each layer from bottom to top. Use the
+stacked-PR guide and `gh-stack` skill for branch creation and submission. Once
+those local commits materialize the proposed layers, run the root guide's
+stack-specific adversarial review against every layer and the assembled top
+diff. Resolve or defer findings, return the revised diffs to both reviewers,
+and repeat until both have reviewed the final stack. Rerun affected layer
+checks and the whole-stack validation at the top. Only then may `gh stack
+submit --auto` publish the draft PRs. Run GitHub provenance for every resulting
+PR.
+
 Report the branch, worktree path, commit list, and PR URL. Leave the worktree
 in place for the user; `/clean_gone` removes it and its branch once the branch
 is merged and deleted upstream.
@@ -173,18 +191,9 @@ Exception: the test-plan subagent may start and explore the app with
 
 ## Adversarial review
 
-Two reviewers in parallel, fresh contexts, identical brief. Their inputs are the
-issue, the ACs, the test plan, and the diff — never this session's reasoning.
-
-Brief, verbatim:
-
-> You did not write this and do not want it merged. Exhaustively find reasons
-> the code or plan creates bugs or does not work. Return findings only:
-> severity, failing scenario or repro. No fixes, no praise. An empty list must
-> state what you attacked and why it held.
-
-Dedupe both lists. Fix or defer each finding with a stated reason, then re-run
-the checks the validate step calls for.
+Follow the universal contract in root `AGENTS.md` after the first green and
+before handoff or publication. It applies whether the work stops without a PR,
+ships as one PR, or ships as a stack.
 
 ## Acceptance evidence
 

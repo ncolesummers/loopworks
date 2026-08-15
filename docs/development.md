@@ -143,8 +143,9 @@ PR shape does not grant publication authority. For a single PR, use
 requires explicit authority to create its worktree and branches, commit, push,
 and open PRs. Without that authority, record the proposed layers and follow the
 paused `implement-issue` boundary. With it, keep the root guide's issue-backed
-TDD, worktree, review, validation, and provenance requirements, but use
-`gh-stack` rather than either single-PR skill for branches and publication.
+TDD, worktree, review, validation, and provenance requirements. Use
+`implement-issue-pr` for the issue workflow and acceptance evidence, and add
+`gh-stack` only for the stacked branch and publication mechanics.
 
 ### Split by meaning
 
@@ -176,14 +177,20 @@ inside it. Each branch must be coherent and independently satisfy the relevant
 tests and repository validation because GitHub evaluates every layer against
 the stack's trunk rules.
 
+The root guide's adversarial review is universal, not a single-PR workflow
+step. Before submitting a stack, both reviewers inspect every proposed PR diff
+in dependency context and the assembled top-of-stack diff.
+
 ### Work with a stack
 
-GitHub stacked pull requests are in public preview. Install the extension with
-`gh extension install github/gh-stack`; agents must also use the repository's
-`gh-stack` skill, which supplies the non-interactive command contract and error
-recovery details. This project guide overrides generic examples in that skill:
-do not move behavior tests or routine documentation into later layers merely
-because they are different file types.
+GitHub stacked pull requests are in public preview and require GitHub CLI 2.90.0
+or later. Check `gh --version`, then install the extension with `gh extension
+install github/gh-stack`. Agents must also use the repository's `gh-stack`
+skill, which supplies the non-interactive command contract and error recovery
+details. The version here overrides that vendored skill's older generic GitHub
+CLI minimum. This project guide also overrides generic split examples in that
+skill: do not move behavior tests or routine documentation into later layers
+merely because they are different file types.
 
 Create branches from bottom to top. Stage deliberately so work lands in the
 layer where it belongs, and keep the repository's signed-commit policy:
@@ -196,20 +203,27 @@ git worktree add -b agent/123-model \
 cd ../loopworks-worktrees/123-feature
 bun install
 
-git config rerere.enabled true
-git config remote.pushDefault origin
+# Enable per-worktree config once, then keep these values out of sibling trees.
+git config extensions.worktreeConfig true
+git config --worktree rerere.enabled true
+git config --worktree remote.pushDefault origin
 gh stack init agent/123-model
-# Write the model test, show red, implement green, and validate.
+# Run the model layer's TDD, dual-review loop, validation, and preflight.
+bun run commit:preflight
 git add path/to/model.test.ts path/to/model.ts
 git commit -S -m "feat(model): add the issue model"
 git verify-commit HEAD
 
 gh stack add agent/123-service
-# Repeat red, green, and validation for the service layer.
+# Repeat TDD, dual review, validation, and preflight for the service layer.
+bun run commit:preflight
 git add path/to/service.test.ts path/to/service.ts
 git commit -S -m "feat(service): consume the issue model"
 git verify-commit HEAD
 
+# Have both reviewers inspect every layer and the assembled top diff. Resolve
+# findings, return revised diffs to both, and repeat until the stack is clear.
+bun run validate
 gh stack submit --auto
 gh stack view --json
 ```
@@ -241,14 +255,17 @@ gh stack rebase --upstack
 gh stack view --json
 # Visit every rewritten layer, rerun its relevant checks, and verify every
 # rewritten commit's signature. Run bun run validate from the top layer.
+# Return every rewritten layer diff and the assembled top diff to both
+# adversarial reviewers; resolve findings and repeat until both clear it.
 gh stack push
 gh stack view --json
 ```
 
 Do not push after a rebase until every rewritten layer passes its checks and all
-rewritten commits pass local signature verification. Rerun GitHub provenance
-checks after pushing. Do not use GitHub rebase-and-merge; ADR 0026 disallows it
-because it cannot satisfy the signature contract.
+rewritten commits pass local signature verification, and both reviewers have
+reviewed the final rewritten stack. Rerun GitHub provenance checks after
+pushing. Do not use GitHub rebase-and-merge; ADR 0026 disallows it because it
+cannot satisfy the signature contract.
 
 The installed `gh-stack` skill explains merge mechanics, not LoopWorks merge
 authority. Agents stop at draft PRs and never run its merge command. Version

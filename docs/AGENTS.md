@@ -14,6 +14,12 @@ review, loop manifests, and contributor-facing documentation under `docs/`.
 4. Update `docs/security-review.md` when auth or session behavior changes the
    durable security expectation.
 5. Keep docs Markdownlint-compliant.
+6. Use unit tests for documentation only when they protect a machine-enforced
+   contract, such as generated artifacts, resolvable links or symlinks,
+   schemas, or executable commands. Do not pin headings, phrases, or editorial
+   wording merely to prove that guidance exists; use Markdownlint, focused
+   review, and acceptance evidence for prose. Exact text belongs in a test only
+   when another tool consumes that text as an interface.
 
 ## Routing
 
