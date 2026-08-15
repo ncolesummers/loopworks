@@ -96,6 +96,12 @@ describe("agent context budget", () => {
     expect(implementIssuePrSkill).toContain("name: implement-issue-pr\n");
   });
 
+  it("ships the gh-stack skill through the shared .agents skill directory", () => {
+    expect(readlinkSync(".claude/skills/gh-stack")).toBe("../../.agents/skills/gh-stack");
+    // Resolves, so the symlink is not left dangling by a partial commit.
+    expect(statSync(".claude/skills/gh-stack/SKILL.md").isFile()).toBe(true);
+  });
+
   it("gives the worktree variant its own branch, commits, and draft PR", () => {
     const authorized = skillSections(implementIssuePrSkill);
 

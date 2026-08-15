@@ -54,8 +54,8 @@ green-only report is not evidence.
 
 ### 4. Adversarial review
 
-For non-trivial changes, run the adversarial review below after the first green,
-then resolve findings and re-run focused checks.
+Run the universal adversarial review from root `AGENTS.md` after the first
+green, then resolve findings and re-run focused checks.
 
 ### 5. Validate and pause
 
@@ -109,18 +109,9 @@ Exception: the test-plan subagent may start and explore the app with
 
 ## Adversarial review
 
-Two reviewers in parallel, fresh contexts, identical brief. Their inputs are the
-issue, the ACs, the test plan, and the diff — never this session's reasoning.
-
-Brief, verbatim:
-
-> You did not write this and do not want it merged. Exhaustively find reasons
-> the code or plan creates bugs or does not work. Return findings only:
-> severity, failing scenario or repro. No fixes, no praise. An empty list must
-> state what you attacked and why it held.
-
-Dedupe both lists. Fix or defer each finding with a stated reason, then re-run
-the checks the validate step calls for.
+Follow the universal contract in root `AGENTS.md` after the first green and
+before handoff or publication. It applies whether the work stops without a PR,
+ships as one PR, or ships as a stack.
 
 ## Acceptance evidence
 

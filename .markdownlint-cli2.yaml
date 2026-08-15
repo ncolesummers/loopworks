@@ -15,3 +15,6 @@ ignores:
   - ".claude/worktrees"
   - "CLAUDE.md"
   - "**/CLAUDE.md"
+  # Vendored GitHub skill; keep its provenance-bound source byte-for-byte.
+  - ".agents/skills/gh-stack/SKILL.md"
+  - ".claude/skills/gh-stack/SKILL.md"

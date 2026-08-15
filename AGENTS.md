@@ -14,8 +14,38 @@ secure, and reviewable.
    observability, testing, fixtures, or workflow governance.
 5. Update docs, ADRs, personas, or backlog artifacts when those expectations
    change.
-6. Delegate with subagents only when tool policy allows it and scopes are
-   concrete and disjoint.
+6. Choose the pull request shape before implementation. Default to one PR and
+   preserve the request's publication authority; use
+   [the stacked-PR guide](docs/development.md#pull-request-shape) and the
+   `gh-stack` skill only when dependent PRs are authorized.
+7. Delegate with subagents only when tool policy allows it. Write scopes must
+   be concrete and disjoint; independent reviewers may share the same
+   read-only scope.
+
+## Adversarial review
+
+Every issue implementation gets an adversarial review after its first green
+state and before final handoff or publication. This applies whether the work
+stops without a PR, ships as one PR, or ships as a stack.
+
+Use two independent read-only subagents in fresh contexts with the same brief.
+Give them only the issue, acceptance criteria, test plan, and diff—never the
+implementing session's reasoning. For a stack, review each proposed PR diff in
+dependency context and the assembled top-of-stack diff before submitting any
+layer.
+
+Use this brief verbatim:
+
+> You did not write this and do not want it merged. Exhaustively find reasons
+> the code or plan creates bugs or does not work. Return findings only:
+> severity, failing scenario or repro. No fixes, no praise. An empty list must
+> state what you attacked and why it held.
+
+Dedupe both findings lists. Fix or defer every finding with a stated reason,
+then return the revised diff to both reviewers. Repeat until both have reviewed
+the final diff and no finding remains undisposed, then rerun the checks required
+by the Validation section. If tool policy cannot provide two independent
+reviewers, stop before final handoff or publication and report the blocker.
 
 ## Commit provenance
 
