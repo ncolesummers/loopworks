@@ -1,154 +1,110 @@
-# Polly LoopWorks Model Routing
+# Polly LoopWorks Routing and Enforcement
 
-This document is the public routing and cross-review contract for the
-project-scoped `polly-loopworks` Omnigent bundle. Worker names encode model
-tiers, so an orchestrator chooses a named role instead of remembering or
-overriding a model string.
+This is the public contract for the repository-scoped `polly-loopworks` bundle.
+Worker names encode routing tiers; the orchestrator selects a role instead of
+remembering a model string.
 
-LoopWorks uses three subscriptions with independent meters: **OpenAI Pro 5x,
-Anthropic $100, and Gemini $20**. OpenAI meters reasoning time rather than
-messages, so routing optimizes for reasoning steps and output tokens. Spill
-across providers instead of waiting for one allowance to reset.
+## Supported runtime
 
-## Verified harness availability
+The bundle currently targets the LoopWorks macOS host. Reviewer configs set
+`sandbox.type: darwin_seatbelt` explicitly and therefore fail loudly on Linux
+instead of selecting an unavailable sandbox or silently running without one.
+A Linux deployment needs separate reviewer specs with an explicit
+`linux_bwrap` backend and verified `bwrap` installation.
 
-The aliases below were confirmed on the target machine on 2026-08-15.
-Subscription logins expose no model-listing API, so this is a curated catalog,
-not a live provider probe.
+The Antigravity native harness has no policy-enforcement path for this bundle:
+it discards the worker prompt and launches without a binding sandbox. Therefore
+there is no Gemini worker in the roster. A human, not an unconfined model,
+settles a disagreement the two configured reviewers cannot resolve.
 
-| Bundle workers | CLI | Status | Models |
-| --- | --- | --- | --- |
-| `sol`, `luna`, `terra`, `reviewer_sol` | `codex` | Available | `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.5` |
-| `opus`, `reviewer_opus` | `claude` | Available | `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `claude-fable-5` |
-| `gemini` | `agy` | Boots with Gemini 3.7 Flash (high); model enumeration unavailable | Harness default only |
+## Routing tiers
 
-The OpenAI and Anthropic legs are executable. The Gemini leg must pass a smoke
-test before a workflow depends on it.
+| Worker | Model | Use |
+| --- | --- | --- |
+| `sol` | `gpt-5.6-sol` | Default substantive implementation |
+| `luna` | `gpt-5.6-luna` | Mechanical and volume work |
+| `terra` | `gpt-5.6-terra` | Work beyond Luna that does not need Sol |
+| `opus` | `claude-opus-5` | Architecture, ambiguity, escalation, provider spill |
+| `reviewer_sol` | `gpt-5.6-sol` | Correctness, edge cases, test adequacy |
+| `reviewer_opus` | `claude-opus-5` | Architecture, blast radius, coupling |
 
-## Implementation tiers
+No worker pins `claude-fable-5`. A CEL policy denies a dispatch-time Fable
+override and custom child creation. Changing that requires an explicit policy
+edit.
 
-### Default: `sol` (`gpt-5.6-sol`)
+## Binding controls
 
-Use for substantive implementation: features, refactors, multi-file changes,
-debugging, and tests. It averages roughly 61 reasoning steps and 60,000 output
-tokens per task in the benchmark evidence behind this policy, about half the
-burn of alternatives at equal or better accuracy. The expected allowance is
-75–450 messages per five-hour window.
+### Reviewers
 
-Do not use Sol for mechanical edits; route those to Luna.
+Both reviewer configs:
 
-### Volume: `luna` (`gpt-5.6-luna`)
+- disable bypass modes (`yolo: false` or Claude `permission_mode: plan`);
+- use an explicit Seatbelt sandbox with no workspace write path;
+- apply the public `read_only_os` policy to direct edit tools;
+- deny every native and Omnigent shell tool through CEL; and
+- retain `blast_radius` with `gate_pushes: true` as defense in depth.
 
-Use for mechanical edits, renames, docstrings, type annotations, configuration,
-changelogs, log reading, triage, verification, summarization, and parallel
-fan-out. The expected allowance is 250–1,400 messages per five-hour window.
-Using Luna freely protects the Sol allowance.
+The `.polly` hidden directory is readable so reviewers can consume the packet,
+but it remains non-writable. Reviewers receive no skills and policies block the
+human-facing orchestration skills plus native agent-spawn tool names.
 
-### Mid-tier: `terra` (`gpt-5.6-terra`)
+### Implementers
 
-Use for real work that is too heavy for Luna but does not require Sol. Terra is
-the second OpenAI spill target, with an expected allowance of 100–550 messages
-per five-hour window.
+Omnigent makes the runner launch workspace authoritative for every child. Its
+current dispatch schema has no per-child cwd, and a worker's configured cwd is
+overridden by the runner workspace. Consequently no bundle setting can move a
+worker from the main checkout into a sibling issue worktree.
 
-### Architecture and cross-provider spill: `opus` (`claude-opus-5`)
+The managed workflow therefore requires the bundle itself to be launched from
+the intended sibling worktree and stops before dispatch when effective cwd does
+not match. This is an explicit operational precondition, not a filesystem
+containment claim. Implementers remain trusted writers inside that launch
+workspace.
 
-Use Opus when:
+Implementers use `gate_pushes: false` so authorized publication can run without
+an approval deadlock. A separate CEL policy denies `gh pr merge` regardless of
+that setting. The orchestrator uses `gate_pushes: true` and the same merge deny.
 
-- Sol is throttled;
-- Sol has failed twice on the same task;
-- the work is architectural, ambiguous, or exploratory; or
-- an adversarial perspective from the Anthropic provider is required.
+### Nested agents and skills
 
-Anthropic has a separate meter, so this is headroom relative to the OpenAI
-pool. Opus burns roughly twice Sol's steps for a tied benchmark score. Do not
-use it for bulk or fan-out work.
+Implementers discover only `tdd-implement`, `browser-validate`, and
+`commit-signed-pr`; reviewers discover no skills. Every worker also carries:
 
-### Tiebreak only: `gemini` (harness default)
+- public `block_skills` denial for `implement-issue` and
+  `implement-issue-pr`; and
+- CEL denial for native and Omnigent agent-creation tool names.
 
-The `antigravity-native` harness enumerates no models, so this worker has no
-`executor.model` pin. It currently runs Gemini 3.7 Flash by default. Use it
-only when:
+The human-facing issue skills explain managed mode, while the three worker
+skills contain craft only. Sequence, reviewer dispatch, and authority remain in
+the bundle-local orchestrator skill.
 
-- both OpenAI and Anthropic are throttled;
-- context exceeds what Sol or Opus can hold in one session; or
-- Sol and Opus reviewers still disagree after one reconciliation round.
+## Review and provenance record
 
-This is the smallest subscription tier and has the heaviest measured per-task
-burn at roughly 125 steps. Until the harness passes a smoke test, escalate a
-surviving reviewer disagreement to a human rather than Gemini.
+Every issue change receives fresh `reviewer_sol` and `reviewer_opus` sessions
+in the same dispatch turn. Each sees only the issue, acceptance criteria, test
+plan, and diff by file path and never sees the other's findings. The authoring
+worker disposes findings; both reviewers assess the final diff.
 
-## Prohibited routing
+Every PR body and handoff records:
 
-- Never select `claude-fable-5` for benchmark performance. It has a lower
-  DeepSWE score than Opus 5 at equal token burn. It is allowed only as a
-  deliberate safeguard or policy choice. The orchestrator's CEL guardrail
-  denies a dispatch-time override, so choosing Fable requires an explicit,
-  reviewable policy change.
-- Never use Gemini 3.5 Flash or 3.6 Flash for coding work.
-- Never use Sol for mechanical edits; use Luna.
-- Never use Opus for bulk or fan-out work.
-- Never assume the five-hour window is the only limit. Weekly caps and shared
-  credit pools still apply.
+- author model and provider;
+- Reviewer A model and provider;
+- Reviewer B model and provider; and
+- whether either reviewer shared the author's model lineage.
 
-## Dual adversarial cross-review
+This factual record is required on every run, including fallbacks. There is no
+categorical stamp that can imply a model or provider different from the one
+that actually reviewed.
 
-Every issue implementation receives two independent reviewers in fresh
-contexts, regardless of diff size:
+## Workflow scope
 
-- **Reviewer A — `reviewer_sol`:** correctness, edge cases, test adequacy, and
-  specification conformance.
-- **Reviewer B — `reviewer_opus`:** architecture, blast radius, coupling, and
-  implications for adjacent subsystems.
+The managed bundle supports one draft pull request per issue. Dependent
+pull-request layers are outside this skill because they require layer-specific
+review, validation, publication, and assembled-diff evidence that this sequence
+does not map.
 
-Both reviewers are mandatory and normally span vendors. Their worker configs
-declare `sandbox: {}`, which resolves to the platform's read-only OS sandbox
-(`darwin_seatbelt` on macOS or `linux_bwrap` on Linux) and fails loudly when
-unavailable. The `read_only_os` tool guardrail adds a second layer, so reviewers
-report findings and cannot edit the implementation.
-
-### Review mechanics
-
-1. Dispatch Reviewer A and Reviewer B in the same orchestrator turn so they run
-   in parallel and neither can see the other's output.
-2. Give each a file path. The file contains only the issue, acceptance
-   criteria, test plan, and diff. Never paste a large multiline diff inline;
-   native TUIs can drop it, especially the antigravity TUI.
-3. Never let the authoring session review its own diff. If the author used Sol,
-   Reviewer A is still a fresh `reviewer_sol` session with no author context.
-4. The authoring worker reconciles deduplicated findings. The orchestrator
-   never edits the diff.
-5. Return the revised review-input file to both reviewers. Repeat until both
-   have reviewed the final diff and every finding is fixed or deferred with a
-   stated reason.
-6. A disagreement that survives one author reconciliation round goes to
-   `gemini` only after its smoke test. Before that, escalate it to a human.
-
-The review pair satisfies Polly's cross-vendor requirement even when Reviewer A
-shares the author's model lineage because the second reviewer is always on the
-other provider and both contexts are fresh.
-
-### Degraded fallback
-
-If Sol is throttled, launch a fresh `reviewer_sol` context with an explicit
-`gpt-5.6-terra` model fallback. If Opus is throttled, launch a second fresh
-`reviewer_sol` context and assign it Reviewer B's architecture and blast-radius
-focus. Both fallbacks retain the reviewer worker's read-only sandbox and
-`read_only_os` guardrail. Never use the writable `sol` or `terra` implementer
-config for review.
-
-The `reviewer_sol` prompt treats architecture and blast radius as its focus
-when it is explicitly dispatched as degraded Reviewer B. Two reviewers from
-one provider are better than one reviewer, but they do not provide vendor
-independence.
-
-The orchestrator announces either fallback before dispatch. Terra Reviewer A
-plus Opus Reviewer B still spans vendors and does not receive the degradation
-stamp. The Opus-to-Sol fallback loses vendor independence, so the orchestrator
-must stamp the PR body and handoff with
-`reviewed without vendor independence`. It must never apply that fallback
-silently. If two read-only reviewers cannot run, stop before handoff or
-publication; review is never optional.
-
-Custom `sys_session_create` launches are denied. The bundle keeps upstream's
-spawn surface but routes execution only through declared workers, preventing a
-custom config from bypassing the pinned roster or Fable policy.
+All dispatches begin with the fixed role/position/authority header in the
+bundle skill. `.polly/workflow-state.md` is append-only across transitions and
+orients resumed sessions. Validation gates run serially. The contributor-bound
+worker performs preflight, signed commit, push, draft PR publication, and
+GitHub provenance. No actor marks ready or merges.

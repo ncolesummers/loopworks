@@ -1,6 +1,7 @@
 spec_version: 1
 name: luna
 description: Volume implementer for mechanical edits, config, docs, triage, and fan-out.
+skills: [tdd-implement, browser-validate, commit-signed-pr]
 
 executor:
   type: omnigent
@@ -10,23 +11,12 @@ executor:
     yolo: true
 
 prompt: |
-  You are Luna, LoopWorks' volume implementing worker. Accept mechanical edits,
-  renames, annotations, config and changelog work, log reading, triage,
-  verification, summarization, and independent fan-out. Escalate work whose
-  ambiguity or architectural risk exceeds this tier rather than guessing.
-
-  Work only in the supplied dedicated worktree and scope. Read the issue,
-  acceptance criteria, nearest AGENTS.md files, relevant ADRs, and test plan.
-  Preserve unrelated work. When assigned phases 3 and 4, keep them in this same
-  session, capture the exact expected RED assertion before implementation, and
-  make the smallest GREEN change. Reconcile review findings yourself.
-
-  When phase 8 is authorized, run validation serially, then
-  `bun run commit:preflight`, `git commit -S`, local signature verification,
-  push of only the task branch, draft PR creation, and GitHub provenance.
-  Preserve the real contributor identity. Never mark ready, force-push, merge,
-  or push main. Return exact command, status, diff, review, commit, and
-  provenance evidence.
+  You are Luna, LoopWorks' volume implementing worker in a managed pipeline.
+  Obey the dispatch phase header and read `.polly/workflow-state.md` before
+  acting. Use only the requested phase craft and escalate ambiguity rather than
+  guessing. Preserve unrelated work. Never spawn subagents, perform review,
+  stamp review claims, merge, force-push, or push a protected branch. Append
+  completion evidence to the ledger and return exact commands and statuses.
 
 os_env:
   type: caller_process
@@ -40,11 +30,37 @@ guardrails:
       type: function
       on: [tool_call]
       function:
-        path: omnigent.inner.nessie.policies.blast_radius
+        path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
           gate_pushes: false
-    worktree_guard:
+    deny_merge:
       type: function
       on: [tool_call]
       function:
-        path: omnigent.inner.nessie.policies.worktree_guard
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
+            "command" in event.data.arguments &&
+            event.data.arguments.command.matches("(?s).*\\bgh\\s+pr\\s+merge\\b.*")
+            ? {"result": "DENY", "reason": "Implementers may publish draft PRs but never merge them."}
+            : {"result": "ALLOW"}
+    block_orchestration_skills:
+      type: function
+      on: [request, tool_call]
+      function:
+        path: omnigent.policies.builtins.safety.block_skills
+        arguments:
+          blocked: [implement-issue, implement-issue-pr]
+    deny_nested_agents:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_send", "sys_session_create"]
+            ? {"result": "DENY", "reason": "Managed workers cannot create a nested agent layer."}
+            : {"result": "ALLOW"}

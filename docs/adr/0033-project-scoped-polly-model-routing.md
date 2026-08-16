@@ -1,4 +1,4 @@
-# ADR 0033: Project-Scoped Polly Model Routing And Review Isolation
+# ADR 0033: Project-Scoped Polly Routing With Explicit Enforcement Boundaries
 
 Status: Proposed
 Date: 2026-08-15
@@ -6,84 +6,98 @@ Issue: [#267 — Project-scoped Polly orchestrator with subscription-aware model
 
 ## Context
 
-LoopWorks delegates coding work through Omnigent's Polly orchestrator across
-three independently metered subscriptions. The upstream Polly bundle exposes
-workers by vendor and permits model selection at dispatch time. That makes the
-project's cost/quality routing policy a repeated prompt-time judgment and does
-not structurally prevent a reviewer from editing the implementation.
+LoopWorks delegates coding work through Omnigent across separately metered
+OpenAI and Anthropic subscriptions. Generic vendor-named workers leave model
+tier, reviewer independence, phase authority, and contributor provenance to
+prompt-time judgment.
 
-The single-agent `implement-issue-pr` workflow also assigns test planning, TDD,
-review, validation, and publication to one session. An orchestration-only root
-must distribute those phases without breaking the red-before-green evidence
-chain, cross-review independence, or signed contributor provenance.
+The first proposal overstated its containment. Direct-write policies did not
+cover shell, reviewer bypass modes were enabled, outward-command approval was
+disabled, an empty sandbox block had platform-dependent behavior, and the
+Antigravity native harness did not enforce its worker prompt or policies. The
+configured cwd guard also could not confine children to this repository's
+sibling-worktree convention.
 
 ## Decision
 
-Add a repository-scoped Omnigent bundle at `.omnigent/polly-loopworks/` with a
-restricted, role-named roster:
+Add `.omnigent/polly-loopworks/` with six role-named workers:
 
-- `sol`, `luna`, `terra`, and `opus` are model-pinned implementing tiers;
-- `reviewer_sol` and `reviewer_opus` are model-pinned adversarial reviewers on
-  different vendors; and
-- `gemini` is an unpinned, read-only tiebreak worker because its antigravity
-  harness exposes only a default model.
+- `sol`, `luna`, `terra`, and `opus` are model-pinned implementers; and
+- `reviewer_sol` and `reviewer_opus` are model-pinned reviewers from different
+  providers.
 
-Implementers carry `worktree_guard`. Reviewers use the platform's read-only OS
-sandbox and `read_only_os`, so reviewer mutation is denied by mechanism rather
-than prompt convention. A purpose guard requires every dispatch to declare its
-role, spawn bounds cap per-turn fan-out, and a CEL policy denies nested
-`args.model: claude-fable-5`. Fable remains available only through an explicit,
-reviewable policy change because its DeepSWE score is lower than Opus 5 at equal
-token burn.
+Do not register a Gemini worker. The available Antigravity native executor
+cannot bind the worker prompt, policy hook, or read-only sandbox, so it is not a
+safe automated tiebreak.
 
-Every issue implementation receives two fresh reviewers in parallel, one Sol
-and one Opus, using a file-based handoff containing only issue, acceptance
-criteria, test plan, and diff. The author reconciles findings; the orchestrator
-never edits or merges. Reviewer configs explicitly select the portable platform
-sandbox and carry `read_only_os`. If a preferred model is throttled, the
-workflow may override the model on the read-only `reviewer_sol` config. It never
-dispatches a writable implementer as a reviewer, announces any fallback, stamps
-only an actual loss of vendor independence, and stops publication if two
-read-only reviewers cannot run. Custom child creation is denied so it cannot
-bypass the declared roster or model policy.
+Target the current bundle at the LoopWorks macOS host. Reviewers explicitly use
+`darwin_seatbelt` with no workspace write grants, disable harness bypass modes,
+deny direct edit tools, and deny all shell tools. A Linux deployment requires a
+separate explicit `linux_bwrap` configuration and verified runtime support.
 
-The bundle-local `implement-issue-pr` skill keeps test planning and TDD in one
-implementing session, runs validation gates serially, and leaves commit,
-signing, push, draft PR creation, and GitHub provenance with the implementing
-worker. This preserves the real contributor identity while keeping the root
-orchestration-only.
+Use only public policy handlers under `omnigent.policies.builtins.*`. The
+invariant suite imports every configured handler against a pinned Omnigent
+source revision. CEL policies deny custom children, nested worker agent tools,
+reviewer shell, Fable overrides, and pull-request merge commands. Reviewer
+`blast_radius` uses `gate_pushes: true`; implementers retain `false` for the
+authorized publication step, with merge denied separately.
+
+Do not claim filesystem confinement for implementers. Empirical runtime
+resolution demonstrated that `OMNIGENT_RUNNER_WORKSPACE` overrides even an
+absolute worker cwd, and `sys_session_send` has no per-child cwd argument. The
+managed workflow must be launched from the intended sibling issue worktree and
+must stop before dispatch if effective cwd differs. Implementers are trusted
+writers within that launch workspace until Omnigent exposes a binding
+per-worker worktree mechanism.
+
+Split worker craft into `tdd-implement`, `browser-validate`, and
+`commit-signed-pr`. The human-facing issue skills compose those files and retain
+single-agent behavior. Managed workers receive only phase craft, policies block
+the human orchestration skills and agent-creation tools, every dispatch carries
+a position/authority header, and `.polly/workflow-state.md` is append-only at
+transitions.
+
+Limit the managed bundle to one draft pull request. Supporting dependent layers
+would require per-layer and assembled-diff review, validation, publication, and
+provenance mapping not represented by this sequence.
+
+Every PR body and handoff records the actual author and reviewer models and
+providers and whether either reviewer shared the author's model lineage. This
+replaces categorical independence stamps that can misdescribe a real run.
 
 ## Consequences
 
-Routing choices become inspectable configuration and named roles instead of
-ad-hoc model strings. The scarce Sol and Opus allowances are protected by Luna,
-Terra, and provider spill, while every publication retains two structurally
-read-only reviews.
-
-The roster intentionally duplicates harnesses to pin tier models. Adding or
-renaming a worker requires updating both `tools.agents` and the physical
-`agents/` directory because Omnigent discovers every directory independently.
-The Gemini tiebreak remains unavailable for required decisions until its
-harness passes a smoke test. A provider outage may preserve two reviewers but
-lose vendor independence; that degradation must be visible in the PR and
-handoff.
+- Routing mistakes become roster/config changes instead of ad hoc model names.
+- Review mutation is blocked through native sandbox, harness mode, edit-tool
+  denial, and shell denial on the supported macOS host.
+- Reviewers cannot run tests through shell; the review packet must contain all
+  needed diff and test evidence.
+- The bundle fails loudly rather than degrading to unsandboxed review on Linux.
+- Gemini capacity is unavailable until its native harness gains a binding
+  policy path.
+- Automatic creation of a sibling worktree after the orchestrator starts is
+  unsupported; the operator must launch from the prepared issue worktree.
+- Managed dependent pull-request layers remain outside this workflow.
+- The pinned external policy-source revision becomes a CI validation input and
+  must be updated deliberately when the runtime changes.
 
 ## Validation
 
-1. `tests/unit/agent/polly-loopworks-spec.test.ts` parses the orchestrator and
-   worker YAML, checks the exact roster and model pins, and enforces role
-   guardrails and the nested Fable deny expression.
-2. The same suite checks phase ownership, serial validation, file-based parallel
-   review, author reconciliation, degraded-review disclosure, and the no-merge
-   boundary.
-3. `bun run check` and `bun run validate` verify formatting, static analysis,
-   Markdown, agent-doc synchronization, tests, and repository security gates.
-4. Two fresh read-only reviewers attack the issue contract, test plan, and
-   proposed diff before publication and re-review the final diff.
+- `bun vitest run tests/unit/agent/polly-loopworks-spec.test.ts --reporter=verbose`
+  exercises named invariants for roster, exact models, reviewer sandbox and
+  shell denial, merge denial, nested-agent denial, public handler imports,
+  phase skills, dispatch headers, and the ledger.
+- A runtime resolver probe compares an absolute sibling-worktree candidate
+  against the actual runner workspace and records the effective cwd.
+- `bun run validate` remains the aggregate repository gate and runs serially.
 
-## Follow-Ups
+## Follow-ups
 
-1. Smoke-test the `antigravity-native` harness before enabling Gemini tiebreaks.
-2. Revisit allowance estimates and aliases when subscription catalogs change.
-3. Keep upstream Polly improvements under review and deliberately port relevant
-   guardrail changes into this project-scoped fork.
+- Add a Linux reviewer variant only after `linux_bwrap` startup and denial
+  behavior are tested on the target host.
+- Reconsider Gemini only when its native executor propagates prompts and policy
+  decisions through an enforceable hook and sandbox.
+- Replace the launch-cwd precondition when Omnigent provides a tested
+  per-worker cwd/workspace boundary for sibling worktrees.
+- Add managed dependent-layer orchestration only with per-layer and assembled
+  evidence contracts.

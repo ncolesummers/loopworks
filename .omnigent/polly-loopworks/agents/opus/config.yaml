@@ -1,6 +1,7 @@
 spec_version: 1
 name: opus
 description: Architecture, ambiguity, exploration, and cross-provider implementation spill.
+skills: [tdd-implement, browser-validate, commit-signed-pr]
 
 executor:
   type: omnigent
@@ -10,23 +11,12 @@ executor:
     permission_mode: auto
 
 prompt: |
-  You are Opus, LoopWorks' architecture and exploratory implementing worker.
-  Take ambiguous or architectural work, primary cross-provider spill when Sol
-  is throttled, or escalation after Sol fails twice. Do not accept bulk or
-  mechanical fan-out that belongs with Luna.
-
-  Work only in the supplied dedicated worktree and acceptance scope. Read the
-  issue, nearest AGENTS.md files, relevant ADRs, and test plan. Preserve
-  unrelated work. Keep phases 3 and 4 in the same session: establish the exact
-  RED assertion before writing the smallest GREEN implementation. Perform
-  browser validation when applicable. Reconcile both reviewers' findings
-  yourself; the orchestrator never edits the diff.
-
-  When phase 8 is authorized, run validation serially, then
-  `bun run commit:preflight`, `git commit -S`, local signature verification,
-  push only the task branch, create a draft PR, and verify GitHub provenance.
-  Preserve the real contributor identity. Never mark ready, force-push, merge,
-  or push main. Return exact commands, statuses, decisions, and evidence.
+  You are Opus, LoopWorks' architecture implementing worker in a managed
+  pipeline. Obey the dispatch phase header and read
+  `.polly/workflow-state.md` before acting. Use only the requested phase craft.
+  Preserve unrelated work. Never spawn subagents, perform review, stamp review
+  claims, merge, force-push, or push a protected branch. Append completion
+  evidence to the ledger and return exact commands and statuses.
 
 os_env:
   type: caller_process
@@ -40,11 +30,37 @@ guardrails:
       type: function
       on: [tool_call]
       function:
-        path: omnigent.inner.nessie.policies.blast_radius
+        path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
           gate_pushes: false
-    worktree_guard:
+    deny_merge:
       type: function
       on: [tool_call]
       function:
-        path: omnigent.inner.nessie.policies.worktree_guard
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
+            "command" in event.data.arguments &&
+            event.data.arguments.command.matches("(?s).*\\bgh\\s+pr\\s+merge\\b.*")
+            ? {"result": "DENY", "reason": "Implementers may publish draft PRs but never merge them."}
+            : {"result": "ALLOW"}
+    block_orchestration_skills:
+      type: function
+      on: [request, tool_call]
+      function:
+        path: omnigent.policies.builtins.safety.block_skills
+        arguments:
+          blocked: [implement-issue, implement-issue-pr]
+    deny_nested_agents:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_send", "sys_session_create"]
+            ? {"result": "DENY", "reason": "Managed workers cannot create a nested agent layer."}
+            : {"result": "ALLOW"}

@@ -1,35 +1,29 @@
 spec_version: 1
 name: reviewer_sol
 description: Reviewer A for correctness, edge cases, test adequacy, and spec conformance.
+skills: none
 
 executor:
   type: omnigent
   model: gpt-5.6-sol
   config:
     harness: codex-native
-    yolo: true
+    yolo: false
 
 prompt: |
-  You are a fresh and independent adversarial reviewer. As Reviewer A, focus on
-  correctness, edge cases, test adequacy, and specification conformance. When
-  the dispatch explicitly identifies you as the degraded Reviewer B fallback,
-  focus instead on architecture, blast radius, coupling, and adjacent systems.
-  You did not write the change. Your filesystem is read-only: never edit code,
-  tests, configuration, docs, the input file, or the diff.
-
-  The dispatch references one review-input file containing only the issue,
-  acceptance criteria, test plan, and diff. Read that file from its path. Do not
-  ask for the diff to be pasted inline and do not inspect another reviewer's
-  output. Return findings only: severity plus a concrete failing scenario or
-  repro. No fixes and no praise. If the list is empty, state what you attacked
-  and why it held.
+  You are Reviewer A in a managed pipeline. Focus on correctness, edge cases,
+  test adequacy, and specification conformance. Read the supplied review packet
+  with read tools only. Return findings only: severity and a concrete failing
+  scenario or repro. No fixes and no praise. Never use shell, edit files,
+  create commits, push, merge, load orchestration skills, or spawn subagents.
 
 os_env:
   type: caller_process
   cwd: .
-  # An empty block explicitly selects the portable platform default:
-  # darwin_seatbelt on macOS or linux_bwrap on Linux (fail-loud if unavailable).
-  sandbox: {}
+  sandbox:
+    type: darwin_seatbelt
+    write_paths: []
+    cwd_allow_hidden: [.venv, .polly]
 
 guardrails:
   policies:
@@ -37,11 +31,40 @@ guardrails:
       type: function
       on: [tool_call]
       function:
-        path: omnigent.inner.nessie.policies.blast_radius
+        path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
-          gate_pushes: false
+          gate_pushes: true
     read_only_os:
       type: function
       on: [tool_call]
       function:
-        path: omnigent.inner.nessie.policies.read_only_os
+        path: omnigent.policies.builtins.orchestration.read_only_os
+    deny_shell:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal", "execute_code", "developer__shell"]
+            ? {"result": "DENY", "reason": "Reviewer shell access is disabled because shell can mutate the checkout."}
+            : {"result": "ALLOW"}
+    block_orchestration_skills:
+      type: function
+      on: [request, tool_call]
+      function:
+        path: omnigent.policies.builtins.safety.block_skills
+        arguments:
+          blocked: [implement-issue, implement-issue-pr]
+    deny_nested_agents:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_send", "sys_session_create"]
+            ? {"result": "DENY", "reason": "Managed workers cannot create a nested agent layer."}
+            : {"result": "ALLOW"}

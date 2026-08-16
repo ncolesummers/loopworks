@@ -165,6 +165,28 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # The Polly bundle targets Omnigent policy handlers. Unit tests import the
+      # real public registry from this pinned source revision so a typo or
+      # removed handler cannot pass as a YAML string. Keep the checkout outside
+      # GITHUB_WORKSPACE so repository security scans and source discovery do
+      # not accidentally include a second project.
+      - name: Prepare pinned Omnigent policy registry
+        env:
+          OMNIGENT_REVISION: ba241c3592000b8098101164d3de03d52ca74ddf
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/omnigent-policy-source"
+          python_root="$RUNNER_TEMP/omnigent-policy-python"
+          git init "$source_root"
+          git -C "$source_root" remote add origin https://github.com/omnigent-ai/omnigent.git
+          git -C "$source_root" fetch --depth=1 origin "$OMNIGENT_REVISION"
+          git -C "$source_root" checkout --detach FETCH_HEAD
+          uv venv "$python_root"
+          uv pip install --python "$python_root/bin/python" \
+            cel-python==0.5.0 'pydantic>=2,<3' 'pyyaml>=6,<7'
+          echo "OMNIGENT_SOURCE_ROOT=$source_root" >> "$GITHUB_ENV"
+          echo "OMNIGENT_IMPORT_PYTHON=$python_root/bin/python" >> "$GITHUB_ENV"
+
       - name: Unit tests
         run: bun run test
 
