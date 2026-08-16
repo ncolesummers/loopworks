@@ -112,6 +112,18 @@ Risks:
 | S06 | Security Reviewer | GitHub App callbacks reject forged or replayed state and verify the active operator can access the installation before persisting it. | Unit, integration |
 | S07 | Security Reviewer | A denied or failed sign-in renders mapped copy with an honest next step and never exposes the raw error parameter, provider errors, tokens, scopes, or allowlist internals. | Unit, Playwright |
 
+### Deferred Browser Coverage
+
+A02, A03, R02, S05, and M02 are browser-applicable above, but the product
+surfaces they describe do not exist yet, so the executable journey registry
+(`src/lib/personas/journey-registry.ts`) deliberately declares no journey for
+them. Each is **deferred** with its reason recorded in that module's header:
+the approvals surface renders a single gate, the run timeline collapses the
+Test-writing stage's two artifacts into one string, no run record carries a
+changed-surface coverage field, the approval confirm control performs no write,
+and the loop routing toggle holds React state only. They return once those
+surfaces land.
+
 ### Day-Zero Journey
 
 P05, M04, and M05 are one ordered walk, not three independent scenarios. The
