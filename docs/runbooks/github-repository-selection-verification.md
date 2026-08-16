@@ -263,13 +263,46 @@ new identity and `LOOPWORKS_EXPECTED_STORE_ID` is updated to match (#158).
 To redo step 1, uninstall the App from the org:
 <https://github.com/organizations/loopworks-sandbox/settings/installations>
 
+## Operator-access denial and revocation (#145)
+
+Run this only with a sandbox operator who is allowlisted into the target
+Loopworks environment. Do not remove a production operator from an organization
+to manufacture evidence.
+
+1. Sign in as an allowlisted operator whose GitHub account cannot access the
+   connected installation. `/settings/repositories` must render **Repository
+   list unavailable** without naming the account or installation.
+2. In that page's browser console, run the non-mutating apply:
+
+   ```js
+   await fetch("/api/github/repositories", {
+     method: "POST",
+     headers: { "content-type": "application/json" },
+     body: JSON.stringify({ select: [], deselect: [] }),
+   }).then(async (response) => ({ status: response.status, body: await response.json() }))
+   ```
+
+   Expect `403` and exactly `{status: "access-denied"}`. A `502` is an
+   indeterminate token, configuration, provider, or response failure; investigate
+   it without treating it as proof of denial.
+3. Restore sandbox access and reload. A denial is never cached, so the next read
+   checks GitHub immediately and the normal selection surface returns.
+4. While authorized, load the surface once to establish a successful cache
+   entry, then revoke the sandbox operator's installation access. A refresh may
+   remain authorized for at most 60 seconds. After 60 seconds, reload and repeat
+   the empty POST; both must fail as in steps 1-2, with no selection mutation.
+5. Restore access again. The post-expiry denial is not cached, so the next reload
+   can recover immediately.
+
+Fixture and browser evidence prove only the presentation and interaction states.
+The default Octokit pagination, malformed-response, and provider-error boundary
+is proven offline by `tests/unit/github/installation-gateway.test.ts` (ADR 0022).
+
 ## Known gaps this cannot exercise
 
 - **Multi-installation (#146).** With both orgs connected, selection manages only
   the lower-numbered installation. Connect `loopworks-sandbox` first and check
   which account the surface names before trusting step 3.
-- **Operator-bound authorization (#145).** Any allowlisted operator can manage
-  the installation; there is no per-operator access check to observe.
 - **Large installations (#148).** Eight repos will not surface the batching or
   pagination limits. Nor will they surface rate-limit behavior: the installation
   client carries no retry or throttling plugin, so a secondary rate limit

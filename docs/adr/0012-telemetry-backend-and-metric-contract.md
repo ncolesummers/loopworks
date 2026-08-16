@@ -4,6 +4,7 @@ Status: Proposed
 Date: 2026-07-03
 
 Driving issue: [#21](https://github.com/ncolesummers/loopworks/issues/21)
+Updated by: [#145](https://github.com/ncolesummers/loopworks/issues/145)
 
 ## Context
 
@@ -45,6 +46,7 @@ Research fact sheets with sources are recorded on issue #21.
 | `loopworks.validation.duration` | histogram | `s` | `gate`, `command` |
 | `loopworks.webhook.outcome` | counter | `{delivery}` | `event`, bounded `action`, `outcome` (`authorized`, `unauthorized`, `indeterminate`, `duplicate`, `manifest_drift`, `ignored`, `invalid_signature`, `error`) |
 | `loopworks.github.installation.outcome` | counter | `{attempt}` | `phase`, `outcome` |
+| `loopworks.github.repository_selection.authorization` | counter | `{attempt}` | `operation`, `outcome`, `cache_hit` |
 | `loopworks.loop.registration.outcome` | counter | `{attempt}` | `outcome` (`unauthenticated`, `invalid-request`, `invalid`, `duplicate-key`, `repository-missing`, `registered`, `error`) |
 | `loopworks.agent.tool.outcome` | counter | `{request}` | `agent`, `tool`, `provider`, `outcome` |
 | `loopworks.agent.tool.duration` | histogram | `s` | `agent`, `tool`, `provider`, `outcome` |

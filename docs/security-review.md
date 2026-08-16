@@ -65,6 +65,20 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
     are public endpoints. It only starts the GitHub authorization handshake, and
     it re-sanitizes the submitted `callbackUrl` to a same-origin path rather than
     trusting the hidden field the page rendered.
+11. Repository-selection reads and applies bind the Auth.js user id and
+    immutable provider account id to exactly one server-side GitHub account row,
+    enforce that Auth.js and installation authorization use the same GitHub App,
+    and verify the resolved installation through the user's token before any
+    selected-row read, App credential use, repository listing, or mutation.
+    Only successful decisions are cached, for 60 seconds, by immutable provider,
+    App, and installation ids. Definite denial returns bounded 403;
+    missing, malformed, mismatched, expired, rate-limited, or unavailable
+    evidence is indeterminate and returns generic 502. Neither path exposes the
+    token or identity evidence, and fixture rendering never enters this cache.
+    Successful GitHub re-authentication rotates an existing Auth.js account
+    token because the adapter does not update returning OAuth accounts itself;
+    cache expiry uses a monotonic clock so wall-clock rollback cannot extend the
+    60-second revocation window.
 
 ## Issue Activation Authorization
 
@@ -108,6 +122,10 @@ This review is the final MVP gate. It checks that the portal is safe enough to o
     repository/installation mismatch, permission API failure, duplicate and
     concurrent deliveries, and raw-content exclusion from durable audit and
     OTel.
+12. Repository-selection coverage for cross-actor/provider confusion,
+    same-App configuration, definite denial, indeterminate evidence, exact
+    positive-cache expiry, no negative or error caching, unauthorized stale-row
+    deselection, and token/evidence exclusion from responses and OTel.
 
 ## Approval Audit Notes
 
