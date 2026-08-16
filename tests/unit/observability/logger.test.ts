@@ -75,6 +75,8 @@ describe("Loopworks logger", () => {
     expect(entry.time).toEqual(expect.any(String));
   });
 
+  // Persona S04: logger redaction removes token, secret, authorization,
+  // OAuth, and webhook-sensitive fields.
   it("redacts common secret and token fields", () => {
     const sink = createMemoryDestination();
     const logger = createLogger(

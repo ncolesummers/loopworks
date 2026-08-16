@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { captureBrowserErrors } from "../helpers/browser-errors";
 
 /**
- * The sign-in surface (#214), personas P06 and S07.
+ * Persona P06/S07: the sign-in surface (#214).
  *
  * `tests/e2e/auth-guard.spec.ts` owns the one assertion that must arrive through the guard: that
  * an unauthenticated protected-route request lands here at all. Everything below is about the

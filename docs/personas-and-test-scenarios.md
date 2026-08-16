@@ -114,15 +114,16 @@ Risks:
 
 ### Deferred Browser Coverage
 
-A02, A03, R02, S05, and M02 are browser-applicable above, but the product
-surfaces they describe do not exist yet, so the executable journey registry
-(`src/lib/personas/journey-registry.ts`) deliberately declares no journey for
-them. Each is **deferred** with its reason recorded in that module's header:
-the approvals surface renders a single gate, the run timeline collapses the
-Test-writing stage's two artifacts into one string, no run record carries a
-changed-surface coverage field, the approval confirm control performs no write,
-and the loop routing toggle holds React state only. They return once those
-surfaces land.
+A02, A03, R02, S05, and M02 are browser-applicable above, but the executable
+journey registry (`src/lib/personas/journey-registry.ts`) declares no journey
+for them yet. Each is classified **deferred** in that module's `coverage` list,
+which records why and names the issue tracking it. Some already have partial
+browser coverage in `tests/e2e/portal.spec.ts`; what is deferred is a registry
+journey covering the whole scenario, not all coverage of it.
+
+Neither those reasons nor the tracking issue number are restated here. One
+statement of a fact is checkable; two copies drift, and the stale one is the one
+a reader believes.
 
 ### Day-Zero Journey
 

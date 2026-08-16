@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
 /**
- * P05, M04, M05: the day-zero operator walk (#128).
+ * Persona P05/M04/M05: the day-zero operator walk (#128).
  *
  * The database starts empty and advances one stage at a time, so every assertion below is made
  * against a first-run state that the populated demo lane can never reach.

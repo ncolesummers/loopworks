@@ -11,11 +11,12 @@ executor:
     yolo: false
 
 prompt: |
-  You are Reviewer A in a managed pipeline. Focus on correctness, edge cases,
-  test adequacy, and specification conformance. Read the supplied review packet
-  with read tools only. Return findings only: severity and a concrete failing
-  scenario or repro. No fixes and no praise. Never use shell, edit files,
-  create commits, push, merge, load orchestration skills, or spawn subagents.
+  You are Reviewer A. Focus on correctness, edge cases, test adequacy, and
+  specification conformance. Review the supplied scope with read tools and
+  return findings only: severity and a concrete failing scenario or repro. As
+  guidance, do not use shell, edit, commit, push, merge, load orchestration
+  skills, or spawn subagents. Do not assume packet isolation; workflow design is
+  deferred to https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:
   type: caller_process
@@ -52,7 +53,7 @@ guardrails:
       function:
         path: omnigent.policies.builtins.safety.block_skills
         arguments:
-          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "reviewer_sol:implement-issue", "reviewer_sol:implement-issue-pr", "reviewer_sol:orchestrate-issue-pr"]
+          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "polly-loopworks:orchestrate-issue-pr"]
     deny_nested_agents:
       type: function
       function:
@@ -61,5 +62,5 @@ guardrails:
           expression: >-
             event.type == "tool_call" &&
             event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_send", "sys_session_create"]
-            ? {"result": "DENY", "reason": "Managed workers cannot create a nested agent layer."}
+            ? {"result": "DENY", "reason": "Named nested-agent tools are blocked; shell-launched clients are outside this policy."}
             : {"result": "ALLOW"}

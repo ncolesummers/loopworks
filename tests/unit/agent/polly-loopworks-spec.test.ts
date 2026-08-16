@@ -1,13 +1,26 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
 
 const repoRoot = process.cwd();
 const bundleRoot = path.join(repoRoot, ".omnigent/polly-loopworks");
+const bundleManifestPath = path.join(bundleRoot, ".claude-plugin/plugin.json");
 const orchestrationSkillPath = path.join(bundleRoot, "skills/orchestrate-issue-pr/SKILL.md");
 const phaseSkillNames = ["browser-validate", "commit-signed-pr", "tdd-implement"];
 const omnigentRevision = "ba241c3592000b8098101164d3de03d52ca74ddf";
+const issue280Url = "https://github.com/ncolesummers/loopworks/issues/280";
 
 const implementingWorkers = {
   sol: { harness: "codex-native", model: "gpt-5.6-sol" },
@@ -27,9 +40,7 @@ const handlers = {
   blastRadius: "omnigent.policies.builtins.orchestration.blast_radius",
   blockSkills: "omnigent.policies.builtins.safety.block_skills",
   cel: "omnigent.policies.builtins.cel.cel_policy",
-  purposeGuard: "omnigent.policies.builtins.orchestration.headless_subagent_purpose_guard",
   readOnly: "omnigent.policies.builtins.orchestration.read_only_os",
-  spawnBounds: "omnigent.policies.builtins.orchestration.spawn_bounds",
 } as const;
 
 type Policy = {
@@ -74,11 +85,43 @@ type SkillFrontmatter = {
   metadata?: { "loopworks-skill-class"?: string };
 };
 
-type ClassifiedSkill = {
-  classification: SkillClassification;
+type SkillPolicyManifest = {
+  name?: string;
+  metadata?: {
+    loopworks?: {
+      version?: number;
+      skillClassifications?: Record<string, SkillClassification>;
+      orchestrationBlocklist?: string[];
+    };
+  };
+};
+
+type DiscoveredSkill = {
   name: string;
   path: string;
 };
+
+const expectedSkillClassifications: Record<string, SkillClassification> = {
+  "agent-browser": "CRAFT",
+  "browser-validate": "CRAFT",
+  "commit-signed-pr": "CRAFT",
+  eve: "CRAFT",
+  "gh-stack": "CRAFT",
+  "implement-issue": "ORCHESTRATION",
+  "implement-issue-pr": "ORCHESTRATION",
+  "polly-loopworks:browser-validate": "CRAFT",
+  "polly-loopworks:commit-signed-pr": "CRAFT",
+  "polly-loopworks:orchestrate-issue-pr": "ORCHESTRATION",
+  "polly-loopworks:tdd-implement": "CRAFT",
+  "tdd-implement": "CRAFT",
+};
+
+const expectedOrchestrationBlocklist = [
+  "implement-issue",
+  "implement-issue-pr",
+  "orchestrate-issue-pr",
+  "polly-loopworks:orchestrate-issue-pr",
+].sort();
 
 function readYaml<T>(relativePath: string): T {
   const filePath = path.join(repoRoot, relativePath);
@@ -114,44 +157,29 @@ function skillFrontmatter(skillDirectory: string): SkillFrontmatter {
   return parse(match?.[1] ?? "") as SkillFrontmatter;
 }
 
-function classifiedSkills(): ClassifiedSkill[] {
-  const roots = [path.join(repoRoot, ".agents/skills"), path.join(bundleRoot, "skills")];
+function discoveredSkillIdentities(roots: string[]): DiscoveredSkill[] {
   const discovered = roots.flatMap((root) =>
     skillDirectories(root).map((skillDirectory) => {
       const frontmatter = skillFrontmatter(skillDirectory);
       expect(frontmatter.name, `${skillDirectory} must declare its resolved skill name`).toMatch(
         /^[a-z0-9-]+$/,
       );
-      const classification = frontmatter.metadata?.["loopworks-skill-class"];
-      expect(
-        classification,
-        `${skillDirectory} must classify itself as CRAFT or ORCHESTRATION`,
-      ).toMatch(/^(?:CRAFT|ORCHESTRATION)$/);
+      if (path.basename(skillDirectory) !== frontmatter.name) {
+        throw new Error(
+          `${skillDirectory} basename must match frontmatter name ${String(frontmatter.name)}`,
+        );
+      }
       return {
-        classification: classification as SkillClassification,
         name: frontmatter.name as string,
         path: skillDirectory,
       };
     }),
   );
-  return [...new Map(discovered.map((skill) => [skill.name, skill])).values()].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-}
-
-function blockedSkillNames(
-  actor: string,
-  skills = classifiedSkills(),
-  allowedOrchestrationSkills: string[] = [],
-): string[] {
-  return skills
-    .filter(
-      (skill) =>
-        skill.classification === "ORCHESTRATION" &&
-        !allowedOrchestrationSkills.includes(skill.name),
-    )
-    .flatMap((skill) => [skill.name, `${actor}:${skill.name}`])
-    .sort();
+  const names = discovered.map((skill) => skill.name);
+  if (new Set(names).size !== names.length) {
+    throw new Error(`duplicate resolved name: ${names.join(", ")}`);
+  }
+  return discovered.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 type OmnigentSource = { revision: string; root: string };
@@ -188,6 +216,11 @@ function omnigentSource(): OmnigentSource | undefined {
   return { revision: gitRevision(configured) ?? "", root: configured };
 }
 
+function readSkillPolicyManifest(): SkillPolicyManifest {
+  expect(existsSync(bundleManifestPath), `${bundleManifestPath} must exist`).toBe(true);
+  return JSON.parse(readFileSync(bundleManifestPath, "utf8")) as SkillPolicyManifest;
+}
+
 const runtimePolicyTest = process.env.OMNIGENT_SOURCE_ROOT ? it : it.skip;
 
 describe("polly-loopworks bundle contract", () => {
@@ -207,7 +240,7 @@ describe("polly-loopworks bundle contract", () => {
     );
   });
 
-  it("declares only the six enforceable, role-named workers", () => {
+  it("declares exactly the six role-named workers", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const expectedNames = Object.keys(expectedWorkers).sort();
     expect([...(orchestrator.tools?.agents ?? [])].sort()).toEqual(expectedNames);
@@ -327,6 +360,7 @@ describe("polly-loopworks bundle contract", () => {
       expect(expression).toContain("api");
       expect(expression).toContain("pulls");
       expect(expression).toContain("mergePullRequest");
+      expect(expression).toContain('"sys_os_shell"');
       expect(expression).toContain('"DENY"');
     }
     expect(policies(actorConfigs[0]).blast_radius?.function?.arguments?.gate_pushes).toBe(true);
@@ -426,8 +460,9 @@ describe("polly-loopworks bundle contract", () => {
             "  prefix = f'{actor}.{policy_name}'",
             "  if policy_name == 'deny_merge':",
             "   evaluate = cel_policy(expression=arguments['expression'])",
-            "   for index, shell_command in enumerate(merge_commands): check(f'{prefix}.deny.{index}', evaluate(call('Bash', {'command': shell_command})), 'DENY')",
-            "   check(f'{prefix}.allow', evaluate(call('Bash', {'command': 'git status'})), 'ALLOW')",
+            "   for tool in ['Bash', 'sys_os_shell']:",
+            "    for index, shell_command in enumerate(merge_commands): check(f'{prefix}.{tool}.deny.{index}', evaluate(call(tool, {'command': shell_command})), 'DENY')",
+            "    check(f'{prefix}.{tool}.allow', evaluate(call(tool, {'command': 'git status'})), 'ALLOW')",
             "  elif policy_name == 'deny_nested_agents':",
             "   evaluate = cel_policy(expression=arguments['expression'])",
             "   for tool in nested_tools:",
@@ -525,29 +560,78 @@ describe("polly-loopworks bundle contract", () => {
     expect(probe.status, `${probe.stdout}\n${probe.stderr}`).toBe(0);
   });
 
-  it("classifies every resolved project and bundle skill in its own frontmatter", () => {
-    const skills = classifiedSkills();
-    expect(skills.map((skill) => skill.name)).toEqual([
-      "agent-browser",
-      "browser-validate",
-      "commit-signed-pr",
-      "eve",
-      "gh-stack",
-      "implement-issue",
-      "implement-issue-pr",
-      "orchestrate-issue-pr",
-      "tdd-implement",
-    ]);
+  it("owns the exact skill policy in one repo-owned bundle manifest", () => {
+    const manifest = readSkillPolicyManifest();
+    const policy = manifest.metadata?.loopworks;
+    expect(manifest.name).toBe("polly-loopworks");
+    expect(policy?.version).toBe(1);
     expect(
-      skills.filter((skill) => skill.classification === "ORCHESTRATION").map((skill) => skill.name),
-    ).toEqual(["implement-issue", "implement-issue-pr", "orchestrate-issue-pr"]);
+      policy?.skillClassifications,
+      "classification changed - this is a policy change",
+    ).toEqual(expectedSkillClassifications);
+    expect(
+      [...(policy?.orchestrationBlocklist ?? [])].sort(),
+      "the runtime blocklist is explicit and must not be derived from classification",
+    ).toEqual(expectedOrchestrationBlocklist);
+
+    for (const root of [path.join(repoRoot, ".agents/skills"), path.join(bundleRoot, "skills")]) {
+      for (const skillDirectory of skillDirectories(root)) {
+        expect(
+          skillFrontmatter(skillDirectory).metadata?.["loopworks-skill-class"],
+          `${skillDirectory} must not own policy classification`,
+        ).toBeUndefined();
+      }
+    }
   });
 
-  it("blocks harness-internal subagents and denies orchestration but never craft skills", () => {
-    const skills = classifiedSkills();
-    const craftNames = skills
-      .filter((skill) => skill.classification === "CRAFT")
-      .map((skill) => skill.name);
+  it("fails closed when any resolved project or bundle skill is unclassified", () => {
+    const classifications =
+      readSkillPolicyManifest().metadata?.loopworks?.skillClassifications ?? {};
+    const projectSkills = discoveredSkillIdentities([path.join(repoRoot, ".agents/skills")]);
+    const bundleSkills = discoveredSkillIdentities([path.join(bundleRoot, "skills")]);
+    const discovered = [
+      ...projectSkills.map((skill) => skill.name),
+      ...bundleSkills.map((skill) => `polly-loopworks:${skill.name}`),
+    ];
+    expect(new Set(discovered).size, "resolved skill names must be unique").toBe(discovered.length);
+    expect(
+      Object.keys(classifications).sort(),
+      "an unclassified skill is a policy failure",
+    ).toEqual([...discovered].sort());
+  });
+
+  it("rejects duplicate resolved names and basename/frontmatter mismatches", () => {
+    const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "loopworks-skill-identity-"));
+    const firstRoot = path.join(fixtureRoot, "first");
+    const secondRoot = path.join(fixtureRoot, "second");
+    const writeSkill = (root: string, directoryName: string, frontmatterName: string) => {
+      const directory = path.join(root, directoryName);
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(
+        path.join(directory, "SKILL.md"),
+        `---\nname: ${frontmatterName}\ndescription: fixture\n---\n`,
+      );
+    };
+
+    try {
+      writeSkill(firstRoot, "tdd-implement", "tdd-implement");
+      writeSkill(secondRoot, "tdd-implement", "tdd-implement");
+      expect(() => discoveredSkillIdentities([firstRoot, secondRoot])).toThrow(
+        /duplicate resolved name/i,
+      );
+
+      rmSync(secondRoot, { recursive: true, force: true });
+      writeSkill(secondRoot, "renamed-tdd", "tdd-implement");
+      expect(() => discoveredSkillIdentities([secondRoot])).toThrow(/basename.*frontmatter/i);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("configures named-agent denials and blocks orchestration but never craft skills", () => {
+    const craftNames = Object.entries(expectedSkillClassifications)
+      .filter(([, classification]) => classification === "CRAFT")
+      .map(([name]) => name);
     for (const name of Object.keys(expectedWorkers) as Array<keyof typeof expectedWorkers>) {
       const config = readAgent(name);
       const workerPolicies = policies(config);
@@ -558,14 +642,13 @@ describe("polly-loopworks bundle contract", () => {
       expect(workerPolicies.block_orchestration_skills).toMatchObject({
         function: {
           path: handlers.blockSkills,
-          arguments: { blocked: blockedSkillNames(name, skills) },
+          arguments: { blocked: expectedOrchestrationBlocklist },
         },
       });
       const configuredBlocked = workerPolicies.block_orchestration_skills?.function?.arguments
         ?.blocked as string[] | undefined;
       for (const craft of craftNames) {
         expect(configuredBlocked).not.toContain(craft);
-        expect(configuredBlocked).not.toContain(`${name}:${craft}`);
       }
       expect(workerPolicies.deny_nested_agents?.function?.path).toBe(handlers.cel);
       const expression = policyExpression(workerPolicies.deny_nested_agents);
@@ -575,7 +658,7 @@ describe("polly-loopworks bundle contract", () => {
     }
   });
 
-  it("makes the orchestrator host-skill-hermetic and blocks delegated orchestration and nesting", () => {
+  it("makes host skills hermetic and blocks orchestration plus named child tools", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const orchestratorPolicies = policies(orchestrator);
     expect(orchestrator.name).toBe("polly-loopworks");
@@ -583,11 +666,7 @@ describe("polly-loopworks bundle contract", () => {
     expect(orchestratorPolicies.block_orchestration_skills).toMatchObject({
       function: {
         path: handlers.blockSkills,
-        arguments: {
-          blocked: blockedSkillNames("polly-loopworks", classifiedSkills(), [
-            "orchestrate-issue-pr",
-          ]),
-        },
+        arguments: { blocked: expectedOrchestrationBlocklist },
       },
     });
     expect(orchestratorPolicies.deny_nested_agents?.function?.path).toBe(handlers.cel);
@@ -599,7 +678,7 @@ describe("polly-loopworks bundle contract", () => {
   });
 
   runtimePolicyTest(
-    "loads craft as every implementer and denies orchestration as every worker in both name shapes",
+    "executes resolver-derived bundle Skill calls against every blocklist",
     { timeout: 30_000 },
     () => {
       const source = omnigentSource();
@@ -621,14 +700,7 @@ describe("polly-loopworks bundle contract", () => {
       };
       const payload = {
         actorPolicies,
-        implementers: Object.keys(implementingWorkers),
-        orchestrationSkills: {
-          "polly-loopworks": "implement-issue-pr",
-          ...Object.fromEntries(
-            Object.keys(expectedWorkers).map((name) => [name, "orchestrate-issue-pr"]),
-          ),
-        },
-        craftSkill: "tdd-implement",
+        bundleRoot,
       };
       const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
       const command = importPython ?? "uv";
@@ -641,25 +713,43 @@ describe("polly-loopworks bundle contract", () => {
           ...commandPrefix,
           "-c",
           [
-            "import json, sys",
+            "import json, shutil, sys, tempfile",
+            "from pathlib import Path",
+            "from omnigent.inner.bundle_skills import ensure_bundle_plugin_manifest",
             "from omnigent.policies.builtins.safety import block_skills",
+            "from omnigent.spec.skill_sources import SkillSourceContext, resolve_harness_skills",
             "payload = json.loads(sys.argv[1])",
             "def load(skill):",
             " return {'type': 'tool_call', 'data': {'name': 'Skill', 'arguments': {'skill': skill}}}",
             "checks = {}",
             "bad = {}",
-            "for actor, policy in payload['actorPolicies'].items():",
-            " blocked = policy['function']['arguments']['blocked']",
-            " evaluate = block_skills(blocked=blocked)",
-            " orchestration = payload['orchestrationSkills'][actor]",
-            " for shape in [orchestration, f'{actor}:{orchestration}']:",
-            "  label = f'{actor}.orchestration.{shape}'",
-            "  result = evaluate(load(shape))",
-            "  checks[label] = result",
-            "  if result.get('result') != 'DENY': bad[label] = {'expected': 'DENY', 'actual': result}",
-            " if actor in payload['implementers']:",
-            "  craft = payload['craftSkill']",
-            "  for shape in [craft, f'{actor}:{craft}']:",
+            "with tempfile.TemporaryDirectory() as tmp:",
+            " home = Path(tmp) / 'home'",
+            " install = home / '.claude/plugins/cache/loopworks/polly-loopworks/1.0.0'",
+            " shutil.copytree(Path(payload['bundleRoot']), install)",
+            " ensure_bundle_plugin_manifest(install, 'polly-loopworks')",
+            " ensure_bundle_plugin_manifest(install, 'opus')",
+            " manifest = json.loads((install / '.claude-plugin/plugin.json').read_text())",
+            " plugin = manifest['name']",
+            " key = f'{plugin}@loopworks'",
+            " (home / '.claude').mkdir(parents=True, exist_ok=True)",
+            " (home / '.claude/settings.json').write_text(json.dumps({'enabledPlugins': {key: True}}))",
+            " (home / '.claude/plugins/installed_plugins.json').write_text(json.dumps({'version': 2, 'plugins': {key: [{'scope': 'user', 'installPath': str(install), 'version': '1.0.0'}]}}))",
+            " ctx = SkillSourceContext(roots=(), home=home, skills_filter='all', bundle_dir=install)",
+            " resolved = [skill.name for skill in resolve_harness_skills(ctx, 'claude-native')]",
+            " orchestration = [name for name in resolved if name.endswith(':orchestrate-issue-pr')]",
+            " craft = [name for name in resolved if name.endswith(':tdd-implement')]",
+            " if orchestration != ['polly-loopworks:orchestrate-issue-pr']: bad['resolver.orchestration'] = {'expected': ['polly-loopworks:orchestrate-issue-pr'], 'actual': orchestration}",
+            " if craft != ['polly-loopworks:tdd-implement']: bad['resolver.craft'] = {'expected': ['polly-loopworks:tdd-implement'], 'actual': craft}",
+            " for actor, policy in payload['actorPolicies'].items():",
+            "  blocked = policy['function']['arguments']['blocked']",
+            "  evaluate = block_skills(blocked=blocked)",
+            "  for shape in ['orchestrate-issue-pr', *orchestration]:",
+            "   label = f'{actor}.orchestration.{shape}'",
+            "   result = evaluate(load(shape))",
+            "   checks[label] = result",
+            "   if result.get('result') != 'DENY': bad[label] = {'expected': 'DENY', 'actual': result}",
+            "  for shape in ['tdd-implement', *craft]:",
             "   label = f'{actor}.craft.{shape}'",
             "   result = evaluate(load(shape))",
             "   checks[label] = result",
@@ -759,67 +849,15 @@ describe("polly-loopworks bundle contract", () => {
     },
   );
 
-  it("bounds orchestrator dispatch and denies custom children and Fable overrides", () => {
+  it("configures the Fable override and custom-child safeguard", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const orchestratorPolicies = policies(orchestrator);
-    expect(orchestratorPolicies.spawn_bounds).toMatchObject({
-      function: {
-        path: handlers.spawnBounds,
-        arguments: {
-          dispatch_tools: ["sys_session_send", "sys_session_create"],
-        },
-      },
-    });
-    expect(orchestratorPolicies.headless_subagent_purpose_guard).toMatchObject({
-      function: {
-        path: handlers.purposeGuard,
-        arguments: {
-          allowed_purposes: ["implement", "review", "explore", "search"],
-        },
-      },
-    });
     const expression = policyExpression(orchestratorPolicies.deny_claude_fable_5);
     expect(expression).toContain('event.data.name == "sys_session_create"');
     expect(expression).toContain("claude-fable-5");
   });
 
-  it("requires an accurate reviewer-model and author-lineage record on every PR", () => {
-    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
-    expect(orchestrator.prompt).toContain("every PR body");
-    expect(orchestrator.prompt).toContain("Reviewer A model");
-    expect(orchestrator.prompt).toContain("Reviewer B model");
-    expect(orchestrator.prompt).toContain("shared the author's model lineage");
-    expect(orchestrator.prompt).not.toContain("reviewed without vendor independence");
-  });
-
-  it("defines a single-PR managed sequence with phase headers and a transition ledger", () => {
-    const skill = readFileSync(orchestrationSkillPath, "utf8");
-    const normalized = skill.replace(/\s+/g, " ");
-    expect(skill).toContain("name: orchestrate-issue-pr");
-    expect(skill).toContain("Single PR only");
-    expect(skill).not.toMatch(/stacked PR|gh-stack/i);
-    for (const field of ["ROLE:", "PHASE:", "DONE:", "YOU PRODUCE:", "YOU DO NOT:", "NEXT:"]) {
-      expect(skill).toContain(field);
-    }
-    expect(skill).toContain("Every `args.input` must begin");
-    expect(skill).toContain(".polly/workflow-state.md");
-    expect(normalized).toContain("Record a chronological entry after every phase transition");
-  });
-
-  it("bootstraps the managed worktree before accepting red-test evidence", () => {
-    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
-    const prompt = orchestrator.prompt ?? "";
-    const skill = readFileSync(orchestrationSkillPath, "utf8");
-    for (const text of [prompt, skill]) {
-      expect(text).toContain("bun install");
-      expect(text).toContain("node_modules");
-      expect(text).toContain(".env.local");
-      expect(text).toContain("security:osv");
-      expect(text.toLowerCase()).toContain("before dispatch");
-    }
-  });
-
-  it("reports same-finding arbitration to the human without invoking a nonexistent ask tool", () => {
+  it("defers workflow guarantees to issue 280 and keeps only routing behavior", () => {
     const skill = readFileSync(orchestrationSkillPath, "utf8");
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const prompt = orchestrator.prompt ?? "";
@@ -831,28 +869,42 @@ describe("polly-loopworks bundle contract", () => {
     const orchestratorYaml = readFileSync(path.join(bundleRoot, "config.yaml"), "utf8");
 
     for (const text of [skill, prompt, routing, adr, orchestratorYaml]) {
-      const normalized = text.toLowerCase().replace(/\s+/g, " ");
-      expect(normalized).toContain("human operator");
-      expect(normalized).toContain("publication remains blocked");
-      expect(normalized).not.toContain("two reconciliation rounds");
-      expect(text).not.toContain("Terra model override");
-      expect(text).not.toContain("`ask`");
-      expect(text).not.toContain("ask_timeout");
+      expect(text).toContain(issue280Url);
     }
 
-    for (const text of [skill, prompt, routing, adr]) {
+    const scopedClaims = [
+      ...[skill, prompt, routing, adr, orchestratorYaml],
+      ...Object.keys(expectedWorkers).map((name) =>
+        readFileSync(path.join(bundleRoot, `agents/${name}/config.yaml`), "utf8"),
+      ),
+    ];
+    for (const text of scopedClaims) {
       const normalized = text.toLowerCase().replace(/\s+/g, " ");
-      expect(normalized).toContain("same finding");
-      expect(normalized).toContain("stop dispatching");
-      expect(normalized).toContain("normal output");
-      expect(normalized).toContain("root `agents.md`");
-      expect(normalized).toContain("assessment");
+      for (const strippedClaim of [
+        "same-finding",
+        "same finding",
+        "divergence means",
+        "without a separate round cap",
+        "neither reviewer",
+        "each sees only",
+        "never sees the other",
+        "only the declared worker roster",
+        "never authors a commit",
+        "you never implement",
+        "every `args.input` must begin",
+        "record a chronological entry after every phase transition",
+        "append your completion evidence",
+        "before dispatch, bootstrap",
+      ]) {
+        expect(normalized).not.toContain(strippedClaim);
+      }
     }
 
-    expect(skill).toContain(".polly/review-packet/reviewer-a.md");
-    expect(skill).toContain(".polly/review-packet/reviewer-b.md");
-    expect(skill).toContain("gh pr comment --body-file");
-    expect(skill).toContain("comment URL");
+    expect(routing).toContain("bun install");
+    expect(routing).toContain(".env.local");
+    expect(routing).toContain("security:osv");
+    expect(routing.toLowerCase()).toContain("convention");
+    expect(routing.toLowerCase().replace(/\s+/g, " ")).toContain("not enforced");
   });
 
   it("records the self-attested cwd residual risk and unique ADR numbering", () => {
@@ -871,7 +923,7 @@ describe("polly-loopworks bundle contract", () => {
     expect(adrFiles).not.toContain("0033-project-scoped-polly-model-routing.md");
   });
 
-  it("splits phase craft from the thin human-facing composers", () => {
+  it("keeps bundle craft sequence-free without rewriting the human-facing composers", () => {
     const skillText = new Map(
       phaseSkillNames.map((name) => [
         name,
@@ -899,13 +951,12 @@ describe("polly-loopworks bundle contract", () => {
       "utf8",
     );
     for (const composer of [implementIssue, implementIssuePr]) {
-      expect(composer).toContain("## Managed mode");
-      expect(composer).toContain("tdd-implement");
-      expect(composer).toContain("browser-validate");
-      expect(composer).not.toMatch(/^## Subagents$/m);
+      expect(composer).not.toContain("## Managed mode");
+      expect(composer).not.toContain(".polly/workflow-state.md");
+      expect(composer).not.toContain(".polly/review-packet");
     }
-    expect(implementIssuePr).toContain("commit-signed-pr");
-    expect(implementIssue).not.toContain("git commit -S");
+    expect(implementIssuePr).toContain("git commit -S");
+    expect(implementIssue).not.toContain("gh pr create");
   });
 
   it("pins the shared TDD craft contract used by human and managed workflows", () => {

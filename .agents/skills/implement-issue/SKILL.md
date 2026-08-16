@@ -1,34 +1,121 @@
 ---
 name: implement-issue
-description: Implement a numbered GitHub issue in the current LoopWorks worktree with TDD and validation, stopping before commit or publication.
-metadata:
-  loopworks-skill-class: ORCHESTRATION
+description: Implement a GitHub issue end to end on the current branch and stop before committing. Use when asked to implement, build, or fix a numbered issue or issue URL without publishing, and for the AC extraction, test-plan-first, adversarial review, and acceptance-evidence steps that work requires. Use implement-issue-pr instead when the request also asks for a branch, commits, or a pull request.
 ---
 
 # Implement Issue
 
-Use this human-facing composer for one issue when the user wants to inspect the
-result before any commit.
+Issue-backed implementation workflow. `AGENTS.md` and the nearest scoped guide
+still govern code, docs, ADR, observability, and validation expectations — this
+skill covers only the procedure layered on top of them.
 
-Never create, switch, rebase, or clean branches or worktrees. If the current
-branch or worktree is unsuitable, stop and ask the operator to use
-`implement-issue-pr`; this paused variant does not alter repository topology.
+Invoke as `/implement-issue <issue>` in Claude Code or `$implement-issue
+<issue>` in Codex. The issue number or URL arrives as ordinary prompt context —
+there is no argument substitution. If no issue was named, ask for one before
+doing anything else.
 
-1. Read the issue and comments, root and scoped guides, and relevant ADRs.
-2. Confirm the current worktree and preserve unrelated work.
-3. Use `tdd-implement` for the test plan and continuous red-to-green change.
-4. Use `browser-validate` when the change is user-visible.
-5. Follow the root guide's independent review contract.
-6. Resolve every finding, then run the required focused and aggregate gates
-   serially.
-7. Report the diff, evidence, findings dispositions, and AC-to-evidence table.
-   Do not commit, push, or open a pull request.
+## Guardrails
 
-## Managed mode
+These are not boilerplate. They hold for the entire run:
 
-When an external orchestrator delegates only one stage, do only the bounded
-craft named in its dispatch. Do not run the root review stage, create another
-agent layer, stamp review claims, publish, or continue to another stage. Write
-the issue, ACs, test plan, red/green evidence, and diff to the requested
-`.polly/review-packet/` file, append completion to
-`.polly/workflow-state.md`, and return the packet path to the orchestrator.
+1. Never create, switch, rebase, or clean branches or worktrees. If the current
+   branch is unsuitable for this issue, stop and say so. Use the
+   `implement-issue-pr` skill when the work needs its own branch.
+2. No commits, pushes, or PRs unless explicitly asked.
+3. No unrelated refactors. Fix what the ACs require and nothing else.
+4. Preserve user work already in the tree.
+
+## Steps
+
+### 1. Resolve
+
+Read the issue (`gh issue view <n> --comments`). Extract acceptance criteria as
+an explicit numbered list. Flag any AC that is missing, ambiguous, or conflicts
+with another AC or with an ADR — flag it, do not silently resolve it. Read the
+nearest `AGENTS.md` for every directory you expect to touch.
+
+### 2. Test plan, before any implementation code
+
+Map every AC to a specific test: unit, integration, or browser. For anything
+user-visible add negative, responsive, and accessibility cases.
+
+Reuse an existing test plan or documented journey if one covers the surface. If
+none exists and the change is user-visible, explore the running app with the
+`agent-browser` skill first.
+
+For an AC that cannot be tested, say why and give the closest deterministic
+check. Present the plan before writing implementation code.
+
+### 3. TDD
+
+Per test: run it red first, recording the exact command and the failing
+assertion, then make the smallest change that turns it green. Show the red. A
+green-only report is not evidence.
+
+### 4. Adversarial review
+
+Run the universal adversarial review from root `AGENTS.md` after the first
+green, then resolve findings and re-run focused checks.
+
+### 5. Validate and pause
+
+Validate at the level `AGENTS.md` requires for the change you actually made —
+focused checks while working, escalating only as its Validation section says.
+Then stop and report — do not commit.
+
+### 6. Publish when explicitly authorized
+
+Publication remains authorization-gated. When the user explicitly authorizes a
+commit and PR handoff, use this order and stop on any mismatch:
+
+1. Run `bun run commit:preflight` and confirm the effective author and
+   committer are the actual contributor identity represented by the GitHub
+   account, not a fixture identity. Retain the complete preflight output as
+   handoff evidence.
+2. Create small, atomic commits with `git commit -S`. Do not use `--no-verify`
+   or disable signing to work around a failed preflight.
+3. Inspect the local signature with `git verify-commit <commit>` or
+   `git log --show-signature -1` and retain the result as handoff evidence.
+4. Push the authorized branch and open a draft PR only after the preceding
+   checks pass. Push is required before GitHub metadata exists.
+5. Obtain the token and repository without printing the token (`export
+   GH_TOKEN="$(gh auth token)"` and `export GITHUB_REPOSITORY="$(gh repo view
+   --json nameWithOwner --jq .nameWithOwner)"`), then run `bun run
+   commit:provenance --github <PR>` against the pushed PR. The GitHub-resolved
+   author and verified signer must satisfy the repository policy. No user
+   handoff occurs before this verification passes; retain its output as
+   handoff evidence.
+
+## Browser validation
+
+Required when the change is user-visible. Run the plan's browser cases with the
+`agent-browser` skill: main path, negative, responsive, accessibility.
+
+Prefer a read-only subagent. If running in the main session, say so.
+
+Screenshot meaningful states to a temp path. Report pass/fail, screenshot
+paths, console and network errors, and coverage gaps. Never commit screenshots;
+attach them to the PR instead (`drogers0/gh-image` is installed). If blocked,
+report the blocker and the closest verification you did complete.
+
+## Subagents
+
+Subagents are read-only and the main agent is the sole writer, unless a subagent
+is given a concrete disjoint write scope. Declare each one in a single line:
+purpose, scope, artifact.
+
+Exception: the test-plan subagent may start and explore the app with
+`agent-browser`. Its only output is the test plan.
+
+## Adversarial review
+
+Follow the universal contract in root `AGENTS.md` after the first green and
+before handoff or publication. It applies whether the work stops without a PR,
+ships as one PR, or ships as a stack.
+
+## Acceptance evidence
+
+Close with an AC-to-evidence table: AC, test or command, expected result. Give
+exact repro steps for anything manual. Note deviations and gaps explicitly.
+
+Write it for a tester who has no context beyond the issue.

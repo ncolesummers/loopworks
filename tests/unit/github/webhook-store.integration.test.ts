@@ -128,6 +128,7 @@ describe("GitHub webhook delivery store (pglite integration)", () => {
     });
   });
 
+  // Persona S02: the idempotency lock holds against a real engine, not a fake.
   it("claims once, rejects an in-flight duplicate, then completes and blocks reprocessing", async () => {
     const store = createStore();
     const key = "github:lifecycle-delivery";

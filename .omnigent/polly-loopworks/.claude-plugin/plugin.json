@@ -1,0 +1,29 @@
+{
+  "name": "polly-loopworks",
+  "description": "Model-pinned LoopWorks worker roster and skill policy",
+  "metadata": {
+    "loopworks": {
+      "version": 1,
+      "skillClassifications": {
+        "agent-browser": "CRAFT",
+        "browser-validate": "CRAFT",
+        "commit-signed-pr": "CRAFT",
+        "eve": "CRAFT",
+        "gh-stack": "CRAFT",
+        "implement-issue": "ORCHESTRATION",
+        "implement-issue-pr": "ORCHESTRATION",
+        "polly-loopworks:browser-validate": "CRAFT",
+        "polly-loopworks:commit-signed-pr": "CRAFT",
+        "polly-loopworks:orchestrate-issue-pr": "ORCHESTRATION",
+        "polly-loopworks:tdd-implement": "CRAFT",
+        "tdd-implement": "CRAFT"
+      },
+      "orchestrationBlocklist": [
+        "implement-issue",
+        "implement-issue-pr",
+        "orchestrate-issue-pr",
+        "polly-loopworks:orchestrate-issue-pr"
+      ]
+    }
+  }
+}

@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 
 const dbBackedPortalPaths = ["/", "/catalog", "/loops", "/approvals", "/settings"] as const;
 
+// Persona P01: the same protected route slices as the fixture walk, driven
+// against a live database rather than seeded fixtures.
 test.describe("seeded Postgres portal", () => {
   test("renders representative seeded records from the live database", async ({ page }) => {
     await page.goto("/");

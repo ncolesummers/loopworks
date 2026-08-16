@@ -125,6 +125,7 @@ function createFakeWebhookDatabase() {
 }
 
 describe("Drizzle GitHub webhook delivery store", () => {
+  // Persona S02: repeated delivery ids do not create duplicate runs.
   it("claims a GitHub delivery once and records the idempotency lock plus delivery row", async () => {
     const fake = createFakeWebhookDatabase();
     const lockContentionScopes: string[] = [];

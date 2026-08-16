@@ -1,8 +1,6 @@
 ---
 name: commit-signed-pr
 description: Publish an already validated LoopWorks change as a signed contributor-authored commit and draft pull request with local and GitHub provenance evidence.
-metadata:
-  loopworks-skill-class: CRAFT
 ---
 
 # Commit Signed PR

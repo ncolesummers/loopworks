@@ -136,6 +136,60 @@ every documented scenario appears at all — cannot be expressed in the schema,
 which cannot know the document's scenario list; it is enforced by a parity gate
 that extends the existing persona parity test rather than duplicating it.
 
+**The kind must agree with the matrix's own coverage column.** Resolution gates
+alone treat `deferred` and `not_applicable` as interchangeable: swapping one for
+the other keeps the classification exhaustive and every reference resolving
+while silently retiring a scenario that is merely blocked. So the classification
+is checked against the matrix directly — `browser_journey` and `deferred`
+require a Playwright-marked row, `deterministic_non_browser` and
+`not_applicable` require its absence. The narrative decides what is browser
+work; the registry may only agree with it.
+
+This separates the pairs across that boundary and not within it. Swapping
+`deterministic_non_browser` for `not_applicable` on a non-browser scenario
+still passes every gate, because distinguishing them requires knowing whether a
+covering test *could* exist — which is not derivable from anything the registry
+or the matrix records. That discrimination stays a review judgement, and it is
+recorded here as a known limit rather than presented as closed. What does bite
+on that side is the covering-test gate: dropping to `not_applicable` discards
+named tests that must otherwise resolve and annotate the scenario.
+
+A related limit: `deferred` requires a Playwright-marked row, so it is
+unavailable to a non-browser scenario that is applicable but uncovered. P03 is
+the only scenario in that position and is recorded `not_applicable`, since its
+decision-to-ADR link is an authoring convention rather than a product surface.
+A second non-browser scenario in that state would need the kind vocabulary
+widened.
+
+**A deferral must name browser coverage that already exists.** Specs under
+`tests/e2e/` annotate the personas they exercise, and four deferred scenarios —
+M02, A02, A03, R02 — are already partly driven by `portal.spec.ts`. Three of
+those reasons first asserted that no surface existed, and no registry-only gate
+could see it, because every other gate reads only the registry. A gate now requires
+each deferral to name any spec that claims the scenario.
+
+That enforces mention, not truth: a reason may name the spec and then
+misdescribe it, and this ADR's own first draft of the M02 reason did exactly
+that. What the gate buys is that the sentence cannot be written without
+confronting the spec. Accuracy past that point is a reviewer's judgement, and
+this is recorded as a limit rather than dressed up as verification. The
+convention it depends on is itself unguarded upstream, so a companion check
+requires every browser spec to annotate at least one persona — a floor against a
+new spec opting out, though removing one annotation from a spec that keeps
+others stays undetectable.
+
+What is deferred is a registry journey covering the whole scenario, not all
+coverage of it.
+
+One classification per scenario is what makes the list answerable: "is this
+covered" has a single answer rather than a set of partial ones. The cost is
+real. A scenario blocked only in the browser but already covered by unit tests
+carries `deferred`, and its existing coverage is named inside the reason rather
+than in a field of its own. M02, R02, and S05 are each in that position, and
+their reasons say which half is covered and by what. A second evidence field on
+`deferred` would model that more precisely, at the price of the property that
+makes the classification useful at all.
+
 **The JSON mirror is generated, not hand-maintained.** Zod 4 provides
 `z.toJSONSchema()`, so `schemas/persona-journey.v1.schema.json` is produced by
 `scripts/sync-schemas.ts` behind `--write` / `--check`, matching the
@@ -204,8 +258,61 @@ With the contract layer:
 
 With the coverage layer, additionally:
 
-- Parity gates are demonstrated failing for an unclassified scenario, a
-  scenario classified twice, and a `browser_journey` naming an unknown journey.
+- Each coverage gate is a function over a registry, so the suite hands it
+  mutated registries and asserts the exact violation it reports. Committed
+  negative cases cover an unknown journey ID, a real journey that does not claim
+  the scenario back, a journey whose scenario is classified as non-browser work,
+  a covering test path that does not exist, one that traverses out of the
+  repository, one that exists but does not annotate the scenario, a deferral
+  that ignores a spec already exercising it, evidence reduced to a stub,
+  evidence citing a path that no longer resolves, a deferral the narrative does
+  not note, a narrative deferral the registry has dropped, and a relabelling in
+  either direction across the browser boundary. Gates that only run against the
+  real registry prove the data is currently fine and never prove the gate would
+  notice if it were not.
+- Covering tests are confined to the default Vitest lane. The excluded prefixes
+  are read from `vitest.config.ts` rather than restated, so the two cannot
+  drift; both lanes do run elsewhere in CI, so this bounds which gate may rely
+  on the evidence, not whether it runs. It also stops a
+  `deterministic_non_browser` scenario citing a browser spec, which would
+  contradict the kind. Demonstrated by a mutant citing `portal.spec.ts`.
+- The scenario annotation must appear in a comment. A whole-file substring
+  search was satisfiable by an incidental mention inside a string literal —
+  this suite's own expected-violation messages supply one — so the mutant for
+  that case points at this file itself, which would have passed the unanchored
+  check.
+- The narrative-section parser is exercised against synthetic documents, since
+  its failure modes are filesystem-shaped and unreachable through the registry
+  mutation harness the other gates use.
+
+- Schema-level rejections are asserted directly: a scenario classified twice, an
+  entry mixing two kinds' keys, and six malformed-evidence shapes.
+- Exhaustiveness — a dropped or newly documented scenario — is the parity gate
+  in `tests/unit/loops/manifest.test.ts`, which fails on a matrix row nothing
+  classifies.
+- The deferral list the journey tests read is derived from the classification,
+  and the reasons live only in `coverage` — the module header and the matrix
+  section no longer carry copies to fall out of date. The *sets* of ids are
+  gated in both directions; the surrounding prose is not, so a sentence
+  contradicting a reason would still pass.
+- Every registered gate is asserted to have at least one mutation case. Without
+  that, a gate can ship whose branch never executes against any registry, real
+  or mutated — which is how the excluded-lane check and comment anchoring were
+  first written, both while this section described them as established.
+
+Four limits are stated rather than closed. `deferralsNameExistingSpecs` iterates
+from spec annotations to reasons, so a spec that genuinely exercises a scenario
+without annotating it stays invisible; the annotation floor only catches a spec
+with no annotations at all. R02 was in exactly that state — its reason credited
+`portal.spec.ts` for the design-token half while that spec annotated no R02 —
+and annotating it makes the two agree at the cost of satisfying the gate for
+R02 without the author confronting anything. That trade is taken deliberately:
+an accurate corpus is worth more than one scenario's share of a gate that
+enforces mention anyway. The narrative gate matches bare scenario ids, so a
+section that named them while denying the deferral would satisfy it. And
+`e2ePersonaClaims` counts specs from the seeded Playwright lane, which CI runs
+in a separate job from `validate` — deliberately, because the question there is
+whether browser coverage exists at all, not whether `validate` executes it.
 
 ## Follow-Ups
 

@@ -189,6 +189,8 @@ describe("GitHub webhook helpers", () => {
     });
   });
 
+  // Persona P02: an agent-ready issue normalizes into a development trigger;
+  // spike plus agent-ready normalizes into a research trigger.
   it("returns a planning trigger for an agent-ready issues webhook", () => {
     const trigger = getAgentReadyTriggerFromIssuesWebhook({
       action: "labeled",
@@ -360,6 +362,7 @@ describe("GitHub webhook helpers", () => {
     ).toBe(true);
   });
 
+  // Persona S01: invalid signatures are rejected before payload processing.
   it("rejects an invalid signature before parsing the webhook payload with bounded metric attributes", async () => {
     vi.stubEnv("GITHUB_WEBHOOK_SECRET", "secret");
     const webhookOutcome = createWebhookOutcomeRecorder();

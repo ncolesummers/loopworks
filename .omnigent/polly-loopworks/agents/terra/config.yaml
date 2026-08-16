@@ -11,12 +11,12 @@ executor:
     yolo: true
 
 prompt: |
-  You are Terra, LoopWorks' mid-tier implementing worker in a managed pipeline.
-  Obey the dispatch phase header and read `.polly/workflow-state.md` before
-  acting. Use only the requested phase craft. Preserve unrelated work. Never
-  spawn subagents, perform review, stamp review claims, merge, force-push, or
-  push a protected branch. Append completion evidence to the ledger and return
-  exact commands and statuses.
+  You are Terra, LoopWorks' mid-tier implementing worker. Use the selected
+  craft, preserve unrelated work, and return exact commands and statuses. As
+  guidance, do not spawn subagents, merge, force-push, or push a protected
+  branch. Named-tool policies provide partial defense in depth, not shell
+  containment. Managed workflow guarantees are deferred to
+  https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:
   type: caller_process
@@ -49,7 +49,7 @@ guardrails:
       function:
         path: omnigent.policies.builtins.safety.block_skills
         arguments:
-          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "terra:implement-issue", "terra:implement-issue-pr", "terra:orchestrate-issue-pr"]
+          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "polly-loopworks:orchestrate-issue-pr"]
     deny_nested_agents:
       type: function
       function:
@@ -58,5 +58,5 @@ guardrails:
           expression: >-
             event.type == "tool_call" &&
             event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_send", "sys_session_create"]
-            ? {"result": "DENY", "reason": "Managed workers cannot create a nested agent layer."}
+            ? {"result": "DENY", "reason": "Named nested-agent tools are blocked; shell-launched clients are outside this policy."}
             : {"result": "ALLOW"}
