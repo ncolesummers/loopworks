@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { requireApiSession } from "@/lib/auth/api";
+import {
+  type RepositorySelectionAuthorizationSubject,
+  readRepositorySelectionAuthorizationSubject,
+} from "@/lib/auth/repository-selection-subject";
 import type {
   RepositorySelectionApplyResult,
   RepositorySelectionSnapshot,
 } from "@/lib/github/repository-selection";
 import { createGithubRepositorySelectionRuntime } from "@/lib/github/repository-selection-runtime";
 import { createRequestLogger } from "@/lib/observability/logger";
+import { observeGithubRepositorySelectionAuthorization } from "@/lib/observability/repository-selection";
 import { type LoopworksSpan, withLoopworksActiveSpan } from "@/lib/observability/trace-context";
 
 const route = "api.github.repositories";
@@ -21,6 +26,7 @@ const loggableReasons = new Set([
   "github_installation_token_failed",
   "github_repository_selection_failed",
   "github_repository_verification_failed",
+  "github_repository_selection_authorization_indeterminate",
 ]);
 
 function safeReason(reason: string | undefined): string {
@@ -28,18 +34,38 @@ function safeReason(reason: string | undefined): string {
 }
 
 type SelectionSession =
-  | { authenticated: true; actorId: string }
+  | {
+      authenticated: true;
+      actorId: string;
+      authorizationSubject?: RepositorySelectionAuthorizationSubject | null;
+      session?: import("next-auth").Session | null;
+    }
   | { authenticated: false; response: NextResponse };
 
 type SelectionDependencies = {
-  applySelection: (input: {
-    deselect: number[];
-    select: number[];
-  }) => Promise<RepositorySelectionApplyResult>;
-  readSelection: () => Promise<RepositorySelectionSnapshot>;
+  applySelection: (
+    input: {
+      authUserId: string;
+      githubProviderAccountId: string;
+    },
+    selection: {
+      deselect: number[];
+      select: number[];
+    },
+  ) => Promise<RepositorySelectionApplyResult>;
+  readSelection: (
+    subject: RepositorySelectionAuthorizationSubject,
+  ) => Promise<RepositorySelectionSnapshot>;
   requireSession: (input: { route: string }) => Promise<SelectionSession>;
   span: LoopworksSpan;
 };
+
+function authorizationSubjectFromSession(
+  session: Extract<SelectionSession, { authenticated: true }>,
+): RepositorySelectionAuthorizationSubject | null {
+  if ("authorizationSubject" in session) return session.authorizationSubject ?? null;
+  return readRepositorySelectionAuthorizationSubject(session.session ?? null);
+}
 
 function markOutcome(span: LoopworksSpan | undefined, outcome: string): void {
   span?.setAttribute("loopworks.github.repository_selection.outcome", outcome);
@@ -68,14 +94,26 @@ export async function handleGithubRepositorySelectionRead(
     markOutcome(dependencies.span, "unauthenticated");
     return session.response;
   }
+  const authorizationSubject = authorizationSubjectFromSession(session);
+  if (!authorizationSubject) {
+    markOutcome(dependencies.span, "error");
+    observeGithubRepositorySelectionAuthorization({
+      cacheHit: false,
+      operation: "read",
+      outcome: "indeterminate",
+    });
+    return NextResponse.json({ status: "error" }, { status: 502 });
+  }
 
   let snapshot: RepositorySelectionSnapshot;
   try {
     // Runtime construction reads configuration and can throw; a misconfigured deployment must not
     // surface as an unhandled 500.
     snapshot = await (
-      dependencies.readSelection ?? (() => createGithubRepositorySelectionRuntime().readSelection())
-    )();
+      dependencies.readSelection ??
+      ((subject: RepositorySelectionAuthorizationSubject) =>
+        createGithubRepositorySelectionRuntime().readSelection(subject))
+    )(authorizationSubject);
   } catch (error) {
     markOutcome(dependencies.span, "error");
     requestLogger.warn(
@@ -85,6 +123,10 @@ export async function handleGithubRepositorySelectionRead(
     return NextResponse.json({ status: "error" }, { status: 502 });
   }
   markOutcome(dependencies.span, snapshot.status);
+
+  if (snapshot.status === "access-denied") {
+    return NextResponse.json({ status: "access-denied" }, { status: 403 });
+  }
 
   if (snapshot.status === "error") {
     requestLogger.warn(
@@ -106,6 +148,16 @@ export async function handleGithubRepositorySelectionApply(
   if (!session.authenticated) {
     markOutcome(dependencies.span, "unauthenticated");
     return session.response;
+  }
+  const authorizationSubject = authorizationSubjectFromSession(session);
+  if (!authorizationSubject) {
+    markOutcome(dependencies.span, "error");
+    observeGithubRepositorySelectionAuthorization({
+      cacheHit: false,
+      operation: "apply",
+      outcome: "indeterminate",
+    });
+    return NextResponse.json({ status: "error" }, { status: 502 });
   }
 
   let body: unknown;
@@ -131,9 +183,11 @@ export async function handleGithubRepositorySelectionApply(
   try {
     result = await (
       dependencies.applySelection ??
-      ((input: { deselect: number[]; select: number[] }) =>
-        createGithubRepositorySelectionRuntime().applySelection(input))
-    )({ deselect, select });
+      ((
+        subject: RepositorySelectionAuthorizationSubject,
+        input: { deselect: number[]; select: number[] },
+      ) => createGithubRepositorySelectionRuntime().applySelection(subject, input))
+    )(authorizationSubject, { deselect, select });
   } catch (error) {
     markOutcome(dependencies.span, "error");
     requestLogger.warn(
@@ -143,6 +197,10 @@ export async function handleGithubRepositorySelectionApply(
     return NextResponse.json({ status: "error" }, { status: 502 });
   }
   markOutcome(dependencies.span, result.status);
+
+  if (result.status === "access-denied") {
+    return NextResponse.json({ status: "access-denied" }, { status: 403 });
+  }
 
   if (result.status === "error") {
     requestLogger.warn(

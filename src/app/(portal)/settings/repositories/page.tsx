@@ -1,12 +1,19 @@
 import Link from "next/link";
 
+import { auth } from "@/auth";
+
 import { RepositorySelectionRefresher } from "@/components/portal/repository-selection-refresher";
 import { Button } from "@/components/ui/button";
+import {
+  type RepositorySelectionAuthorizationSubject,
+  readRepositorySelectionAuthorizationSubject,
+} from "@/lib/auth/repository-selection-subject";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { repositorySelectionFixture } from "@/lib/fixtures";
 import type { RepositorySelectionSnapshot } from "@/lib/github/repository-selection";
 import { createGithubRepositorySelectionRuntime } from "@/lib/github/repository-selection-runtime";
 import { createRequestLogger } from "@/lib/observability/logger";
+import { observeGithubRepositorySelectionAuthorization } from "@/lib/observability/repository-selection";
 import { isProductionRuntime } from "@/lib/runtime";
 
 function RepositorySelectionSurface({
@@ -38,10 +45,14 @@ function RepositorySelectionSurface({
 
 export async function RepositorySelectionPageContent({
   env = process.env,
+  readAuthorizationSubject,
   readSelection,
 }: Readonly<{
   env?: Partial<NodeJS.ProcessEnv>;
-  readSelection?: () => Promise<RepositorySelectionSnapshot>;
+  readAuthorizationSubject?: () => Promise<RepositorySelectionAuthorizationSubject | null>;
+  readSelection?: (
+    subject: RepositorySelectionAuthorizationSubject,
+  ) => Promise<RepositorySelectionSnapshot>;
 }> = {}) {
   // Explicit, non-production fixture mode only; it must never stand in for a failed real read.
   if (
@@ -53,16 +64,38 @@ export async function RepositorySelectionPageContent({
 
   let snapshot: RepositorySelectionSnapshot;
   try {
-    snapshot = await (
-      readSelection ?? (() => createGithubRepositorySelectionRuntime().readSelection())
+    const authorizationSubject = await (
+      readAuthorizationSubject ??
+      (async () => readRepositorySelectionAuthorizationSubject(await auth()))
     )();
-  } catch (error) {
+    if (!authorizationSubject) {
+      observeGithubRepositorySelectionAuthorization({
+        cacheHit: false,
+        operation: "read",
+        outcome: "indeterminate",
+      });
+      return (
+        <RepositorySelectionSurface
+          snapshot={{ reason: "repository_selection_unavailable", status: "error" }}
+        />
+      );
+    }
+    snapshot = await (
+      readSelection ??
+      ((subject: RepositorySelectionAuthorizationSubject) =>
+        createGithubRepositorySelectionRuntime().readSelection(subject))
+    )(authorizationSubject);
+  } catch {
     // Configuration and runtime construction failures must not blank the page; the operator still
     // needs the surrounding surface and its route back to installation access.
     createRequestLogger({ route: "portal.settings.repositories" }).warn(
-      { reason: error instanceof Error ? error.message : "unknown" },
+      { reason: "repository_selection_unavailable" },
       "repository_selection_read_failed",
     );
+    snapshot = { reason: "repository_selection_unavailable", status: "error" };
+  }
+
+  if (snapshot.status === "access-denied") {
     snapshot = { reason: "repository_selection_unavailable", status: "error" };
   }
 

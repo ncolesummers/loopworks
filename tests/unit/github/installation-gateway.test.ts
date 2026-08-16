@@ -98,7 +98,10 @@ describe("GitHub installation verification gateway", () => {
       },
     }));
     const userRequest = vi.fn(async () => ({ data: { id: 22_808_397, login: "NColesummers" } }));
-    const paginate = vi.fn(async () => [{ id: 1 }, { id: 124_001 }]);
+    const paginate = vi.fn(async () => [
+      { app_id: 124, id: 1 },
+      { app_id: 124, id: 124_001 },
+    ]);
     const gateway = createGithubInstallationGateway({
       appId: 124,
       createAppClient: () => ({ request: appRequest }),
@@ -238,6 +241,61 @@ describe("GitHub installation verification gateway", () => {
     expect(requestedPages).toEqual([null, "2", null, "2", null, "2"]);
     expect(new Set(authorizations)).toEqual(new Set(["token ghu_token"]));
   });
+
+  it("distinguishes a complete denial from malformed installation-access evidence", async () => {
+    const responses: unknown[][] = [
+      [{ app_id: 124, id: 999_001 }],
+      [{ app_id: 124, id: "124001" }],
+      [{ id: 124_001 }],
+      [{ app_id: 999, id: 124_001 }],
+      [null],
+    ];
+    const gateway = createGithubInstallationGateway({
+      appId: 124,
+      createAppClient: () => ({ request: vi.fn() }),
+      createUserClient: () => ({
+        paginate: vi.fn(async () => responses.shift() ?? []),
+        request: vi.fn(),
+      }),
+      oauthFetchImpl: vi.fn(),
+      privateKey: "private-key",
+    });
+
+    await expect(gateway.userCanAccessInstallation("ghu_access_canary", 124_001)).resolves.toBe(
+      false,
+    );
+    await expect(gateway.userCanAccessInstallation("ghu_access_canary", 124_001)).rejects.toThrow(
+      "github_user_installations_verification_failed",
+    );
+    await expect(gateway.userCanAccessInstallation("ghu_access_canary", 124_001)).rejects.toThrow(
+      "github_user_installations_verification_failed",
+    );
+    await expect(gateway.userCanAccessInstallation("ghu_access_canary", 124_001)).rejects.toThrow(
+      "github_user_installations_verification_failed",
+    );
+    await expect(gateway.userCanAccessInstallation("ghu_access_canary", 124_001)).rejects.toThrow(
+      "github_user_installations_verification_failed",
+    );
+  });
+
+  it.each([401, 403, 429, 500, 503])(
+    "fails the default user-access client closed on GitHub HTTP %s",
+    async (status) => {
+      mswServer.use(
+        http.get("https://api.github.com/user/installations", () =>
+          HttpResponse.json({ message: "provider token canary" }, { status }),
+        ),
+      );
+      const gateway = createGithubInstallationGateway({
+        appId: 124,
+        privateKey: generateAppPrivateKey(),
+      });
+
+      await expect(
+        gateway.userCanAccessInstallation("ghu_status_canary", 124_001),
+      ).rejects.toThrow();
+    },
+  );
 
   it("normalizes every repository page the installation can reach", async () => {
     const paginate = vi.fn(async () => [

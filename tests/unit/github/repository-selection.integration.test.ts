@@ -19,6 +19,10 @@ import {
 const appId = 124;
 const installationId = 124_001;
 const now = new Date("2026-08-04T12:00:00.000Z");
+const subject = {
+  authUserId: "auth-user-operator",
+  githubProviderAccountId: "22808397",
+};
 
 const portal: AvailableGithubRepository = {
   archived: false,
@@ -56,6 +60,7 @@ describe("repository selection reaching the catalog", () => {
 
   function flow(available: AvailableGithubRepository[] = [portal]) {
     return createGithubRepositorySelectionFlow({
+      authorizeInstallationAccess: async () => ({ cacheHit: false, outcome: "authorized" }),
       gateway: { listInstallationRepositories: async () => available },
       now: () => now,
       store: createGithubRepositorySelectionStore(
@@ -82,7 +87,7 @@ describe("repository selection reaching the catalog", () => {
     });
 
     await expect(
-      flow().applySelection({ deselect: [], select: [portal.githubRepoId] }),
+      flow().applySelection(subject, { deselect: [], select: [portal.githubRepoId] }),
     ).resolves.toEqual({
       outcomes: [{ githubRepoId: portal.githubRepoId, outcome: "selected" }],
       status: "applied",
@@ -104,10 +109,10 @@ describe("repository selection reaching the catalog", () => {
 
   it("returns the operator to no-repositories when the last selection is removed", async () => {
     const selection = flow();
-    await selection.applySelection({ deselect: [], select: [portal.githubRepoId] });
+    await selection.applySelection(subject, { deselect: [], select: [portal.githubRepoId] });
 
     await expect(
-      selection.applySelection({ deselect: [portal.githubRepoId], select: [] }),
+      selection.applySelection(subject, { deselect: [portal.githubRepoId], select: [] }),
     ).resolves.toEqual({
       outcomes: [{ githubRepoId: portal.githubRepoId, outcome: "deselected" }],
       status: "applied",
@@ -127,7 +132,7 @@ describe("repository selection reaching the catalog", () => {
 
   it("keeps a repository in the catalog when deselection is refused for loop history", async () => {
     const selection = flow();
-    await selection.applySelection({ deselect: [], select: [portal.githubRepoId] });
+    await selection.applySelection(subject, { deselect: [], select: [portal.githubRepoId] });
     const [repository] = await context.db
       .select()
       .from(repositories)
@@ -140,7 +145,7 @@ describe("repository selection reaching the catalog", () => {
     });
 
     await expect(
-      selection.applySelection({ deselect: [portal.githubRepoId], select: [] }),
+      selection.applySelection(subject, { deselect: [portal.githubRepoId], select: [] }),
     ).resolves.toEqual({
       outcomes: [{ githubRepoId: portal.githubRepoId, outcome: "in-use" }],
       status: "applied",
@@ -149,7 +154,7 @@ describe("repository selection reaching the catalog", () => {
   });
 
   it("reports zero accessible repositories as its own state, not as not-connected", async () => {
-    await expect(flow([]).readSelection()).resolves.toMatchObject({
+    await expect(flow([]).readSelection(subject)).resolves.toMatchObject({
       installation: { accountLogin: "loopworks-org", installationId },
       repositories: [],
       status: "no-accessible-repositories",
@@ -162,6 +167,6 @@ describe("repository selection reaching the catalog", () => {
       .set({ appId: 999 })
       .where(eq(githubInstallations.installationId, installationId));
 
-    await expect(flow().readSelection()).resolves.toEqual({ status: "not-connected" });
+    await expect(flow().readSelection(subject)).resolves.toEqual({ status: "not-connected" });
   });
 });

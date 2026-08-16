@@ -153,6 +153,12 @@ function redactNestedLogValue(
 
 export type LoopworksLogger = Logger;
 
+export type RepositorySelectionAuthorizationObservation = {
+  cacheHit: boolean;
+  operation: "apply" | "read";
+  outcome: "access-denied" | "authorized" | "indeterminate";
+};
+
 function defaultBaseBindings() {
   return {
     service: "loopworks",
@@ -206,4 +212,22 @@ export function createRequestLogger(
   bindings: Record<string, string | number | boolean | null | undefined>,
 ): LoopworksLogger {
   return logger.child(bindings);
+}
+
+export function logGithubRepositorySelectionAuthorization(
+  observation: RepositorySelectionAuthorizationObservation,
+  target: LoopworksLogger = logger,
+): void {
+  try {
+    target.info(
+      {
+        cacheHit: observation.cacheHit,
+        operation: observation.operation,
+        outcome: observation.outcome,
+      },
+      "github_repository_selection_authorization",
+    );
+  } catch {
+    // Authorization must not depend on telemetry sink health.
+  }
 }

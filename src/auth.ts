@@ -7,6 +7,7 @@ import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import {
   readGithubAccessTokenForUser,
   readGithubProviderAccountIdForUser,
+  refreshGithubAccessTokenForAccount,
 } from "@/lib/auth/accounts";
 import { readAuthAllowlistConfig } from "@/lib/auth/allowlist";
 import { fetchGithubOrganizationLookup } from "@/lib/auth/github";
@@ -95,6 +96,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       const decision = evaluation.decision;
+
+      if (
+        decision.allowed &&
+        account?.provider === "github" &&
+        account.providerAccountId &&
+        account.access_token
+      ) {
+        await refreshGithubAccessTokenForAccount({
+          accessToken: account.access_token,
+          providerAccountId: account.providerAccountId,
+        });
+      }
 
       logger.info(
         {

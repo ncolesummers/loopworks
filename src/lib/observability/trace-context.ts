@@ -145,6 +145,28 @@ export function markGithubWebhookActivationSpanOutcome(
   }
 }
 
+export function markGithubRepositorySelectionAuthorizationSpanOutcome(
+  input: {
+    cacheHit: boolean;
+    operation: "apply" | "read";
+    outcome: "access-denied" | "authorized" | "indeterminate";
+  },
+  span: Span | undefined = trace.getActiveSpan(),
+): void {
+  if (!span) return;
+
+  try {
+    span.setAttribute("loopworks.github.repository_selection.operation", input.operation);
+    span.setAttribute("loopworks.github.repository_selection.authorization_outcome", input.outcome);
+    span.setAttribute("loopworks.github.repository_selection.cache_hit", input.cacheHit);
+    span.setStatus({
+      code: input.outcome === "indeterminate" ? SpanStatusCode.ERROR : SpanStatusCode.OK,
+    });
+  } catch {
+    // Authorization must not depend on telemetry sink health.
+  }
+}
+
 export function isValidW3cTraceId(traceId: unknown): traceId is string {
   return typeof traceId === "string" && w3cTraceIdPattern.test(traceId) && traceId !== emptyTraceId;
 }

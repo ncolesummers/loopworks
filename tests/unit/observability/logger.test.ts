@@ -1,6 +1,10 @@
 import { context, type Span, TraceFlags, trace } from "@opentelemetry/api";
 import { configRegistry } from "@/lib/config/registry";
-import { createLogger, loggerRedactionPaths } from "@/lib/observability/logger";
+import {
+  createLogger,
+  logGithubRepositorySelectionAuthorization,
+  loggerRedactionPaths,
+} from "@/lib/observability/logger";
 
 function createMemoryDestination() {
   const writes: string[] = [];
@@ -16,6 +20,35 @@ function createMemoryDestination() {
 }
 
 describe("Loopworks logger", () => {
+  it("logs only bounded repository-selection authorization fields", () => {
+    const sink = createMemoryDestination();
+    const boundedLogger = createLogger({ level: "info", base: null }, sink.destination);
+
+    logGithubRepositorySelectionAuthorization(
+      {
+        accessToken: "ghu_log_canary",
+        authorizationCacheKey: "22808397:124:124001",
+        cacheHit: false,
+        githubProviderAccountId: "22808397",
+        operation: "read",
+        outcome: "indeterminate",
+        rawError: "provider rejected ghu_log_canary",
+      } as never,
+      boundedLogger,
+    );
+
+    const serialized = sink.writes.join("");
+    expect(serialized).not.toContain("ghu_log_canary");
+    expect(serialized).not.toContain("22808397");
+    expect(serialized).not.toContain("124001");
+    expect(JSON.parse(sink.writes[0] ?? "{}")).toMatchObject({
+      cacheHit: false,
+      msg: "github_repository_selection_authorization",
+      operation: "read",
+      outcome: "indeterminate",
+    });
+  });
+
   it("emits structured JSON with service metadata", () => {
     const sink = createMemoryDestination();
     const logger = createLogger(
