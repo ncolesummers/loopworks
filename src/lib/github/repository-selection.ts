@@ -1,9 +1,12 @@
+import type { RepositorySelectionAuthorizationSubject } from "@/lib/auth/repository-selection-subject";
 import type { AvailableGithubRepository } from "@/lib/github/installation-flow";
+import type { RepositorySelectionAuthorizationDecision } from "@/lib/github/repository-selection-authorization";
 import type {
   RepositoryDeselectionOutcome,
   RepositorySelectionInput,
   RepositorySelectionOutcome,
 } from "@/lib/github/repository-selection-store";
+import { observeGithubRepositorySelectionAuthorization } from "@/lib/observability/repository-selection";
 
 export type ConnectedGithubInstallation = {
   accountLogin: string;
@@ -20,6 +23,7 @@ export type RepositorySelectionEntry = AvailableGithubRepository & {
 };
 
 export type RepositorySelectionSnapshot =
+  | { installation?: never; reason?: never; repositories?: never; status: "access-denied" }
   | { installation?: never; reason: string; repositories?: never; status: "error" }
   | { installation?: never; reason?: never; repositories?: never; status: "not-connected" }
   | {
@@ -45,6 +49,7 @@ export type RepositorySelectionApplyEntry = {
  * the operator nothing changed while rows had in fact been written.
  */
 export type RepositorySelectionApplyResult =
+  | { outcomes?: never; reason?: never; status: "access-denied" }
   | { outcomes: RepositorySelectionApplyEntry[]; reason?: never; status: "applied" }
   | { outcomes: RepositorySelectionApplyEntry[]; reason: string; status: "partial" }
   | { outcomes?: never; reason: string; status: "error" }
@@ -73,13 +78,29 @@ export type GithubRepositorySelectionGateway = {
   listInstallationRepositories(installationId: number): Promise<AvailableGithubRepository[]>;
 };
 
+const safeFailureReasons = new Set([
+  "github_installation_token_failed",
+  "github_repository_selection_failed",
+  "github_repository_verification_failed",
+]);
+
 function failureReason(error: unknown): string {
-  return error instanceof Error ? error.message : "github_repository_selection_failed";
+  const message = error instanceof Error ? error.message : "";
+  return safeFailureReasons.has(message) ? message : "github_repository_selection_failed";
 }
 
 export function createGithubRepositorySelectionFlow(dependencies: {
+  authorizeInstallationAccess(
+    subject: RepositorySelectionAuthorizationSubject,
+    installation: ConnectedGithubInstallation,
+  ): Promise<RepositorySelectionAuthorizationDecision>;
   gateway: GithubRepositorySelectionGateway;
   now: () => Date;
+  observeAuthorizationOutcome?: (input: {
+    cacheHit: boolean;
+    operation: "apply" | "read";
+    outcome: RepositorySelectionAuthorizationDecision["outcome"];
+  }) => void;
   store: GithubRepositorySelectionStore;
 }) {
   async function resolveInstallation() {
@@ -121,10 +142,44 @@ export function createGithubRepositorySelectionFlow(dependencies: {
     return { available, entries };
   }
 
+  async function authorize(
+    operation: "apply" | "read",
+    subject: RepositorySelectionAuthorizationSubject,
+    installation: ConnectedGithubInstallation,
+  ): Promise<RepositorySelectionAuthorizationDecision> {
+    let decision: RepositorySelectionAuthorizationDecision;
+    try {
+      decision = await dependencies.authorizeInstallationAccess(subject, installation);
+    } catch {
+      decision = { cacheHit: false, outcome: "indeterminate" };
+    }
+    try {
+      (dependencies.observeAuthorizationOutcome ?? observeGithubRepositorySelectionAuthorization)({
+        cacheHit: decision.cacheHit,
+        operation,
+        outcome: decision.outcome,
+      });
+    } catch {
+      // Authorization must not depend on telemetry sink health.
+    }
+    return decision;
+  }
+
   return {
-    async readSelection(): Promise<RepositorySelectionSnapshot> {
+    async readSelection(
+      subject: RepositorySelectionAuthorizationSubject,
+    ): Promise<RepositorySelectionSnapshot> {
       const installation = await resolveInstallation();
       if (!installation) return { status: "not-connected" };
+
+      const decision = await authorize("read", subject, installation);
+      if (decision.outcome === "access-denied") return { status: "access-denied" };
+      if (decision.outcome === "indeterminate") {
+        return {
+          reason: "github_repository_selection_authorization_indeterminate",
+          status: "error",
+        };
+      }
 
       try {
         const { available, entries } = await loadEntries(installation);
@@ -138,12 +193,24 @@ export function createGithubRepositorySelectionFlow(dependencies: {
       }
     },
 
-    async applySelection(input: {
-      deselect: number[];
-      select: number[];
-    }): Promise<RepositorySelectionApplyResult> {
+    async applySelection(
+      subject: RepositorySelectionAuthorizationSubject,
+      input: {
+        deselect: number[];
+        select: number[];
+      },
+    ): Promise<RepositorySelectionApplyResult> {
       const installation = await resolveInstallation();
       if (!installation) return { status: "not-connected" };
+
+      const decision = await authorize("apply", subject, installation);
+      if (decision.outcome === "access-denied") return { status: "access-denied" };
+      if (decision.outcome === "indeterminate") {
+        return {
+          reason: "github_repository_selection_authorization_indeterminate",
+          status: "error",
+        };
+      }
 
       const outcomes: RepositorySelectionApplyEntry[] = [];
       try {

@@ -7,7 +7,13 @@ import {
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 
-const authenticated = async () => ({ actorId: "ncolesummers", authenticated: true }) as const;
+const authorizationSubject = {
+  authUserId: "auth-user-operator",
+  githubProviderAccountId: "22808397",
+};
+
+const authenticated = async () =>
+  ({ actorId: "ncolesummers", authenticated: true, authorizationSubject }) as const;
 
 function applyRequest(body: unknown) {
   return new Request("https://loopworks.local/api/github/repositories", {
@@ -53,28 +59,74 @@ describe("GitHub repository selection route", () => {
   });
 
   it("returns the selection snapshot for an authenticated operator", async () => {
+    const readSelection = vi.fn(async () => ({
+      installation: {
+        accountLogin: "loopworks-org",
+        accountType: "Organization",
+        appId: 124,
+        installationId: 124_001,
+        repositorySelection: "selected",
+      },
+      repositories: [],
+      status: "no-accessible-repositories" as const,
+    }));
     const response = await handleGithubRepositorySelectionRead(
       new Request("https://loopworks.local/api/github/repositories"),
       {
-        readSelection: async () => ({
-          installation: {
-            accountLogin: "loopworks-org",
-            accountType: "Organization",
-            appId: 124,
-            installationId: 124_001,
-            repositorySelection: "selected",
-          },
-          repositories: [],
-          status: "no-accessible-repositories" as const,
-        }),
+        readSelection,
         requireSession: authenticated,
       },
     );
 
+    expect(readSelection).toHaveBeenCalledWith(authorizationSubject);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       status: "no-accessible-repositories",
     });
+  });
+
+  it.each(["read", "apply"] as const)(
+    "returns a bounded 403 for definite operator-access denial on %s",
+    async (operation) => {
+      const response =
+        operation === "read"
+          ? await handleGithubRepositorySelectionRead(
+              new Request("https://loopworks.local/api/github/repositories"),
+              {
+                readSelection: async () => ({ status: "access-denied" as const }),
+                requireSession: authenticated,
+              },
+            )
+          : await handleGithubRepositorySelectionApply(
+              applyRequest({ deselect: [], select: [900_001] }),
+              {
+                applySelection: async () => ({ status: "access-denied" as const }),
+                requireSession: authenticated,
+              },
+            );
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({ status: "access-denied" });
+    },
+  );
+
+  it("fails closed when an authenticated session has no complete immutable subject", async () => {
+    const readSelection = vi.fn();
+    const response = await handleGithubRepositorySelectionRead(
+      new Request("https://loopworks.local/api/github/repositories"),
+      {
+        readSelection,
+        requireSession: async () => ({
+          actorId: "ncolesummers",
+          authenticated: true,
+          authorizationSubject: null,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ status: "error" });
+    expect(readSelection).not.toHaveBeenCalled();
   });
 
   it("reports an upstream failure as 502 without leaking the provider message", async () => {
@@ -125,7 +177,10 @@ describe("GitHub repository selection route", () => {
       { applySelection, requireSession: authenticated },
     );
 
-    expect(applySelection).toHaveBeenCalledWith({ deselect: [], select: [900_001] });
+    expect(applySelection).toHaveBeenCalledWith(authorizationSubject, {
+      deselect: [],
+      select: [900_001],
+    });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       outcomes: [{ githubRepoId: 900_001, outcome: "selected" }],

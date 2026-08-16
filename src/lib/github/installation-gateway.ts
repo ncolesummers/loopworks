@@ -97,6 +97,19 @@ function normalizeRepository(value: unknown): AvailableGithubRepository {
   };
 }
 
+function normalizeUserInstallationAccess(value: unknown): {
+  appId: number;
+  installationId: number;
+} {
+  const data = object(value);
+  const installationId = positiveInteger(data?.id);
+  const appId = positiveInteger(data?.app_id);
+  if (!installationId || !appId) {
+    throw new Error("github_user_installations_verification_failed");
+  }
+  return { appId, installationId };
+}
+
 export function createGithubInstallationGateway(input: {
   appId: number;
   createAppClient?: () => AppClient;
@@ -218,7 +231,11 @@ export function createGithubInstallationGateway(input: {
 
     async userCanAccessInstallation(accessToken, installationId) {
       const installations = await paginateUserInstallations(accessToken);
-      return installations.some((installation) => object(installation)?.id === installationId);
+      const normalized = installations.map(normalizeUserInstallationAccess);
+      if (normalized.some((installation) => installation.appId !== input.appId)) {
+        throw new Error("github_user_installations_verification_failed");
+      }
+      return normalized.some((installation) => installation.installationId === installationId);
     },
 
     async verifyAppInstallation(installationId) {

@@ -53,6 +53,7 @@ async function postSelection(input: {
     payload = null;
   }
   if (payload?.status === "not-connected") return { status: "not-connected" };
+  if (payload?.status === "access-denied") return { status: "access-denied" };
   if (payload?.status === "applied" || payload?.status === "partial") {
     return {
       outcomes: payload.outcomes ?? [],
@@ -186,7 +187,7 @@ export function RepositorySelectionView({
     );
   }
 
-  if (snapshot.status === "error") {
+  if (snapshot.status === "error" || snapshot.status === "access-denied") {
     return (
       <SurfaceState
         detail="The repository list could not be read from GitHub. Retry, or confirm the installation is still active."
@@ -256,7 +257,7 @@ export function RepositorySelectionView({
         setMessage("No GitHub App installation is connected. Connect one and try again.");
         return;
       }
-      if (result.status === "error") {
+      if (result.status === "error" || result.status === "access-denied") {
         setMessage("The selection could not be saved. Try again.");
         return;
       }

@@ -323,9 +323,10 @@ described above and in `docs/development.md`.
   the onboarding transition, so the page serves an explicit, non-production
   `repositorySelectionFixture` for Playwright and Storybook coverage while the
   transition itself is proven by PGlite tests. The child issue is closed;
-  operator-bound access, multi-installation policy, orphan handling, and
-  large-installation scale remain separate follow-ups in
-  [#145](https://github.com/ncolesummers/loopworks/issues/145)
+  [#145](https://github.com/ncolesummers/loopworks/issues/145) binds each live
+  read and apply to the acting operator's installation access. Multi-installation
+  policy, orphan handling, and large-installation scale remain separate
+  follow-ups in [#146](https://github.com/ncolesummers/loopworks/issues/146)
   through [#148](https://github.com/ncolesummers/loopworks/issues/148).
 - [#126](https://github.com/ncolesummers/loopworks/issues/126): implemented first
   loop registration with a durable `loop_definitions` store, a registration

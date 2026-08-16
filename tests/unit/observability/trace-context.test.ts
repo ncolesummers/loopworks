@@ -2,6 +2,7 @@
 import { type Context, type Span, type Tracer, trace } from "@opentelemetry/api";
 
 import {
+  markGithubRepositorySelectionAuthorizationSpanOutcome,
   markGithubWebhookActivationSpanOutcome,
   startDevelopmentLoopDispatchSpan,
   startDevelopmentLoopRetrySpan,
@@ -9,6 +10,43 @@ import {
 } from "@/lib/observability/trace-context";
 
 describe("Loopworks trace context helpers", () => {
+  it("records only bounded repository-selection authorization attributes on spans", () => {
+    const span = { setAttribute: vi.fn(), setStatus: vi.fn() } as unknown as Span;
+
+    markGithubRepositorySelectionAuthorizationSpanOutcome(
+      {
+        accessToken: "ghu_span_canary",
+        authorizationCacheKey: "22808397:124:124001",
+        cacheHit: false,
+        githubProviderAccountId: "22808397",
+        operation: "read",
+        outcome: "indeterminate",
+      } as never,
+      span,
+    );
+
+    expect(span.setAttribute).toHaveBeenCalledTimes(3);
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      1,
+      "loopworks.github.repository_selection.operation",
+      "read",
+    );
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      2,
+      "loopworks.github.repository_selection.authorization_outcome",
+      "indeterminate",
+    );
+    expect(span.setAttribute).toHaveBeenNthCalledWith(
+      3,
+      "loopworks.github.repository_selection.cache_hit",
+      false,
+    );
+    expect(
+      JSON.stringify((span.setAttribute as ReturnType<typeof vi.fn>).mock.calls),
+    ).not.toContain("ghu_span_canary");
+    expect(span.setStatus).toHaveBeenCalledWith({ code: 2 });
+  });
+
   it("records bounded GitHub webhook activation outcomes on spans", () => {
     const span = { setAttribute: vi.fn(), setStatus: vi.fn() } as unknown as Span;
 

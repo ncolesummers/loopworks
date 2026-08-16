@@ -20,6 +20,7 @@ import {
   recordDevelopmentLoopValidationDurationMetric,
   recordDevelopmentLoopValidationOutcomeMetric,
   recordGithubInstallationFlowOutcomeMetric,
+  recordGithubRepositorySelectionAuthorizationMetric,
   recordGithubWebhookOutcomeMetric,
   recordLockContentionMetric,
   recordLoopRegistrationOutcomeMetric,
@@ -76,6 +77,7 @@ describe("ADR 0012 observability metric contract", () => {
       "loopworks.validation.duration",
       "loopworks.webhook.outcome",
       "loopworks.github.installation.outcome",
+      "loopworks.github.repository_selection.authorization",
       "loopworks.loop.registration.outcome",
       "loopworks.agent.tool.outcome",
       "loopworks.agent.tool.duration",
@@ -162,6 +164,54 @@ describe("ADR 0012 observability metric contract", () => {
         value: 1,
       },
     ]);
+  });
+
+  it("records only bounded repository-selection authorization attributes", () => {
+    const recordings: Array<{ attributes?: Record<string, unknown>; name: string; value: number }> =
+      [];
+    const meter = {
+      createCounter(name: string) {
+        return {
+          add(value: number, attributes?: Record<string, unknown>) {
+            recordings.push({ attributes, name, value });
+          },
+        };
+      },
+    };
+
+    recordGithubRepositorySelectionAuthorizationMetric(
+      {
+        accessToken: "ghu_metric_canary",
+        authorizationCacheKey: "22808397:124:124001",
+        cacheHit: true,
+        githubProviderAccountId: "22808397",
+        operation: "apply",
+        outcome: "authorized",
+      } as never,
+      meter,
+    );
+
+    expect(recordings).toEqual([
+      {
+        attributes: { cache_hit: true, operation: "apply", outcome: "authorized" },
+        name: "loopworks.github.repository_selection.authorization",
+        value: 1,
+      },
+    ]);
+    expect(JSON.stringify(recordings)).not.toContain("ghu_metric_canary");
+    expect(JSON.stringify(recordings)).not.toContain("22808397");
+    expect(() =>
+      recordGithubRepositorySelectionAuthorizationMetric(
+        { cacheHit: false, operation: "read", outcome: "indeterminate" },
+        {
+          createCounter: () => ({
+            add: () => {
+              throw new Error("export ghu_metric_error_canary");
+            },
+          }),
+        } as never,
+      ),
+    ).not.toThrow();
   });
 
   it("records loop registration outcomes with low-cardinality metadata only", () => {

@@ -77,6 +77,12 @@ export const observabilityMetricContract = [
   },
   {
     instrument: "counter",
+    name: "loopworks.github.repository_selection.authorization",
+    requiredAttributes: ["operation", "outcome", "cache_hit"],
+    unit: "{attempt}",
+  },
+  {
+    instrument: "counter",
     name: "loopworks.loop.registration.outcome",
     requiredAttributes: ["outcome"],
     unit: "{attempt}",
@@ -230,6 +236,10 @@ const stepRetryCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const validationDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
 const githubInstallationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
+const githubRepositorySelectionAuthorizationCounters = new WeakMap<
+  object,
+  Counter<MetricAttributes>
+>();
 const loopRegistrationOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const planningToolOutcomeCounters = new WeakMap<object, Counter<MetricAttributes>>();
 const planningToolDurationHistograms = new WeakMap<object, Histogram<MetricAttributes>>();
@@ -276,6 +286,12 @@ export type GithubInstallationFlowOutcomeMetricInput = {
     | "pending-approval"
     | "error";
   phase: "installation" | "authorization";
+};
+
+export type GithubRepositorySelectionAuthorizationMetricInput = {
+  cacheHit: boolean;
+  operation: "apply" | "read";
+  outcome: "access-denied" | "authorized" | "indeterminate";
 };
 
 export type LoopRegistrationOutcome =
@@ -518,6 +534,23 @@ function getGithubInstallationOutcomeCounter(meter: CounterMeter): Counter<Metri
   return counter;
 }
 
+function getGithubRepositorySelectionAuthorizationCounter(
+  meter: CounterMeter,
+): Counter<MetricAttributes> {
+  const cached = githubRepositorySelectionAuthorizationCounters.get(meter);
+  if (cached) return cached;
+
+  const metric = resolveObservabilityMetricDefinition(
+    "loopworks.github.repository_selection.authorization",
+  );
+  const counter = meter.createCounter(metric.name, {
+    description: "Acting-operator authorization outcomes for GitHub repository selection.",
+    unit: metric.unit,
+  });
+  githubRepositorySelectionAuthorizationCounters.set(meter, counter);
+  return counter;
+}
+
 function getLoopRegistrationOutcomeCounter(meter: CounterMeter): Counter<MetricAttributes> {
   const cached = loopRegistrationOutcomeCounters.get(meter);
   if (cached) return cached;
@@ -692,6 +725,21 @@ export function recordGithubInstallationFlowOutcomeMetric(
     });
   } catch {
     // OTel emission must never affect installation request handling.
+  }
+}
+
+export function recordGithubRepositorySelectionAuthorizationMetric(
+  input: GithubRepositorySelectionAuthorizationMetricInput,
+  meter: CounterMeter = getLoopworksMeter(),
+): void {
+  try {
+    getGithubRepositorySelectionAuthorizationCounter(meter).add(1, {
+      cache_hit: input.cacheHit,
+      operation: input.operation,
+      outcome: input.outcome,
+    });
+  } catch {
+    // OTel emission must never affect repository-selection authorization.
   }
 }
 
