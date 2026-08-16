@@ -138,6 +138,9 @@ jobs:
       - name: Env access check
         run: bun run config:access-check
 
+      - name: Generated schema mirror check
+        run: bun run schemas:check
+
       # Deliberately ahead of the Storybook build and the Playwright suite, the
       # two multi-minute gates. They still run after dependency and browser
       # installation, so this is "earlier than it would otherwise be", not
