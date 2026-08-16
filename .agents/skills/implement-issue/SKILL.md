@@ -8,6 +8,10 @@ description: Implement a numbered GitHub issue in the current LoopWorks worktree
 Use this human-facing composer for one issue when the user wants to inspect the
 result before any commit.
 
+Never create, switch, rebase, or clean branches or worktrees. If the current
+branch or worktree is unsuitable, stop and ask the operator to use
+`implement-issue-pr`; this paused variant does not alter repository topology.
+
 1. Read the issue and comments, root and scoped guides, and relevant ADRs.
 2. Confirm the current worktree and preserve unrelated work.
 3. Use `tdd-implement` for the test plan and continuous red-to-green change.

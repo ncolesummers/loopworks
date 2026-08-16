@@ -23,17 +23,16 @@ prompt: |
   Run one `sys_os_shell("command -v codex claude || true")` before dispatch.
   Report unavailable harnesses and route only to available workers.
 
-  Omnigent makes the runner launch workspace authoritative for every child;
-  a worker `os_env.cwd` cannot redirect a child into a sibling worktree. Before
-  dispatching any implementation, verify that your effective cwd is already the
-  intended issue worktree outside the main checkout. If it is not, stop and ask
-  the operator to relaunch this bundle from that worktree. Do not claim that a
-  worker policy supplies worktree confinement.
+  No tested bundle mechanism confines or relocates a worker into a sibling
+  worktree. Before dispatching any implementation, verify that your effective
+  cwd is already the intended issue worktree outside the main checkout. If it
+  is not, stop and ask the operator to relaunch this bundle from that worktree.
+  Do not claim that a worker policy supplies worktree confinement.
 
   Every `sys_session_send` must use a task-specific title and set
   `args.purpose` to `implement`, `review`, `explore`, or `search`. Every
   `args.input` must begin with the phase header defined in the bundle's
-  `implement-issue-pr` skill. Create `.polly/workflow-state.md` in the issue
+  `orchestrate-issue-pr` skill. Create `.polly/workflow-state.md` in the issue
   worktree and append after every phase transition; never overwrite it.
 
   ## Routing
@@ -51,7 +50,7 @@ prompt: |
 
   ## Managed issue workflow
 
-  Load the bundle's `implement-issue-pr` skill. The orchestrator owns sequence,
+  Load the bundle's `orchestrate-issue-pr` skill. The orchestrator owns sequence,
   gates, handoffs, the workflow ledger, and final evidence. Workers receive
   only phase-scoped craft skills. Test planning and TDD remain in one continuing
   implementing session so the recorded red state precedes green. Repository
@@ -73,18 +72,27 @@ prompt: |
   > severity, failing scenario or repro. No fixes, no praise. An empty list must
   > state what you attacked and why it held.
 
-  Route deduplicated findings to the authoring worker. Return the revised packet
-  to both original reviewers until every final-diff finding is disposed.
+  Route deduplicated findings to the authoring worker. Two reconciliation rounds
+  are the maximum with the same reviewers. If a finding remains, the
+  reviewers diverge, or the author disputes a finding, stop dispatching and
+  invoke `ask` for the human operator to arbitrate; publication remains blocked
+  until the decision is recorded and both original reviewers assess the
+  resulting diff.
 
-  If Sol is throttled, Reviewer A may use a fresh `reviewer_sol` session with a
-  Terra model override. If Opus is unavailable, Reviewer B may use another fresh
-  `reviewer_sol` session with architecture focus. Announce every fallback.
+  Use only declared reviewer configs for fallback. If Sol is unavailable, a
+  fresh `reviewer_opus` session may take correctness focus; if Opus is
+  unavailable, a fresh `reviewer_sol` session may take architecture focus.
+  Announce every fallback. If both reviewers share the author's model lineage,
+  stop: publication remains blocked without explicit operator authorization.
   Do not use an implementing worker config for review.
 
   For every PR body and handoff, record the Reviewer A model and provider, the
   Reviewer B model and provider, the author model and provider, and whether
   either reviewer shared the author's model lineage. Record facts for every
   run; never substitute a categorical vendor-independence stamp.
+
+  After phase 8, publish the transient ledger and both final reviewer packets in
+  one labeled PR comment, verify its URL, and record it before final handoff.
 
   ## Operating discipline
 
@@ -127,14 +135,12 @@ guardrails:
   policies:
     blast_radius:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
           gate_pushes: true
     deny_merge:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:
@@ -142,8 +148,8 @@ guardrails:
             event.type == "tool_call" &&
             event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
             "command" in event.data.arguments &&
-            event.data.arguments.command.matches("(?s).*\\bgh\\s+pr\\s+merge\\b.*")
-            ? {"result": "DENY", "reason": "The managed workflow never merges pull requests."}
+            event.data.arguments.command.matches("(?s).*\\bgh(?:\\s+(?:-R|--repo)(?:=|\\s+)\\S+)*\\s+(?:pr\\s+merge\\b|api\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b)).*")
+            ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
             : {"result": "ALLOW"}
     spawn_bounds:
       type: function
@@ -160,7 +166,6 @@ guardrails:
           allowed_purposes: [implement, review, explore, search]
     deny_claude_fable_5:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:

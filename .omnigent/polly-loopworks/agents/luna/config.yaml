@@ -28,14 +28,12 @@ guardrails:
   policies:
     blast_radius:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
           gate_pushes: false
     deny_merge:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:
@@ -43,19 +41,17 @@ guardrails:
             event.type == "tool_call" &&
             event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
             "command" in event.data.arguments &&
-            event.data.arguments.command.matches("(?s).*\\bgh\\s+pr\\s+merge\\b.*")
-            ? {"result": "DENY", "reason": "Implementers may publish draft PRs but never merge them."}
+            event.data.arguments.command.matches("(?s).*\\bgh(?:\\s+(?:-R|--repo)(?:=|\\s+)\\S+)*\\s+(?:pr\\s+merge\\b|api\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b)).*")
+            ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
             : {"result": "ALLOW"}
     block_orchestration_skills:
       type: function
-      on: [request, tool_call]
       function:
         path: omnigent.policies.builtins.safety.block_skills
         arguments:
-          blocked: [implement-issue, implement-issue-pr]
+          blocked: [agent-browser, browser-validate, commit-signed-pr, eve, gh-stack, implement-issue, implement-issue-pr, tdd-implement]
     deny_nested_agents:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:

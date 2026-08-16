@@ -1,9 +1,9 @@
 ---
-name: implement-issue-pr
+name: orchestrate-issue-pr
 description: Orchestrate one LoopWorks issue through managed TDD, independent review, serial gates, a signed commit, and a draft pull request.
 ---
 
-# Implement Issue PR
+# Orchestrate Issue PR
 
 Single PR only. This managed workflow does not support dependent pull-request
 layers. Stop and hand the request back when the issue requires that shape.
@@ -44,20 +44,20 @@ delete prior entries. A resumed run reads the ledger before acting.
 | 2 | Orchestrator | issue, comments, guides, ADRs, numbered ACs |
 | 3–4 | One implementing session | test plan, genuine red, minimal green, review packet |
 | 5 | Implementing session | browser evidence or explicit non-UI disposition |
-| 6 | Two reviewer sessions, then author | independent findings and author disposition |
+| 6 | Two reviewers, author, then human operator arbiter | bounded reconciliation or recorded human decision |
 | 7 | Orchestrator | required repository gates, run serially |
 | 8 | Implementing session | preflight, signed commit, push, draft PR, provenance |
-| 9 | Orchestrator | draft/base/head/publication-boundary verification |
+| 9 | Orchestrator | draft/base/head verification and durable evidence comment |
 | 10 | Orchestrator | AC-to-evidence handoff and all gaps |
 
 ### Intake and isolation
 
-Confirm publication authority and one-PR shape. Omnigent makes the runner launch
-workspace authoritative for child sessions, so a worker `os_env.cwd` cannot
-redirect a child into a sibling worktree. Require the bundle itself to have
-been launched from the intended out-of-main-checkout issue worktree. Verify
-effective cwd, branch, and worktree registration. If any differ, stop and ask
-the operator to relaunch from the worktree; do not dispatch an implementer.
+Confirm publication authority and one-PR shape. No tested bundle mechanism
+confines or relocates a child to a sibling worktree. Require the bundle itself
+to have been launched from the intended out-of-main-checkout issue worktree.
+The unsandboxed orchestrator self-checks effective cwd, branch, and worktree
+registration. If any differ, stop and ask the operator to relaunch from the
+worktree; do not dispatch an implementer.
 
 ### Acceptance contract
 
@@ -67,17 +67,16 @@ contract to `.polly/review-packet/contract.md` and append the transition.
 
 ### Test plan and implementation
 
-Dispatch one implementing worker with the `tdd-implement` craft. Keep planning,
-test creation, the exact red run, and the minimal green change in that same
-conversation. The worker writes `.polly/review-packet/impl.md` containing issue,
-ACs, test plan, red evidence, and diff, then appends its completion to the
-ledger. Green-only evidence is invalid.
+Dispatch one implementing worker with the canonical `tdd-implement` craft and
+keep that phase in one conversation. Require its complete output in
+`.polly/review-packet/impl.md`, then append the transition. Do not restate or
+weaken the craft contract here.
 
 ### Browser validation
 
-When user-visible, continue the implementing session with the
-`browser-validate` craft. Require main, negative, responsive, accessibility,
-console, and network evidence. Otherwise append why it is not applicable.
+When user-visible, continue the implementing session with the canonical
+`browser-validate` craft and require its complete evidence. Otherwise append
+why it is not applicable. Do not maintain a second browser-case list here.
 
 ### Independent review
 
@@ -89,14 +88,20 @@ Each receives only the path to the review packet and this brief:
 > severity, failing scenario or repro. No fixes, no praise. An empty list must
 > state what you attacked and why it held.
 
-Neither receives the other's output. Dedupe findings and return them to the
-authoring worker for test-backed fixes or stated deferrals. Refresh the packet
-and return it to both original reviewers until both have assessed the final
-diff and every finding is disposed.
+Write the independent outputs to `.polly/review-packet/reviewer-a.md` and
+`.polly/review-packet/reviewer-b.md`; neither reviewer receives the other's
+output. Dedupe findings and return them to the authoring worker.
+Two reconciliation rounds are the maximum with the same reviewers. If a finding remains
+undisposed, the reviewers diverge, or the author disputes a finding, stop
+dispatching and invoke `ask` for the human operator to arbitrate. Record the
+decision in the ledger; publication remains blocked until the decision is
+recorded and both original reviewers assess the resulting final diff.
 
 Record the actual author, Reviewer A, and Reviewer B models and providers, plus
 whether either reviewer shared the author's model lineage. Put that factual
 record in every PR body and final handoff. Announce model fallback before use.
+If both reviewers share the author's model lineage, stop: publication remains
+blocked without explicit operator authorization for that degraded topology.
 
 ### Serial gates
 
@@ -106,15 +111,24 @@ failure before attributing it to the diff.
 
 ### Publication
 
-Continue the authoring worker with `commit-signed-pr`. The author runs complete
-preflight, commits with `-S`, verifies the local signature, pushes only the
-issue branch, updates or creates the draft PR from the repository template, and
-runs GitHub provenance. The orchestrator verifies the result but never authors
-a commit. No actor marks ready or merges; CEL denies merge commands.
+Continue the authoring worker with the canonical `commit-signed-pr` craft and
+require its complete evidence. The orchestrator verifies the result but never
+authors a commit. No actor marks ready or merges. The CEL command pattern is
+only a best-effort speed bump; external repository controls remain the durable
+gap recorded in the ADR.
+
+After the PR exists, build one labeled evidence file containing
+`.polly/workflow-state.md`, `.polly/review-packet/reviewer-a.md`, and
+`.polly/review-packet/reviewer-b.md`, then publish it with
+`gh pr comment --body-file <evidence-file>`. Record and verify the comment URL.
+Exclude secrets, raw prompts, and unrelated scratch. The ignored `.polly/` tree
+is transient local scratch; publication remains blocked if the durable PR
+comment cannot be created.
 
 ### Handoff
 
 Report branch, worktree, commit, draft PR URL, diff stat, red and green
 commands, serial gate statuses, preflight, local signature, GitHub provenance,
 reviewer-model lineage record, per-finding disposition, and an AC-to-evidence
-table. State every blocked or downgraded claim explicitly.
+table. Include the durable evidence comment URL. State every blocked or
+downgraded claim explicitly.

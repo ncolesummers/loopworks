@@ -1,11 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import os from "node:os";
+import { existsSync, readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
 
 const repoRoot = process.cwd();
 const bundleRoot = path.join(repoRoot, ".omnigent/polly-loopworks");
+const orchestrationSkillPath = path.join(bundleRoot, "skills/orchestrate-issue-pr/SKILL.md");
 const phaseSkillNames = ["browser-validate", "commit-signed-pr", "tdd-implement"];
 const omnigentRevision = "ba241c3592000b8098101164d3de03d52ca74ddf";
 
@@ -87,8 +87,6 @@ function policyExpression(policy: Policy | undefined): string {
 
 type OmnigentSource = { revision: string; root: string };
 
-let materializedOmnigentRoot: string | undefined;
-
 const isolatedGitEnvironment = { ...process.env };
 for (const key of Object.keys(isolatedGitEnvironment)) {
   if (key.startsWith("GIT_")) {
@@ -110,45 +108,36 @@ function gitRevision(sourceRoot: string): string | undefined {
 
 function omnigentSource(): OmnigentSource | undefined {
   const configured = process.env.OMNIGENT_SOURCE_ROOT;
-  if (configured && existsSync(path.join(configured, "omnigent/policies/builtins"))) {
-    return { revision: gitRevision(configured) ?? "", root: configured };
+  if (!configured) {
+    return undefined;
   }
-  if (!materializedOmnigentRoot) {
-    materializedOmnigentRoot = mkdtempSync(
-      path.join(os.tmpdir(), "loopworks-omnigent-policy-source-"),
+  if (!existsSync(path.join(configured, "omnigent/policies/builtins"))) {
+    throw new Error(
+      `OMNIGENT_SOURCE_ROOT does not contain omnigent/policies/builtins: ${configured}`,
     );
-    const gitSteps = [
-      ["init", materializedOmnigentRoot],
-      [
-        "-C",
-        materializedOmnigentRoot,
-        "remote",
-        "add",
-        "origin",
-        "https://github.com/omnigent-ai/omnigent.git",
-      ],
-      ["-C", materializedOmnigentRoot, "fetch", "--depth=1", "origin", omnigentRevision],
-      ["-C", materializedOmnigentRoot, "checkout", "--detach", "FETCH_HEAD"],
-    ];
-    for (const args of gitSteps) {
-      const result = isolatedGit(args);
-      if (result.status !== 0) {
-        rmSync(materializedOmnigentRoot, { force: true, recursive: true });
-        materializedOmnigentRoot = undefined;
-        throw new Error(`Unable to fetch pinned Omnigent source: ${result.error ?? result.stderr}`);
-      }
-    }
   }
-  return { revision: gitRevision(materializedOmnigentRoot) ?? "", root: materializedOmnigentRoot };
+  return { revision: gitRevision(configured) ?? "", root: configured };
 }
 
-afterAll(() => {
-  if (materializedOmnigentRoot) {
-    rmSync(materializedOmnigentRoot, { force: true, recursive: true });
-  }
-});
+const runtimePolicyTest = process.env.OMNIGENT_SOURCE_ROOT ? it : it.skip;
 
 describe("polly-loopworks bundle contract", () => {
+  it("keeps the default invariant suite independent of an external Omnigent checkout", () => {
+    const suiteSource = readFileSync(
+      path.join(repoRoot, "tests/unit/agent/polly-loopworks-spec.test.ts"),
+      "utf8",
+    );
+
+    expect(suiteSource).not.toContain(
+      ["https:", "", "github.com", "omnigent-ai", "omnigent.git"].join("/"),
+    );
+    expect(suiteSource).not.toContain(
+      [["fe", "tch"].join(""), ["--depth", "=1"].join("")]
+        .map((value) => JSON.stringify(value))
+        .join(", "),
+    );
+  });
+
   it("declares only the six enforceable, role-named workers", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const expectedNames = Object.keys(expectedWorkers).sort();
@@ -182,7 +171,7 @@ describe("polly-loopworks bundle contract", () => {
     }
   });
 
-  it("binds both reviewers to read-only sandboxes and denies every shell", () => {
+  it("configures reviewer restrictions and records the codex-native fail-open gap", () => {
     for (const name of Object.keys(reviewerWorkers) as Array<keyof typeof reviewerWorkers>) {
       const config = readAgent(name);
       const workerPolicies = policies(config);
@@ -196,7 +185,6 @@ describe("polly-loopworks bundle contract", () => {
       ).toContain(".polly");
       expect(workerPolicies.read_only_os?.function?.path).toBe(handlers.readOnly);
       expect(workerPolicies.blast_radius).toMatchObject({
-        on: ["tool_call"],
         function: {
           path: handlers.blastRadius,
           arguments: { gate_pushes: true },
@@ -211,6 +199,16 @@ describe("polly-loopworks bundle contract", () => {
 
     expect(readAgent("reviewer_sol").executor?.config?.yolo).toBe(false);
     expect(readAgent("reviewer_opus").executor?.config?.permission_mode).toBe("plan");
+
+    for (const relativePath of [
+      ".omnigent/polly-loopworks/ROUTING.md",
+      "docs/adr/0034-project-scoped-polly-model-routing.md",
+    ]) {
+      const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
+      expect(text).toContain("fail open");
+      expect(text).toContain("policy_hook_disabled_reason");
+      expect(text).not.toContain("## Binding controls");
+    }
   });
 
   it("does not claim worktree confinement that the runtime cannot enforce", () => {
@@ -229,8 +227,14 @@ describe("polly-loopworks bundle contract", () => {
       "utf8",
     );
     const adrIndex = readFileSync(path.join(repoRoot, "docs/adr/README.md"), "utf8");
+    const orchestrator = readFileSync(path.join(bundleRoot, "config.yaml"), "utf8");
+    const orchestrationSkill = readFileSync(orchestrationSkillPath, "utf8");
     expect(routing).not.toContain("worktree_guard");
     expect(adr).not.toContain("worktree_guard");
+    for (const text of [routing, adr, orchestrator, orchestrationSkill]) {
+      expect(text).not.toContain("OMNIGENT_RUNNER_WORKSPACE");
+      expect(text).not.toContain("runtime resolver probe");
+    }
     expect(adrIndex).toContain("[0034](0034-project-scoped-polly-model-routing.md)");
   });
 
@@ -245,29 +249,154 @@ describe("polly-loopworks bundle contract", () => {
       const denyMerge = policies(config).deny_merge;
       expect(denyMerge?.function?.path).toBe(handlers.cel);
       const expression = policyExpression(denyMerge);
-      expect(expression).toContain("gh\\\\s+pr\\\\s+merge");
+      expect(expression).toContain("--repo");
+      expect(expression).toContain("api");
+      expect(expression).toContain("pulls");
       expect(expression).toContain('"DENY"');
     }
     expect(policies(actorConfigs[0]).blast_radius?.function?.arguments?.gate_pushes).toBe(true);
+
+    for (const relativePath of [
+      ".omnigent/polly-loopworks/ROUTING.md",
+      "docs/adr/0034-project-scoped-polly-model-routing.md",
+    ]) {
+      const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
+      expect(text).toContain("best-effort speed bump");
+      expect(text).toContain("branch protection");
+      expect(text).toContain("token without merge scope");
+      expect(text).toContain("out of scope");
+    }
   });
 
-  it("executes the configured CEL, skill, and direct-write denials", { timeout: 30_000 }, () => {
+  it("does not present ignored function-policy on fields as an enforcement boundary", () => {
+    const configs: Array<AgentConfig | OrchestratorConfig> = [
+      readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml"),
+      ...Object.keys(expectedWorkers).map((name) =>
+        readAgent(name as keyof typeof expectedWorkers),
+      ),
+    ];
+
+    for (const config of configs) {
+      for (const [name, policy] of Object.entries(policies(config))) {
+        expect(policy.on, `${name} must rely on its handler to self-select events`).toBeUndefined();
+      }
+    }
+  });
+
+  runtimePolicyTest(
+    "executes every roster actor's denial policies behaviorally",
+    { timeout: 30_000 },
+    () => {
+      const source = omnigentSource();
+      expect(
+        source,
+        "OMNIGENT_SOURCE_ROOT must point to the pinned Omnigent checkout",
+      ).toBeDefined();
+      expect(source?.revision).toBe(omnigentRevision);
+      const sourceRoot = source?.root as string;
+      const actorConfigs = {
+        orchestrator: readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml"),
+        ...Object.fromEntries(
+          Object.keys(expectedWorkers).map((name) => [
+            name,
+            readAgent(name as keyof typeof expectedWorkers),
+          ]),
+        ),
+      };
+      const payload = Object.fromEntries(
+        Object.entries(actorConfigs).map(([name, config]) => [name, policies(config)]),
+      );
+      const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
+      const command = importPython ?? "uv";
+      const commandPrefix = importPython
+        ? []
+        : [
+            "run",
+            "--with",
+            "cel-python==0.5.0",
+            "--with",
+            "pydantic>=2,<3",
+            "--with",
+            "pyyaml>=6,<7",
+            "--no-project",
+            "python",
+          ];
+      const probe = spawnSync(
+        command,
+        [
+          ...commandPrefix,
+          "-c",
+          [
+            "import json, sys",
+            "from omnigent.policies.builtins.cel import cel_policy",
+            "from omnigent.policies.builtins.orchestration import blast_radius, read_only_os",
+            "from omnigent.policies.builtins.safety import block_skills",
+            "actors = json.loads(sys.argv[1])",
+            "def call(name, arguments=None):",
+            " return {'type': 'tool_call', 'data': {'name': name, 'arguments': arguments or {}}}",
+            "checks = {}",
+            "bad = {}",
+            "def check(label, result, expected):",
+            " checks[label] = result",
+            " if not result or result.get('result') != expected: bad[label] = {'expected': expected, 'actual': result}",
+            "merge_commands = ['gh pr merge 268 --squash', 'gh -R owner/repo pr merge 268', 'gh --repo=owner/repo pr merge 268', 'gh api -X PUT repos/owner/repo/pulls/268/merge']",
+            "nested_tools = ['spawn_agent', 'Agent', 'Task', 'TaskCreate', 'sys_session_send', 'sys_session_create']",
+            "shell_tools = ['sys_os_shell', 'Bash', 'bash', 'Shell', 'terminal', 'execute_code', 'developer__shell']",
+            "write_tools = ['sys_os_write', 'sys_os_edit', 'Write', 'Edit', 'MultiEdit', 'write', 'edit']",
+            "for actor, actor_policies in actors.items():",
+            " for policy_name, policy in actor_policies.items():",
+            "  handler = policy.get('function', {}).get('path')",
+            "  arguments = policy.get('function', {}).get('arguments') or {}",
+            "  prefix = f'{actor}.{policy_name}'",
+            "  if policy_name == 'deny_merge':",
+            "   evaluate = cel_policy(expression=arguments['expression'])",
+            "   for index, shell_command in enumerate(merge_commands): check(f'{prefix}.deny.{index}', evaluate(call('Bash', {'command': shell_command})), 'DENY')",
+            "   check(f'{prefix}.allow', evaluate(call('Bash', {'command': 'git status'})), 'ALLOW')",
+            "  elif policy_name == 'deny_nested_agents':",
+            "   evaluate = cel_policy(expression=arguments['expression'])",
+            "   for tool in nested_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'task': 'review'})), 'DENY')",
+            "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
+            "  elif policy_name == 'deny_shell':",
+            "   evaluate = cel_policy(expression=arguments['expression'])",
+            "   for tool in shell_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'command': 'git status'})), 'DENY')",
+            "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
+            "  elif policy_name == 'block_orchestration_skills':",
+            "   evaluate = block_skills(blocked=arguments['blocked'])",
+            "   for skill in arguments['blocked']: check(f'{prefix}.deny.{skill}', evaluate(call('Skill', {'skill': skill})), 'DENY')",
+            "   check(f'{prefix}.allow', evaluate(call('Skill', {'skill': 'not-a-project-skill'})), 'ALLOW')",
+            "  elif policy_name == 'read_only_os':",
+            "   evaluate = read_only_os(**arguments)",
+            "   for tool in write_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'file_path': 'src/x.ts'}), {}), 'DENY')",
+            "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'}), {}), 'ALLOW')",
+            "  elif policy_name == 'blast_radius':",
+            "   evaluate = blast_radius(**arguments)",
+            "   check(f'{prefix}.force_push', evaluate(call('Bash', {'command': 'git push --force origin HEAD:main'}), {}), 'DENY')",
+            "   check(f'{prefix}.push', evaluate(call('Bash', {'command': 'git push origin feat/267'}), {}), 'ASK' if arguments.get('gate_pushes', True) else 'ALLOW')",
+            "   check(f'{prefix}.allow', evaluate(call('Bash', {'command': 'git status'}), {}), 'ALLOW')",
+            "print(json.dumps({'checks': checks, 'bad': bad}, sort_keys=True))",
+            "raise SystemExit(1 if bad else 0)",
+          ].join("\n"),
+          JSON.stringify(payload),
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PYTHONPATH: [sourceRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+          },
+        },
+      );
+      expect(probe.status, `${probe.stdout}\n${probe.stderr}`).toBe(0);
+    },
+  );
+
+  runtimePolicyTest("executes the explicit Fable safeguard branch", { timeout: 30_000 }, () => {
     const source = omnigentSource();
-    expect(
-      source,
-      "set OMNIGENT_SOURCE_ROOT to the pinned Omnigent source checkout or fetch the pinned revision locally",
-    ).toBeDefined();
+    expect(source, "OMNIGENT_SOURCE_ROOT must point to the pinned Omnigent checkout").toBeDefined();
     expect(source?.revision).toBe(omnigentRevision);
     const sourceRoot = source?.root as string;
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
-    const sol = readAgent("sol");
-    const reviewer = readAgent("reviewer_sol");
-    const payload = {
-      customChild: policyExpression(policies(orchestrator).deny_claude_fable_5),
-      merge: policyExpression(policies(orchestrator).deny_merge),
-      nestedAgent: policyExpression(policies(sol).deny_nested_agents),
-      reviewerShell: policyExpression(policies(reviewer).deny_shell),
-    };
+    const expression = policyExpression(policies(orchestrator).deny_claude_fable_5);
     const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
     const command = importPython ?? "uv";
     const commandPrefix = importPython
@@ -291,26 +420,21 @@ describe("polly-loopworks bundle contract", () => {
         [
           "import json, sys",
           "from omnigent.policies.builtins.cel import cel_policy",
-          "from omnigent.policies.builtins.orchestration import read_only_os",
-          "from omnigent.policies.builtins.safety import block_skills",
-          "expressions = json.loads(sys.argv[1])",
+          "expression = json.loads(sys.argv[1])",
           "def call(name, arguments):",
           " return {'type': 'tool_call', 'data': {'name': name, 'arguments': arguments}}",
+          "evaluate = cel_policy(expression=expression)",
           "checks = {",
-          " 'custom_child': cel_policy(expression=expressions['customChild'])(call('sys_session_create', {'config_path': 'x'})),",
-          " 'merge': cel_policy(expression=expressions['merge'])(call('Bash', {'command': 'gh pr merge 268 --squash'})),",
-          " 'benign_shell': cel_policy(expression=expressions['merge'])(call('Bash', {'command': 'git status'})),",
-          " 'nested_agent': cel_policy(expression=expressions['nestedAgent'])(call('spawn_agent', {'task': 'review'})),",
-          " 'reviewer_shell': cel_policy(expression=expressions['reviewerShell'])(call('Bash', {'command': 'printf x >> src/x.ts'})),",
-          " 'blocked_skill': block_skills(blocked=['implement-issue', 'implement-issue-pr'])(call('Skill', {'skill': 'implement-issue-pr'})),",
-          " 'direct_write': read_only_os()(call('Write', {'file_path': 'src/x.ts'}), {}),",
+          " 'fable': evaluate(call('sys_session_send', {'args': {'model': 'claude-fable-5'}})),",
+          " 'declared': evaluate(call('sys_session_send', {'args': {'model': 'gpt-5.6-sol'}})),",
+          " 'custom_child': evaluate(call('sys_session_create', {'config_path': 'custom.yaml'})),",
           "}",
-          "expected = {'custom_child': 'DENY', 'merge': 'DENY', 'benign_shell': 'ALLOW', 'nested_agent': 'DENY', 'reviewer_shell': 'DENY', 'blocked_skill': 'DENY', 'direct_write': 'DENY'}",
-          "bad = {name: checks[name] for name, verdict in expected.items() if not checks[name] or checks[name].get('result') != verdict}",
+          "expected = {'fable': 'DENY', 'declared': 'ALLOW', 'custom_child': 'DENY'}",
+          "bad = {name: {'expected': expected[name], 'actual': result} for name, result in checks.items() if not result or result.get('result') != expected[name]}",
           "print(json.dumps({'checks': checks, 'bad': bad}, sort_keys=True))",
           "raise SystemExit(1 if bad else 0)",
         ].join("\n"),
-        JSON.stringify(payload),
+        JSON.stringify(expression),
       ],
       {
         encoding: "utf8",
@@ -324,7 +448,12 @@ describe("polly-loopworks bundle contract", () => {
   });
 
   it("blocks harness-internal subagents and exposes only phase craft skills", () => {
-    const blockedSkills = ["implement-issue", "implement-issue-pr"];
+    const blockedSkills = readdirSync(path.join(repoRoot, ".agents/skills"), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
     for (const name of Object.keys(expectedWorkers) as Array<keyof typeof expectedWorkers>) {
       const config = readAgent(name);
       const workerPolicies = policies(config);
@@ -335,9 +464,12 @@ describe("polly-loopworks bundle contract", () => {
       expect(workerPolicies.block_orchestration_skills).toMatchObject({
         function: {
           path: handlers.blockSkills,
-          arguments: { blocked: blockedSkills },
+          arguments: { blocked: expect.arrayContaining(blockedSkills) },
         },
       });
+      const configuredBlocked = workerPolicies.block_orchestration_skills?.function?.arguments
+        ?.blocked as string[] | undefined;
+      expect(configuredBlocked).toEqual(blockedSkills);
       expect(workerPolicies.deny_nested_agents?.function?.path).toBe(handlers.cel);
       const expression = policyExpression(workerPolicies.deny_nested_agents);
       for (const nestedTool of ["spawn_agent", "Agent", "Task"]) {
@@ -346,79 +478,83 @@ describe("polly-loopworks bundle contract", () => {
     }
   });
 
-  it("uses public policy paths that resolve through real Python imports", {
-    timeout: 30_000,
-  }, () => {
-    const source = omnigentSource();
-    expect(
-      source,
-      "set OMNIGENT_SOURCE_ROOT to the pinned Omnigent source checkout or fetch the pinned revision locally",
-    ).toBeDefined();
-    expect(source?.revision).toBe(omnigentRevision);
-    const sourceRoot = source?.root as string;
+  runtimePolicyTest(
+    "uses public policy paths that resolve through real Python imports",
+    { timeout: 30_000 },
+    () => {
+      const source = omnigentSource();
+      expect(
+        source,
+        "OMNIGENT_SOURCE_ROOT must point to the pinned Omnigent checkout",
+      ).toBeDefined();
+      expect(source?.revision).toBe(omnigentRevision);
+      const sourceRoot = source?.root as string;
 
-    const allConfigs: Array<AgentConfig | OrchestratorConfig> = [
-      readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml"),
-      ...Object.keys(expectedWorkers).map((name) =>
-        readAgent(name as keyof typeof expectedWorkers),
-      ),
-    ];
-    const configuredPaths = [
-      ...new Set(
-        allConfigs.flatMap((config) =>
-          Object.values(policies(config)).flatMap((policy) =>
-            policy.function?.path ? [policy.function.path] : [],
+      const allConfigs: Array<AgentConfig | OrchestratorConfig> = [
+        readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml"),
+        ...Object.keys(expectedWorkers).map((name) =>
+          readAgent(name as keyof typeof expectedWorkers),
+        ),
+      ];
+      const configuredPaths = [
+        ...new Set(
+          allConfigs.flatMap((config) =>
+            Object.values(policies(config)).flatMap((policy) =>
+              policy.function?.path ? [policy.function.path] : [],
+            ),
           ),
         ),
-      ),
-    ].sort();
+      ].sort();
 
-    expect(configuredPaths.every((handler) => handler.startsWith("omnigent.policies."))).toBe(true);
-    const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
-    const command = importPython ?? "uv";
-    const commandPrefix = importPython
-      ? []
-      : [
-          "run",
-          "--with",
-          "cel-python==0.5.0",
-          "--with",
-          "pydantic>=2,<3",
-          "--with",
-          "pyyaml>=6,<7",
-          "--no-project",
-          "python",
-        ];
-    const probe = spawnSync(
-      command,
-      [
-        ...commandPrefix,
-        "-c",
+      expect(configuredPaths.every((handler) => handler.startsWith("omnigent.policies."))).toBe(
+        true,
+      );
+      const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
+      const command = importPython ?? "uv";
+      const commandPrefix = importPython
+        ? []
+        : [
+            "run",
+            "--with",
+            "cel-python==0.5.0",
+            "--with",
+            "pydantic>=2,<3",
+            "--with",
+            "pyyaml>=6,<7",
+            "--no-project",
+            "python",
+          ];
+      const probe = spawnSync(
+        command,
         [
-          "import importlib, json, sys",
-          "paths = json.loads(sys.argv[1])",
-          "missing = []",
-          "for dotted in paths:",
-          " module_name, attr = dotted.rsplit('.', 1)",
-          " module = importlib.import_module(module_name)",
-          " registry = getattr(module, 'POLICY_REGISTRY', [])",
-          " if not callable(getattr(module, attr, None)) or not any(entry.get('handler') == dotted for entry in registry):",
-          "  missing.append(dotted)",
-          "print(json.dumps({'resolved': paths, 'missing': missing}))",
-          "raise SystemExit(1 if missing else 0)",
-        ].join("\n"),
-        JSON.stringify(configuredPaths),
-      ],
-      {
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          PYTHONPATH: [sourceRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+          ...commandPrefix,
+          "-c",
+          [
+            "import importlib, json, sys",
+            "paths = json.loads(sys.argv[1])",
+            "missing = []",
+            "for dotted in paths:",
+            " module_name, attr = dotted.rsplit('.', 1)",
+            " module = importlib.import_module(module_name)",
+            " registry = getattr(module, 'POLICY_REGISTRY', [])",
+            " if not callable(getattr(module, attr, None)) or not any(entry.get('handler') == dotted for entry in registry):",
+            "  missing.append(dotted)",
+            "print(json.dumps({'resolved': paths, 'missing': missing}))",
+            "raise SystemExit(1 if missing else 0)",
+          ].join("\n"),
+          JSON.stringify(configuredPaths),
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PYTHONPATH: [sourceRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+          },
         },
-      },
-    );
-    expect(probe.status, `${probe.stdout}\n${probe.stderr}`).toBe(0);
-  });
+      );
+      expect(probe.status, `${probe.stdout}\n${probe.stderr}`).toBe(0);
+    },
+  );
 
   it("bounds orchestrator dispatch and denies custom children and Fable overrides", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
@@ -442,7 +578,6 @@ describe("polly-loopworks bundle contract", () => {
     const expression = policyExpression(orchestratorPolicies.deny_claude_fable_5);
     expect(expression).toContain('event.data.name == "sys_session_create"');
     expect(expression).toContain("claude-fable-5");
-    expect(orchestratorPolicies.deny_claude_fable_5?.on).toEqual(["tool_call"]);
   });
 
   it("requires an accurate reviewer-model and author-lineage record on every PR", () => {
@@ -455,7 +590,8 @@ describe("polly-loopworks bundle contract", () => {
   });
 
   it("defines a single-PR managed sequence with phase headers and a transition ledger", () => {
-    const skill = readFileSync(path.join(bundleRoot, "skills/implement-issue-pr/SKILL.md"), "utf8");
+    const skill = readFileSync(orchestrationSkillPath, "utf8");
+    expect(skill).toContain("name: orchestrate-issue-pr");
     expect(skill).toContain("Single PR only");
     expect(skill).not.toMatch(/stacked PR|gh-stack/i);
     for (const field of ["ROLE:", "PHASE:", "DONE:", "YOU PRODUCE:", "YOU DO NOT:", "NEXT:"]) {
@@ -466,6 +602,44 @@ describe("polly-loopworks bundle contract", () => {
     expect(skill).toContain("append after every phase transition");
   });
 
+  it("bounds review reconciliation, preserves an independence floor, and publishes evidence", () => {
+    const skill = readFileSync(orchestrationSkillPath, "utf8");
+    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
+    const prompt = orchestrator.prompt ?? "";
+
+    for (const text of [skill, prompt]) {
+      const normalized = text.toLowerCase();
+      expect(normalized).toContain("two reconciliation rounds");
+      expect(normalized).toContain("human operator");
+      expect(normalized).toContain("publication remains blocked");
+      expect(normalized).toContain("both reviewers share the author's model lineage");
+      expect(normalized).toContain("explicit operator authorization");
+      expect(text).not.toContain("Terra model override");
+      expect(text).toContain("`ask`");
+    }
+
+    expect(skill).toContain(".polly/review-packet/reviewer-a.md");
+    expect(skill).toContain(".polly/review-packet/reviewer-b.md");
+    expect(skill).toContain("gh pr comment --body-file");
+    expect(skill).toContain("comment URL");
+  });
+
+  it("records the self-attested cwd residual risk and unique ADR numbering", () => {
+    const adr = readFileSync(
+      path.join(repoRoot, "docs/adr/0034-project-scoped-polly-model-routing.md"),
+      "utf8",
+    );
+    expect(adr).toContain("self-attested");
+    expect(adr).toContain("allow_cwd_override: true");
+    expect(adr).toContain("gate_pushes: false");
+
+    const adrFiles = readdirSync(path.join(repoRoot, "docs/adr"));
+    expect(adrFiles.filter((name) => name.startsWith("0034-"))).toEqual([
+      "0034-project-scoped-polly-model-routing.md",
+    ]);
+    expect(adrFiles).not.toContain("0033-project-scoped-polly-model-routing.md");
+  });
+
   it("splits phase craft from the thin human-facing composers", () => {
     const skillText = new Map(
       phaseSkillNames.map((name) => [
@@ -474,6 +648,10 @@ describe("polly-loopworks bundle contract", () => {
       ]),
     );
     for (const [name, skill] of skillText) {
+      const bundleSkillPath = path.join(bundleRoot, `skills/${name}`);
+      expect(readlinkSync(bundleSkillPath)).toBe(`../../../.agents/skills/${name}`);
+      expect(statSync(path.join(bundleSkillPath, "SKILL.md")).isFile()).toBe(true);
+      expect(readFileSync(path.join(bundleSkillPath, "SKILL.md"), "utf8")).toBe(skill);
       expect(skill).not.toMatch(/^## Subagents$/m);
       expect(skill).not.toMatch(/adversarial review/i);
       expect(skill).not.toMatch(/spawn (?:a )?subagent/i);

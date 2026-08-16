@@ -72,6 +72,13 @@ describe("agent context budget", () => {
 
   it("gives the worktree variant its own branch, commits, and draft PR", () => {
     expect(implementIssuePrSkill).toContain("sibling issue worktree");
+    expect(implementIssuePrSkill).toMatch(/outside the\s+repository/);
+    expect(implementIssuePrSkill).toContain('git worktree add -b "<type>/<issue>-<slug>"');
+    expect(implementIssuePrSkill).toContain("../loopworks-worktrees/<issue>-<slug>");
+    expect(implementIssuePrSkill).toContain("security:osv");
+    expect(implementIssuePrSkill).toContain("No package sources found");
+    expect(implementIssuePrSkill).toContain("bun install");
+    expect(implementIssuePrSkill).toContain(".env.local");
     expect(implementIssuePrSkill).toContain("commit-signed-pr");
     expect(commitSignedPrSkill).toContain("Conventional Commit");
     expect(commitSignedPrSkill).toContain("git commit -S");
@@ -79,6 +86,9 @@ describe("agent context budget", () => {
     expect(commitSignedPrSkill).toContain("Closes #<issue>");
     expect(commitSignedPrSkill).not.toContain("--fill");
     expect(commitSignedPrSkill).toContain("commit:provenance --github");
+    expect(implementIssueSkill).toContain(
+      "Never create, switch, rebase, or clean branches or worktrees",
+    );
   });
 
   it("indexes the proposed signed provenance decision and its migration boundary", () => {

@@ -29,19 +29,16 @@ guardrails:
   policies:
     blast_radius:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
           gate_pushes: true
     read_only_os:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.orchestration.read_only_os
     deny_shell:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:
@@ -52,14 +49,12 @@ guardrails:
             : {"result": "ALLOW"}
     block_orchestration_skills:
       type: function
-      on: [request, tool_call]
       function:
         path: omnigent.policies.builtins.safety.block_skills
         arguments:
-          blocked: [implement-issue, implement-issue-pr]
+          blocked: [agent-browser, browser-validate, commit-signed-pr, eve, gh-stack, implement-issue, implement-issue-pr, tdd-implement]
     deny_nested_agents:
       type: function
-      on: [tool_call]
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:
