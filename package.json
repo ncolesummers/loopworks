@@ -23,6 +23,8 @@
     "config:sync": "bun run scripts/sync-env-example.ts --write",
     "config:check": "bun run scripts/sync-env-example.ts --check",
     "config:access-check": "bun run scripts/check-env-access.ts",
+    "schemas:sync": "bun run scripts/sync-schemas.ts --write",
+    "schemas:check": "bun run scripts/sync-schemas.ts --check",
     "vercel-env:check": "bun run scripts/sync-vercel-env.ts --check",
     "vercel-env:write": "bun run scripts/sync-vercel-env.ts --write",
     "commit:preflight": "bun run scripts/check-commit-provenance.ts --local",
@@ -58,7 +60,7 @@
     "security:gitleaks:history": "bun run scripts/run-security-scanner.ts gitleaks-history",
     "security:semgrep": "bun run scripts/run-security-scanner.ts semgrep",
     "security:scan": "bun run security:osv && bun run security:gitleaks && bun run security:semgrep",
-    "validate": "bun run check && bun run agent-docs:check && bun run config:check && bun run config:access-check && bun run security:osv && bun run security:gitleaks && bun run security:semgrep && bun run markdownlint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
+    "validate": "bun run check && bun run agent-docs:check && bun run config:check && bun run config:access-check && bun run schemas:check && bun run security:osv && bun run security:gitleaks && bun run security:semgrep && bun run markdownlint && bun run typecheck && bun run test && bun run storybook:build && bun run test:e2e"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

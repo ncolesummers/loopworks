@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loopworks.local/schemas/persona-journey.v1.schema.json",
+  "title": "Persona Journey Registry (loopworks.persona_journey.v1)",
+  "$comment": "Generated from schemas/persona-journey.ts by scripts/sync-schemas.ts. Do not edit; run `bun run schemas:sync`. Cross-field invariants are enforced in Zod only and are not represented here.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "journeys": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "journeyId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "personaTestIds": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "P01",
+                "P02",
+                "P03",
+                "P04",
+                "P05",
+                "P06",
+                "M01",
+                "M02",
+                "M03",
+                "M04",
+                "M05",
+                "A01",
+                "A02",
+                "A03",
+                "R01",
+                "R02",
+                "S01",
+                "S02",
+                "S03",
+                "S04",
+                "S05",
+                "S06",
+                "S07"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "startState": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "endState": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "surfaces": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "app-shell",
+                "dashboard",
+                "catalog",
+                "loops",
+                "loop-registration",
+                "runs",
+                "approvals",
+                "deployments",
+                "settings",
+                "settings-repositories",
+                "github-install-landing",
+                "sign-in"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "allowedRoutes": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^\\/(?:(?!\\.\\.?(?:[/?#]|$))[A-Za-z0-9\\-._~!$&'()*+,;=:@\\[\\]]+(?:\\/(?!\\.\\.?(?:[/?#]|$))[A-Za-z0-9\\-._~!$&'()*+,;=:@\\[\\]]+)*\\/?)?(?:\\?[A-Za-z0-9\\-._~%!$&'()*+,;=:@\\[\\]/?]*)?(?:#[A-Za-z0-9\\-._~%!$&'()*+,;=:@\\[\\]/?]*)?$"
+            },
+            "uniqueItems": true
+          },
+          "fixtureWorldId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "session": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "unauthenticated"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "persona_fixture"
+                  },
+                  "sessionProfileId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "sessionProfileId"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "actions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "surface": {
+                  "type": "string",
+                  "enum": [
+                    "app-shell",
+                    "dashboard",
+                    "catalog",
+                    "loops",
+                    "loop-registration",
+                    "runs",
+                    "approvals",
+                    "deployments",
+                    "settings",
+                    "settings-repositories",
+                    "github-install-landing",
+                    "sign-in"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "description",
+                "surface"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "checkpoints": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              },
+              "required": [
+                "id",
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "expectations": {
+            "type": "object",
+            "properties": {
+              "functional": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "uniqueItems": true
+              },
+              "keyboard": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "uniqueItems": true
+              },
+              "accessibility": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "functional",
+              "keyboard",
+              "accessibility"
+            ],
+            "additionalProperties": false
+          },
+          "viewports": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "mobile",
+                "tablet",
+                "desktop"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "themes": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "light",
+                "dark"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "mutations": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "none",
+                "fixture_database_write",
+                "browser_storage_write"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "budgets": {
+            "type": "object",
+            "properties": {
+              "maxDurationMs": {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 600000
+              },
+              "maxActions": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            },
+            "required": [
+              "maxDurationMs",
+              "maxActions"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "journeyId",
+          "personaTestIds",
+          "goal",
+          "startState",
+          "endState",
+          "surfaces",
+          "allowedRoutes",
+          "fixtureWorldId",
+          "session",
+          "actions",
+          "checkpoints",
+          "expectations",
+          "viewports",
+          "themes",
+          "mutations",
+          "budgets"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "coverage": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string",
+                "enum": [
+                  "P01",
+                  "P02",
+                  "P03",
+                  "P04",
+                  "P05",
+                  "P06",
+                  "M01",
+                  "M02",
+                  "M03",
+                  "M04",
+                  "M05",
+                  "A01",
+                  "A02",
+                  "A03",
+                  "R01",
+                  "R02",
+                  "S01",
+                  "S02",
+                  "S03",
+                  "S04",
+                  "S05",
+                  "S06",
+                  "S07"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "browser_journey"
+              },
+              "journeyIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+                },
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "scenarioId",
+              "kind",
+              "journeyIds"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string",
+                "enum": [
+                  "P01",
+                  "P02",
+                  "P03",
+                  "P04",
+                  "P05",
+                  "P06",
+                  "M01",
+                  "M02",
+                  "M03",
+                  "M04",
+                  "M05",
+                  "A01",
+                  "A02",
+                  "A03",
+                  "R01",
+                  "R02",
+                  "S01",
+                  "S02",
+                  "S03",
+                  "S04",
+                  "S05",
+                  "S06",
+                  "S07"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "deterministic_non_browser"
+              },
+              "coveringTests": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "scenarioId",
+              "kind",
+              "coveringTests"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string",
+                "enum": [
+                  "P01",
+                  "P02",
+                  "P03",
+                  "P04",
+                  "P05",
+                  "P06",
+                  "M01",
+                  "M02",
+                  "M03",
+                  "M04",
+                  "M05",
+                  "A01",
+                  "A02",
+                  "A03",
+                  "R01",
+                  "R02",
+                  "S01",
+                  "S02",
+                  "S03",
+                  "S04",
+                  "S05",
+                  "S06",
+                  "S07"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "not_applicable"
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "scenarioId",
+              "kind",
+              "rationale"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "version",
+    "journeys"
+  ],
+  "additionalProperties": false
+}
