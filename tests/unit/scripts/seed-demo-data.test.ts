@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import type { SeedCounts, SeedDatabase } from "@/lib/seed/demo-data";
 
-import { runSeedCli } from "../../../scripts/seed-demo-data";
+import { type RunSeedCliDependencies, runSeedCli } from "../../../scripts/seed-demo-data";
 
 const fakeDatabase = {} as SeedDatabase;
 
@@ -219,5 +219,72 @@ describe("seed-demo-data CLI", () => {
 
     expect(exitCode).toBe(1);
     expect(seedSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing role", { code: "28000", message: 'role "loopworks" does not exist' }, "db:bootstrap"],
+    [
+      "missing database",
+      { code: "3D000", message: 'database "loopworks" does not exist' },
+      "db:bootstrap",
+    ],
+    [
+      "bad authentication",
+      { code: "28P01", message: "password secret rejected" },
+      "authentication",
+    ],
+    [
+      "connection refused",
+      { code: "ECONNREFUSED", message: "postgres://user:secret@127.0.0.1" },
+      "Postgres.app",
+    ],
+    ["timeout", { code: "ETIMEDOUT", message: "secret timeout" }, "Postgres.app"],
+    ["sandbox EPERM", { code: "EPERM", message: "secret operation not permitted" }, "sandbox"],
+    ["sandbox EACCES", { code: "EACCES", message: "secret permission denied" }, "sandbox"],
+    ["unknown", new Error("postgres://user:secret@127.0.0.1/loopworks"), "db:doctor"],
+  ] as const)(
+    "returns a sanitized actionable failure for %s",
+    async (_label, failure, nextStep) => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const seedSpy = vi.fn(async () => {
+        throw failure;
+      });
+
+      const exitCode = await runSeedCli(
+        [],
+        {
+          NODE_ENV: "development",
+          DATABASE_URL: "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks",
+        },
+        { seedDemoData: seedSpy, database: fakeDatabase },
+      );
+
+      expect(exitCode).toBe(1);
+      const output = errorSpy.mock.calls.flat().join(" ");
+      expect(output).toContain(nextStep);
+      expect(output).not.toMatch(/secret|postgres:\/\//);
+    },
+  );
+
+  it("classifies a secret-bearing default database construction failure", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const seedSpy = vi.fn(async () => emptyCounts());
+    const loadDatabase = vi.fn(async () => {
+      throw { code: "ECONNREFUSED", message: "postgres://user:loader-secret@127.0.0.1" };
+    });
+
+    const exitCode = await runSeedCli(
+      [],
+      {
+        NODE_ENV: "development",
+        DATABASE_URL: "postgres://loopworks:loopworks@127.0.0.1:5432/loopworks",
+      },
+      { loadDatabase, seedDemoData: seedSpy } as RunSeedCliDependencies,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(loadDatabase).toHaveBeenCalledOnce();
+    expect(seedSpy).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.flat().join(" ")).not.toMatch(/loader-secret|postgres:\/\//);
   });
 });

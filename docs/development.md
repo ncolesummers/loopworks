@@ -16,6 +16,104 @@ LOOPWORKS_PORTAL_DATA_MODE=fixtures bun run dev:fixture
 Open <http://127.0.0.1:3000>. Both fixture data and auth bypass are ignored in
 production.
 
+## Database-backed local quick start
+
+The fixture-mode quick start above does not need Postgres. Use this path when
+you want ordinary database-backed development or either native Postgres test
+lane.
+
+1. Install [Postgres.app](https://postgresapp.com/documentation/install.html)
+   in `/Applications`, open it, click **Initialize**, and start the server.
+   Postgres.app creates an administrator matching your macOS account by
+   default.
+2. Add Postgres.app's command-line tools to new Terminal sessions, then verify
+   `psql` resolves:
+
+   ```bash
+   sudo mkdir -p /etc/paths.d
+   echo /Applications/Postgres.app/Contents/Versions/latest/bin | \
+     sudo tee /etc/paths.d/postgresapp
+   which psql
+   ```
+
+3. Create the untracked local configuration file if you do not already have
+   one. The checked-in example contains the canonical loopback development
+   URL.
+
+   ```bash
+   cp -n .env.example .env.local
+   ```
+
+4. Prepare the fixed local role and databases, apply the checked-in migrations,
+   and verify the target. Bootstrap is idempotent and does not migrate or seed;
+   doctor is read-only and requires exact migration currency.
+
+   ```bash
+   bun run db:bootstrap
+   bun run db:migrate
+   bun run db:doctor
+   bun run db:seed        # optional fixed demo rows
+   ```
+
+5. Start the ordinary database-backed server:
+
+   ```bash
+   bun run dev
+   ```
+
+Open <http://127.0.0.1:3000>. `db:bootstrap` accepts only the canonical
+`loopworks` URL on `127.0.0.1:5432`, discovers the macOS account and then
+`postgres` as possible administrators, and requires both `CREATEROLE` and
+`CREATEDB`. When the login already exists but a database is missing, that
+administrator must also be able to `SET ROLE loopworks` (or be its member on
+PostgreSQL 15). A fresh PostgreSQL 15 cluster requires the normal Postgres.app
+superuser because that release does not automatically grant a role creator
+membership in the role it creates. Bootstrap creates only the `loopworks` login
+and the `loopworks` and `loopworks_e2e` databases. Existing compatible objects
+are left alone; different owners and incompatible login attributes fail without
+alteration. Final canonical connections verify the configured role and both
+databases without changing them.
+
+### Manual Postgres.app bootstrap
+
+If you need to perform the equivalent operations manually, use the Postgres.app
+administrator created for your macOS account. Substitute `postgres` for
+`"$USER"` only if that administrator exists in your cluster:
+
+```bash
+psql --host 127.0.0.1 --username "$USER" --dbname postgres \
+  --command "CREATE ROLE loopworks LOGIN PASSWORD 'loopworks';"
+createdb --host 127.0.0.1 --username "$USER" --owner loopworks loopworks
+createdb --host 127.0.0.1 --username "$USER" --owner loopworks loopworks_e2e
+```
+
+These create commands intentionally fail when an object already exists. Inspect
+existing role attributes with `\du loopworks` and database owners with `\l`
+before deciding on any manual alteration; do not take ownership of an unrelated
+database merely to make setup pass.
+
+### Database troubleshooting
+
+- **Server unavailable:** open Postgres.app, start the intended cluster, and
+  run `pg_isready --host 127.0.0.1 --port 5432` before retrying
+  `bun run db:doctor`.
+- **Role missing:** run `bun run db:bootstrap`, or create the fixed login with
+  the manual administrator command above.
+- **Database missing or owned by another role:** run bootstrap for an absent
+  database. For an ownership conflict, inspect `\l` and resolve it manually;
+  bootstrap never changes ownership.
+- **Authentication rejected:** verify `.env.local` still uses the canonical
+  `loopworks` credentials. From an administrator session, reset only this local
+  development role with
+  `ALTER ROLE loopworks LOGIN PASSWORD 'loopworks';`, then rerun doctor.
+- **Migrations pending:** run `bun run db:migrate`, then doctor. If doctor calls
+  the history incompatible, stop instead of forcing migration metadata; repair
+  the local database intentionally or recreate only the disposable test
+  database using the destructive procedure below.
+- **Sandbox permission denied:** `EPERM` or `EACCES` can mean the agent sandbox
+  blocked a healthy loopback socket. Retry doctor in an ordinary Terminal; do
+  not weaken the target guard.
+
 ## Local Integrations
 
 Copy `.env.example` to the untracked `.env.local`, replace only the values your
@@ -79,10 +177,10 @@ After migrations, seed the fixed demo rows with `bun run db:seed`. Use
 to either command to inspect its plan. ADR 0007 requires both commands to reject
 production runtimes, remote hosts, and non-Postgres URLs.
 
-The browser and native concurrency lanes use a dedicated local database:
+Bootstrap creates the dedicated database used by the browser and native
+concurrency lanes:
 
 ```bash
-createdb --host 127.0.0.1 --username loopworks loopworks_e2e
 DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \
   bun run test:e2e:seeded
 DATABASE_URL="postgres://loopworks:loopworks@127.0.0.1:5432/loopworks_e2e" \

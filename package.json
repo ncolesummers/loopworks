@@ -45,6 +45,8 @@
     "precommit:install": "uvx prek install",
     "precommit:run": "uvx prek run --all-files",
     "db:generate": "drizzle-kit generate",
+    "db:bootstrap": "bun run scripts/bootstrap-local-database.ts",
+    "db:doctor": "bun run scripts/database-doctor.ts",
     "db:migrate": "bun run scripts/migrate-database.ts",
     "db:provision": "bun run scripts/provision-store-identity.ts",
     "db:studio": "drizzle-kit studio",

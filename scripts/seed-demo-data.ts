@@ -1,21 +1,31 @@
 #!/usr/bin/env bun
 
-import { db } from "@/db/client";
 import {
   buildDemoSeedData,
   type SeedCounts,
   type SeedDatabase,
   seedDemoData,
 } from "@/lib/seed/demo-data";
+import { classifyDatabaseError, databaseFailureMessage } from "./database-errors";
 import { getLocalDatabaseSafetyError } from "./local-database-safety";
 
 export type RunSeedCliDependencies = {
-  database: SeedDatabase;
+  closeDatabase?: (database: SeedDatabase) => Promise<void>;
+  database?: SeedDatabase;
+  loadDatabase?: () => Promise<SeedDatabase>;
   seedDemoData: (database: SeedDatabase, options?: { reset?: boolean }) => Promise<SeedCounts>;
 };
 
 const defaultDependencies: RunSeedCliDependencies = {
-  database: db,
+  closeDatabase: async (database) => {
+    const client = (
+      database as SeedDatabase & {
+        $client: { end: (options?: { timeout?: number }) => Promise<void> };
+      }
+    ).$client;
+    await client.end({ timeout: 5 });
+  },
+  loadDatabase: async () => (await import("@/db/client")).db,
   seedDemoData,
 };
 
@@ -93,23 +103,29 @@ export async function runSeedCli(
     return 0;
   }
 
-  const counts = await dependencies.seedDemoData(dependencies.database, {
-    reset: parsed.reset,
-  });
-  printCounts(`Seeded demo data${parsed.reset ? " (reset first)" : ""}:`, counts);
-
-  return 0;
-}
-
-if (import.meta.main) {
+  let database: SeedDatabase | undefined;
+  let exitCode = 1;
   try {
-    process.exitCode = await runSeedCli(process.argv.slice(2));
-  } finally {
-    // `db` is a lazy postgres-js pool: it only opens a socket once a query
-    // runs (inside seedDemoData's transaction), but once open, postgres-js
-    // keeps it alive to keep the event loop from exiting on its own.
-    // Closing it here (a no-op if no query ever ran) lets the CLI actually
-    // return control to the shell instead of hanging after printing counts.
-    await db.$client.end({ timeout: 5 });
+    database = dependencies.database ?? (await dependencies.loadDatabase?.());
+    if (!database) throw new Error("Database dependency is unavailable.");
+    const counts = await dependencies.seedDemoData(database, {
+      reset: parsed.reset,
+    });
+    printCounts(`Seeded demo data${parsed.reset ? " (reset first)" : ""}:`, counts);
+    exitCode = 0;
+  } catch (error) {
+    console.error(databaseFailureMessage(classifyDatabaseError(error), "seed"));
   }
+
+  if (database && dependencies.closeDatabase) {
+    try {
+      await dependencies.closeDatabase(database);
+    } catch (error) {
+      console.error(databaseFailureMessage(classifyDatabaseError(error), "seed"));
+      return 1;
+    }
+  }
+  return exitCode;
 }
+
+if (import.meta.main) process.exitCode = await runSeedCli(process.argv.slice(2));
