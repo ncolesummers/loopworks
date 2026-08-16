@@ -41,8 +41,9 @@ LOOPWORKS_PORTAL_DATA_MODE=fixtures bun run dev:fixture
 ```
 
 Open <http://127.0.0.1:3000>. For real GitHub, Postgres, webhook, seed, and
-native-test setup, use the [development guide](docs/development.md). The
-generated [`.env.example`](.env.example) is the canonical configuration
+native-test setup, use the
+[database-backed local quick start](docs/development.md#database-backed-local-quick-start).
+The generated [`.env.example`](.env.example) is the canonical configuration
 inventory.
 
 ## Validation

@@ -34,8 +34,12 @@ The repo must avoid pretending in-memory stores are production-ready. In-memory 
 
 ## Follow-Ups
 
-1. Add a database health check and local bootstrap path around the generated
-   initial migration.
+1. **Done.** `bun run db:bootstrap` idempotently prepares the fixed native
+   Postgres.app role and databases without migrating or seeding, and the
+   read-only `bun run db:doctor` checks target safety, reachability, identity,
+   and exact ordered Drizzle migration hashes and timestamps. Focused script
+   tests and `tests/integration/postgres/database-doctor.native.test.ts` verify
+   the safety, cleanup, migration-currency, and no-mutation contracts.
 2. Define transaction boundaries for webhook intake, run creation, approval
    transitions, and PR creation.
 3. Decide whether event sourcing remains append-only events plus projections or
