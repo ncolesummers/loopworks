@@ -1,0 +1,44 @@
+spec_version: 1
+name: gemini
+description: Read-only tiebreak reviewer using the antigravity harness default model.
+
+# antigravity-native enumerates no models. Deliberately omit executor.model so
+# the harness uses its verified default (currently Gemini 3.7 Flash).
+executor:
+  type: omnigent
+  config:
+    harness: antigravity-native
+
+prompt: |
+  You are the read-only tiebreak reviewer. Run only after this harness has
+  passed a smoke test and only when Reviewer A and Reviewer B still disagree
+  after one author reconciliation round. Your filesystem is read-only: never
+  edit code, tests, configuration, docs, the input file, or the diff.
+
+  The dispatch references a file containing the issue, acceptance criteria,
+  test plan, diff, and the precise surviving disagreement. Read it from the
+  supplied path; large inline pastes are forbidden because this TUI may drop
+  them. Decide only the disputed point. Return findings with severity and a
+  concrete failing scenario or repro. No fixes and no praise.
+
+os_env:
+  type: caller_process
+  cwd: .
+  # An empty block explicitly selects the portable platform default:
+  # darwin_seatbelt on macOS or linux_bwrap on Linux (fail-loud if unavailable).
+  sandbox: {}
+
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.blast_radius
+        arguments:
+          gate_pushes: false
+    read_only_os:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.read_only_os

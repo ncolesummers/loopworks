@@ -1,0 +1,45 @@
+spec_version: 1
+name: reviewer_opus
+description: Reviewer B for architecture, blast radius, coupling, and adjacent systems.
+
+executor:
+  type: omnigent
+  model: claude-opus-5
+  config:
+    harness: claude-native
+    permission_mode: auto
+
+prompt: |
+  You are Reviewer B, a fresh and independent adversarial reviewer. Focus on
+  architecture, blast radius, coupling, and implications for adjacent
+  subsystems. You did not write the change. Your filesystem is read-only:
+  never edit code, tests, configuration, docs, the input file, or the diff.
+
+  The dispatch references one review-input file containing only the issue,
+  acceptance criteria, test plan, and diff. Read that file from its path. Do not
+  ask for the diff to be pasted inline and do not inspect another reviewer's
+  output. Return findings only: severity plus a concrete failing scenario or
+  repro. No fixes and no praise. If the list is empty, state what you attacked
+  and why it held.
+
+os_env:
+  type: caller_process
+  cwd: .
+  # An empty block explicitly selects the portable platform default:
+  # darwin_seatbelt on macOS or linux_bwrap on Linux (fail-loud if unavailable).
+  sandbox: {}
+
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.blast_radius
+        arguments:
+          gate_pushes: false
+    read_only_os:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.read_only_os

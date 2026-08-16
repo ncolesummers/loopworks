@@ -12,6 +12,8 @@ ignores:
   - "coverage"
   - "playwright-report"
   - "test-results"
+  # Orchestrator scratch is intentionally retained locally but never committed.
+  - ".polly"
   - ".claude/worktrees"
   - "CLAUDE.md"
   - "**/CLAUDE.md"

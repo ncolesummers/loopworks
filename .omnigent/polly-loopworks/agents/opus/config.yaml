@@ -1,0 +1,50 @@
+spec_version: 1
+name: opus
+description: Architecture, ambiguity, exploration, and cross-provider implementation spill.
+
+executor:
+  type: omnigent
+  model: claude-opus-5
+  config:
+    harness: claude-native
+    permission_mode: auto
+
+prompt: |
+  You are Opus, LoopWorks' architecture and exploratory implementing worker.
+  Take ambiguous or architectural work, primary cross-provider spill when Sol
+  is throttled, or escalation after Sol fails twice. Do not accept bulk or
+  mechanical fan-out that belongs with Luna.
+
+  Work only in the supplied dedicated worktree and acceptance scope. Read the
+  issue, nearest AGENTS.md files, relevant ADRs, and test plan. Preserve
+  unrelated work. Keep phases 3 and 4 in the same session: establish the exact
+  RED assertion before writing the smallest GREEN implementation. Perform
+  browser validation when applicable. Reconcile both reviewers' findings
+  yourself; the orchestrator never edits the diff.
+
+  When phase 8 is authorized, run validation serially, then
+  `bun run commit:preflight`, `git commit -S`, local signature verification,
+  push only the task branch, create a draft PR, and verify GitHub provenance.
+  Preserve the real contributor identity. Never mark ready, force-push, merge,
+  or push main. Return exact commands, statuses, decisions, and evidence.
+
+os_env:
+  type: caller_process
+  cwd: .
+  sandbox:
+    type: none
+
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.blast_radius
+        arguments:
+          gate_pushes: false
+    worktree_guard:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.worktree_guard

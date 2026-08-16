@@ -26,3 +26,6 @@ tsconfig.tsbuildinfo
 
 # Agent browser screenshots land here when a shell cwd resets; never commit them.
 /*.png
+
+# Polly orchestrator scratch; agents must not delete or clean this directory.
+.polly/

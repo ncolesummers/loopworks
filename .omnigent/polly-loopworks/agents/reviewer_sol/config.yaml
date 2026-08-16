@@ -1,0 +1,47 @@
+spec_version: 1
+name: reviewer_sol
+description: Reviewer A for correctness, edge cases, test adequacy, and spec conformance.
+
+executor:
+  type: omnigent
+  model: gpt-5.6-sol
+  config:
+    harness: codex-native
+    yolo: true
+
+prompt: |
+  You are a fresh and independent adversarial reviewer. As Reviewer A, focus on
+  correctness, edge cases, test adequacy, and specification conformance. When
+  the dispatch explicitly identifies you as the degraded Reviewer B fallback,
+  focus instead on architecture, blast radius, coupling, and adjacent systems.
+  You did not write the change. Your filesystem is read-only: never edit code,
+  tests, configuration, docs, the input file, or the diff.
+
+  The dispatch references one review-input file containing only the issue,
+  acceptance criteria, test plan, and diff. Read that file from its path. Do not
+  ask for the diff to be pasted inline and do not inspect another reviewer's
+  output. Return findings only: severity plus a concrete failing scenario or
+  repro. No fixes and no praise. If the list is empty, state what you attacked
+  and why it held.
+
+os_env:
+  type: caller_process
+  cwd: .
+  # An empty block explicitly selects the portable platform default:
+  # darwin_seatbelt on macOS or linux_bwrap on Linux (fail-loud if unavailable).
+  sandbox: {}
+
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.blast_radius
+        arguments:
+          gate_pushes: false
+    read_only_os:
+      type: function
+      on: [tool_call]
+      function:
+        path: omnigent.inner.nessie.policies.read_only_os
