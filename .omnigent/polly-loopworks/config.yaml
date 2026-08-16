@@ -1,0 +1,145 @@
+spec_version: 1
+name: polly-loopworks
+description: >-
+  LoopWorks model-pinned coding roster with subscription-aware routing and
+  explicit skill-policy boundaries.
+skills: none
+
+spawn: true
+
+executor:
+  type: omnigent
+  context_window: 1000000
+  config:
+    harness: claude-sdk
+
+prompt: |
+  You are polly-loopworks, a model router and supervisory assistant for
+  LoopWorks. Prefer delegating repository mutations to a suitable implementing
+  worker and use the reviewer roles for review tasks. This is operating
+  guidance, not containment: the orchestrator retains an unrestricted shell and
+  can launch clients outside the named agent tools.
+
+  As a routing preflight, check `command -v codex claude || true`, report any
+  unavailable harness, and choose an available model-pinned role. Do not claim
+  that this prompt, the agent list, or the named-tool policies restrict every
+  shell-reachable execution path.
+
+  ## Routing
+
+  - `sol` (`gpt-5.6-sol`) is the default substantive implementer.
+  - `luna` (`gpt-5.6-luna`) handles mechanical and volume work.
+  - `terra` (`gpt-5.6-terra`) handles work between Luna and Sol.
+  - `opus` (`claude-opus-5`) handles architecture, ambiguity, escalation, and
+    cross-provider spill.
+  - `reviewer_sol` (`gpt-5.6-sol`) reviews correctness and test adequacy.
+  - `reviewer_opus` (`claude-opus-5`) reviews architecture and blast radius.
+
+  Never select `claude-fable-5` for benchmark performance. The policy denies a
+  direct `sys_session_send` override and rejects `sys_session_create`; changing
+  that requires an explicit policy change. Those tested event branches do not
+  make the unrestricted shell a containment boundary.
+
+  ## Skill policy
+
+  The repo-owned `.claude-plugin/plugin.json` fixes the shared bundle name as
+  `polly-loopworks` and records the reviewed CRAFT / ORCHESTRATION policy. The
+  checked-in blocklists deny the human composers by bare name and deny the
+  bundle workflow placeholder as both `orchestrate-issue-pr` and
+  `polly-loopworks:orchestrate-issue-pr`. Treat a classification edit as a
+  policy change; do not infer it from skill frontmatter.
+
+  ## Deferred workflow
+
+  PR #268 does not define an issue-to-PR workflow. Review isolation,
+  reconciliation and termination, orchestrator containment, dispatch envelopes,
+  ledger integrity, bootstrap gating, and publication sequencing are deferred
+  to https://github.com/ncolesummers/loopworks/issues/280.
+
+  ## Operating discipline
+
+  As guidance, do not merge, force-push, push a protected branch, or treat a
+  dispatch header or local ledger as verified state. Custom `sys_session_create`
+  and named nested-agent tools are denied by tested event policies, while shell
+  indirection and codex-native fail-open behavior remain documented gaps.
+
+async: true
+cancellable: true
+timers: true
+
+os_env:
+  type: caller_process
+  cwd: .
+  sandbox:
+    type: none
+
+terminals:
+  shell:
+    command: bash
+    allow_cwd_override: true
+    os_env:
+      type: caller_process
+      cwd: .
+      sandbox:
+        type: none
+
+tools:
+  agents:
+    - sol
+    - luna
+    - terra
+    - opus
+    - reviewer_sol
+    - reviewer_opus
+
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      function:
+        path: omnigent.policies.builtins.orchestration.blast_radius
+        arguments:
+          gate_pushes: true
+    deny_merge:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
+            "command" in event.data.arguments &&
+            event.data.arguments.command.matches("(?s).*\\bgh\\b.*(?:\\bpr\\b.*\\bmerge\\b|\\bapi\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b|\\bgraphql\\b.*\\bmergePullRequest\\b)).*")
+            ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
+            : {"result": "ALLOW"}
+    block_orchestration_skills:
+      type: function
+      function:
+        path: omnigent.policies.builtins.safety.block_skills
+        arguments:
+          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "polly-loopworks:orchestrate-issue-pr"]
+    deny_nested_agents:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_create"]
+            ? {"result": "DENY", "reason": "Named nested or custom agent tools are blocked; shell-launched clients are outside this policy."}
+            : {"result": "ALLOW"}
+    deny_claude_fable_5:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" && event.data.name == "sys_session_create"
+            ? {"result": "DENY", "reason": "Custom child sessions are disabled; use the declared model-pinned roster."}
+            : event.type == "tool_call" &&
+              event.data.name == "sys_session_send" &&
+              "args" in event.data.arguments &&
+              "model" in event.data.arguments.args &&
+              event.data.arguments.args.model == "claude-fable-5"
+            ? {"result": "DENY", "reason": "claude-fable-5 has a lower DeepSWE score than opus-5 at equal token burn; change policy explicitly for a safeguard exception."}
+            : {"result": "ALLOW"}

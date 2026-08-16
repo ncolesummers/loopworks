@@ -54,6 +54,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0031](0031-authorized-github-issue-activation.md) | Proposed | Authorize the signed actor and exact manifest-declared readiness transition before constructing an issue-triggered run. |
 | [0032](0032-operator-bound-repository-selection-access.md) | Proposed | Bind repository-selection reads and applies to the acting operator's same-App installation access with a 60-second positive-only cache. |
 | [0033](0033-persona-journey-registry.md) | Proposed | Define persona journeys and exhaustive scenario coverage as a versioned registry that is the executable projection of the persona narrative. |
+| [0034](0034-project-scoped-polly-model-routing.md) | Proposed | Encode subscription-aware model tiers, read-only dual review, and contributor-safe issue publication in a project-scoped Polly bundle. |
 
 ## Template
 

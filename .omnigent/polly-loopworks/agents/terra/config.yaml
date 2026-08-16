@@ -1,0 +1,62 @@
+spec_version: 1
+name: terra
+description: Mid-tier implementer and OpenAI spill target for work beyond Luna.
+skills: [tdd-implement, browser-validate, commit-signed-pr]
+
+executor:
+  type: omnigent
+  model: gpt-5.6-terra
+  config:
+    harness: codex-native
+    yolo: true
+
+prompt: |
+  You are Terra, LoopWorks' mid-tier implementing worker. Use the selected
+  craft, preserve unrelated work, and return exact commands and statuses. As
+  guidance, do not spawn subagents, merge, force-push, or push a protected
+  branch. Named-tool policies provide partial defense in depth, not shell
+  containment. Managed workflow guarantees are deferred to
+  https://github.com/ncolesummers/loopworks/issues/280.
+
+os_env:
+  type: caller_process
+  cwd: .
+  sandbox:
+    type: none
+
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      function:
+        path: omnigent.policies.builtins.orchestration.blast_radius
+        arguments:
+          gate_pushes: false
+    deny_merge:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
+            "command" in event.data.arguments &&
+            event.data.arguments.command.matches("(?s).*\\bgh\\b.*(?:\\bpr\\b.*\\bmerge\\b|\\bapi\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b|\\bgraphql\\b.*\\bmergePullRequest\\b)).*")
+            ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
+            : {"result": "ALLOW"}
+    block_orchestration_skills:
+      type: function
+      function:
+        path: omnigent.policies.builtins.safety.block_skills
+        arguments:
+          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "polly-loopworks:orchestrate-issue-pr"]
+    deny_nested_agents:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_send", "sys_session_create"]
+            ? {"result": "DENY", "reason": "Named nested-agent tools are blocked; shell-launched clients are outside this policy."}
+            : {"result": "ALLOW"}
