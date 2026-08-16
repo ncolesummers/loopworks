@@ -236,7 +236,7 @@ Default to a single pull request. Use a stack only when each proposed layer has
 its own purpose and the upper layer genuinely depends on the lower one. A large
 but indivisible mechanical change may still be one PR; several small unrelated
 changes do not become a stack merely because one agent found them together.
-[The human guide to the polly-loopworks orchestrator](guides/polly-loopworks.md)
+[The guide to the polly-loopworks orchestrator](guides/omnigent-setup.md)
 covers its setup and operation.
 PR shape does not grant publication authority. For a single PR, use
 `implement-issue` or `implement-issue-pr` according to the request. A stack
