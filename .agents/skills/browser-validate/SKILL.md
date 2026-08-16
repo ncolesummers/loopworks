@@ -1,6 +1,8 @@
 ---
 name: browser-validate
 description: Validate a user-visible LoopWorks change in a real browser across primary, negative, responsive, accessibility, console, and network cases.
+metadata:
+  loopworks-skill-class: CRAFT
 ---
 
 # Browser Validate

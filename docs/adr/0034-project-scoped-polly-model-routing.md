@@ -42,22 +42,25 @@ tools, reviewer shell, Fable overrides, and common pull-request merge command
 forms. Reviewer `blast_radius` uses `gate_pushes: true`; implementers retain
 `false` for the authorized publication step.
 
-Treat the merge command pattern only as a best-effort speed bump. It covers
-direct `gh pr merge`, repository-qualified `gh -R`/`gh --repo` forms, and
-`gh api` merge endpoints, but shell indirection and other API clients can bypass
-string matching. The durable control is GitHub branch protection or a worker
-token without merge scope. Both are out of scope for this PR, so the bundle
-records rather than conceals that enforcement gap.
+Treat the merge command pattern only as a best-effort speed bump. It recognizes
+several common layouts: repository flags before or after `pr`, compact `-R`,
+REST merge endpoints, and GraphQL `mergePullRequest` mutations. It does not
+enumerate every valid CLI or API spelling; shell indirection and other clients
+can bypass string matching. The durable control is GitHub branch protection or
+a worker token without merge scope. Both are out of scope for this PR, so the
+bundle records rather than conceals that enforcement gap.
 
 Function-policy `on:` fields are ignored at the pinned Omnigent revision, so
 omit them and rely on each handler to self-select its event shape. More
-importantly, the codex-native policy hook can fail open when the Codex
-app-server is too old or workspace trust is rejected. Omnigent reports
-`policy_hook_disabled_reason` once, but this bundle has no executable preflight
-that consumes it. In that degraded state `reviewer_sol`'s direct-write, shell,
-nested-agent, and skill policies do not bind. Keep the Codex reviewer for
-routing capacity, but record this residual risk instead of claiming the YAML is
-a containment boundary.
+importantly, the policy hook for every codex-native worker can fail open when
+the Codex app-server is too old or workspace trust is rejected. This affects
+the implementers `sol`, `luna`, and `terra`, plus `reviewer_sol`. Omnigent
+reports `policy_hook_disabled_reason` once, but this bundle has no executable
+preflight that consumes it. In that degraded state merge, nested-agent, and
+skill policies do not bind for the implementers; `reviewer_sol` also loses
+direct-write and shell policies. Keep these workers for routing capacity, but
+record this residual risk instead of claiming the YAML is a containment
+boundary.
 
 Do not claim filesystem confinement for implementers. No checked-in runtime
 probe demonstrates a binding per-worker relocation or confinement mechanism.
@@ -75,10 +78,19 @@ risk.
 Split worker craft into `tdd-implement`, `browser-validate`, and
 `commit-signed-pr`. Bundle-local symlinks resolve to those canonical files, and
 the invariant suite compares their contents byte-for-byte. The human-facing
-issue skills compose those files and retain single-agent behavior. Managed
-workers receive only phase craft, policies target project-discoverable skills
-and agent-creation tools, every dispatch carries a position/authority header,
-and `.polly/workflow-state.md` is append-only at transitions.
+issue skills compose those files and retain single-agent behavior. Implementer
+filters select phase craft, while policies deny ORCHESTRATION-classified skills
+by bare and namespaced frontmatter name and deny agent-creation tools. The
+workflow instructs the orchestrator to add a position/authority header, but no
+policy validates that text. `.polly/workflow-state.md` records chronological
+transitions, but unrestricted workers can rewrite it, so it is not an integrity
+boundary.
+
+Set the top-level orchestrator's host-skill filter to `none`, block the bare and
+`polly-loopworks:` names of both human issue composers, and deny native or
+custom child creation. Keep its own bundle-local `orchestrate-issue-pr` route
+available and preserve `sys_session_send` for the declared worker roster; those
+are the sequence and dispatch authorities the orchestrator must retain.
 
 Limit the managed bundle to one draft pull request. Supporting dependent layers
 would require per-layer and assembled-diff review, validation, publication, and
@@ -88,13 +100,20 @@ Every PR body and handoff records the actual author and reviewer models and
 providers and whether either reviewer shared the author's model lineage. This
 replaces categorical independence stamps that can misdescribe a real run.
 
-Limit reconciliation to two reconciliation rounds with the original reviewers.
-An undisposed or disputed finding, or reviewer divergence, blocks publication
-and goes to the human operator for a recorded decision. If both reviewers share
-the author's model lineage, explicit operator authorization is also required.
-The ignored `.polly/` ledger and final reviewer packets are transient scratch;
-phase nine publishes them as one labeled PR comment and records the comment URL
-before handoff.
+Follow the root `AGENTS.md` reconciliation loop without a separate round cap.
+One assessment is one reviewer's examination of one diff state; one
+reconciliation round is the author's disposition or revision followed by both
+original reviewers' assessments. Divergence means a contradiction on the same
+finding: one reviewer keeps it blocking while the other explicitly holds that
+same finding non-blocking or invalid. Different findings from disjoint scopes
+are not divergence. For a same-finding contradiction, author dispute, or
+undisposed finding, the orchestrator must stop dispatching and report the finding
+and both positions to the human operator in normal output. Publication remains blocked
+pending the recorded decision. If both reviewers share the author's
+model lineage, explicit operator authorization is also required. The ignored
+`.polly/` ledger and final reviewer packets are transient scratch; phase nine
+publishes them as one labeled PR comment and records the comment URL before
+handoff.
 
 ## Consequences
 
@@ -114,9 +133,11 @@ before handoff.
 ## Validation
 
 - `bun vitest run tests/unit/agent/polly-loopworks-spec.test.ts --reporter=verbose`
-  exercises named invariants for roster, exact models, configured reviewer
-  sandbox and shell behavior, the merge speed bump, nested-agent denial, public
-  handler imports, phase skills, dispatch headers, and the ledger.
+  exercises static invariants for roster, exact models, configured reviewer
+  sandbox, policy configuration, phase skills, dispatch instructions, and the
+  ledger contract. Behavioral policy probes are skipped unless
+  `OMNIGENT_SOURCE_ROOT` points to the pinned revision; CI supplies that source
+  before the test command.
 - `bun run validate` remains the aggregate repository gate and runs serially.
 
 ## Follow-ups

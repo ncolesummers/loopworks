@@ -52,6 +52,8 @@ type AgentConfig = {
 };
 
 type OrchestratorConfig = {
+  name?: string;
+  skills?: string | string[];
   spawn?: boolean;
   async?: boolean;
   cancellable?: boolean;
@@ -64,6 +66,19 @@ type OrchestratorConfig = {
 };
 
 type MarkdownlintConfig = { ignores?: string[] };
+
+type SkillClassification = "CRAFT" | "ORCHESTRATION";
+
+type SkillFrontmatter = {
+  name?: string;
+  metadata?: { "loopworks-skill-class"?: string };
+};
+
+type ClassifiedSkill = {
+  classification: SkillClassification;
+  name: string;
+  path: string;
+};
 
 function readYaml<T>(relativePath: string): T {
   const filePath = path.join(repoRoot, relativePath);
@@ -83,6 +98,60 @@ function policyExpression(policy: Policy | undefined): string {
   const expression = policy?.function?.arguments?.expression;
   expect(typeof expression).toBe("string");
   return expression as string;
+}
+
+function skillDirectories(root: string): string[] {
+  return readdirSync(root)
+    .map((name) => path.join(root, name))
+    .filter((candidate) => statSync(candidate).isDirectory())
+    .filter((candidate) => existsSync(path.join(candidate, "SKILL.md")));
+}
+
+function skillFrontmatter(skillDirectory: string): SkillFrontmatter {
+  const skillPath = path.join(skillDirectory, "SKILL.md");
+  const match = readFileSync(skillPath, "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  expect(match, `${skillPath} must begin with YAML frontmatter`).not.toBeNull();
+  return parse(match?.[1] ?? "") as SkillFrontmatter;
+}
+
+function classifiedSkills(): ClassifiedSkill[] {
+  const roots = [path.join(repoRoot, ".agents/skills"), path.join(bundleRoot, "skills")];
+  const discovered = roots.flatMap((root) =>
+    skillDirectories(root).map((skillDirectory) => {
+      const frontmatter = skillFrontmatter(skillDirectory);
+      expect(frontmatter.name, `${skillDirectory} must declare its resolved skill name`).toMatch(
+        /^[a-z0-9-]+$/,
+      );
+      const classification = frontmatter.metadata?.["loopworks-skill-class"];
+      expect(
+        classification,
+        `${skillDirectory} must classify itself as CRAFT or ORCHESTRATION`,
+      ).toMatch(/^(?:CRAFT|ORCHESTRATION)$/);
+      return {
+        classification: classification as SkillClassification,
+        name: frontmatter.name as string,
+        path: skillDirectory,
+      };
+    }),
+  );
+  return [...new Map(discovered.map((skill) => [skill.name, skill])).values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+function blockedSkillNames(
+  actor: string,
+  skills = classifiedSkills(),
+  allowedOrchestrationSkills: string[] = [],
+): string[] {
+  return skills
+    .filter(
+      (skill) =>
+        skill.classification === "ORCHESTRATION" &&
+        !allowedOrchestrationSkills.includes(skill.name),
+    )
+    .flatMap((skill) => [skill.name, `${actor}:${skill.name}`])
+    .sort();
 }
 
 type OmnigentSource = { revision: string; root: string };
@@ -207,6 +276,11 @@ describe("polly-loopworks bundle contract", () => {
       const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
       expect(text).toContain("fail open");
       expect(text).toContain("policy_hook_disabled_reason");
+      expect(text).toContain("every codex-native worker");
+      expect(text).toContain("implementers");
+      for (const name of ["sol", "luna", "terra", "reviewer_sol"]) {
+        expect(text).toContain(`\`${name}\``);
+      }
       expect(text).not.toContain("## Binding controls");
     }
   });
@@ -249,9 +323,10 @@ describe("polly-loopworks bundle contract", () => {
       const denyMerge = policies(config).deny_merge;
       expect(denyMerge?.function?.path).toBe(handlers.cel);
       const expression = policyExpression(denyMerge);
-      expect(expression).toContain("--repo");
+      expect(expression).toContain("pr");
       expect(expression).toContain("api");
       expect(expression).toContain("pulls");
+      expect(expression).toContain("mergePullRequest");
       expect(expression).toContain('"DENY"');
     }
     expect(policies(actorConfigs[0]).blast_radius?.function?.arguments?.gate_pushes).toBe(true);
@@ -261,10 +336,11 @@ describe("polly-loopworks bundle contract", () => {
       "docs/adr/0034-project-scoped-polly-model-routing.md",
     ]) {
       const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
-      expect(text).toContain("best-effort speed bump");
-      expect(text).toContain("branch protection");
-      expect(text).toContain("token without merge scope");
-      expect(text).toContain("out of scope");
+      const normalized = text.replace(/\s+/g, " ");
+      expect(normalized).toContain("best-effort speed bump");
+      expect(normalized).toContain("branch protection");
+      expect(normalized).toContain("token without merge scope");
+      expect(normalized).toContain("out of scope");
     }
   });
 
@@ -339,7 +415,7 @@ describe("polly-loopworks bundle contract", () => {
             "def check(label, result, expected):",
             " checks[label] = result",
             " if not result or result.get('result') != expected: bad[label] = {'expected': expected, 'actual': result}",
-            "merge_commands = ['gh pr merge 268 --squash', 'gh -R owner/repo pr merge 268', 'gh --repo=owner/repo pr merge 268', 'gh api -X PUT repos/owner/repo/pulls/268/merge']",
+            "merge_commands = ['gh pr merge 268 --squash', 'gh -R owner/repo pr merge 268', 'gh --repo=owner/repo pr merge 268', 'gh pr --repo owner/repo merge 268', 'gh pr -R owner/repo merge 268', 'gh -Rowner/repo pr merge 268', 'gh api -X PUT repos/owner/repo/pulls/268/merge', 'gh api graphql -f query=mutation{mergePullRequest(input:{pullRequestId:1}){pullRequest{id}}}']",
             "nested_tools = ['spawn_agent', 'Agent', 'Task', 'TaskCreate', 'sys_session_send', 'sys_session_create']",
             "shell_tools = ['sys_os_shell', 'Bash', 'bash', 'Shell', 'terminal', 'execute_code', 'developer__shell']",
             "write_tools = ['sys_os_write', 'sys_os_edit', 'Write', 'Edit', 'MultiEdit', 'write', 'edit']",
@@ -354,7 +430,9 @@ describe("polly-loopworks bundle contract", () => {
             "   check(f'{prefix}.allow', evaluate(call('Bash', {'command': 'git status'})), 'ALLOW')",
             "  elif policy_name == 'deny_nested_agents':",
             "   evaluate = cel_policy(expression=arguments['expression'])",
-            "   for tool in nested_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'task': 'review'})), 'DENY')",
+            "   for tool in nested_tools:",
+            "    expected = 'ALLOW' if actor == 'orchestrator' and tool == 'sys_session_send' else 'DENY'",
+            "    check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'task': 'review'})), expected)",
             "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
             "  elif policy_name == 'deny_shell':",
             "   evaluate = cel_policy(expression=arguments['expression'])",
@@ -447,13 +525,29 @@ describe("polly-loopworks bundle contract", () => {
     expect(probe.status, `${probe.stdout}\n${probe.stderr}`).toBe(0);
   });
 
-  it("blocks harness-internal subagents and exposes only phase craft skills", () => {
-    const blockedSkills = readdirSync(path.join(repoRoot, ".agents/skills"), {
-      withFileTypes: true,
-    })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
+  it("classifies every resolved project and bundle skill in its own frontmatter", () => {
+    const skills = classifiedSkills();
+    expect(skills.map((skill) => skill.name)).toEqual([
+      "agent-browser",
+      "browser-validate",
+      "commit-signed-pr",
+      "eve",
+      "gh-stack",
+      "implement-issue",
+      "implement-issue-pr",
+      "orchestrate-issue-pr",
+      "tdd-implement",
+    ]);
+    expect(
+      skills.filter((skill) => skill.classification === "ORCHESTRATION").map((skill) => skill.name),
+    ).toEqual(["implement-issue", "implement-issue-pr", "orchestrate-issue-pr"]);
+  });
+
+  it("blocks harness-internal subagents and denies orchestration but never craft skills", () => {
+    const skills = classifiedSkills();
+    const craftNames = skills
+      .filter((skill) => skill.classification === "CRAFT")
+      .map((skill) => skill.name);
     for (const name of Object.keys(expectedWorkers) as Array<keyof typeof expectedWorkers>) {
       const config = readAgent(name);
       const workerPolicies = policies(config);
@@ -464,12 +558,15 @@ describe("polly-loopworks bundle contract", () => {
       expect(workerPolicies.block_orchestration_skills).toMatchObject({
         function: {
           path: handlers.blockSkills,
-          arguments: { blocked: expect.arrayContaining(blockedSkills) },
+          arguments: { blocked: blockedSkillNames(name, skills) },
         },
       });
       const configuredBlocked = workerPolicies.block_orchestration_skills?.function?.arguments
         ?.blocked as string[] | undefined;
-      expect(configuredBlocked).toEqual(blockedSkills);
+      for (const craft of craftNames) {
+        expect(configuredBlocked).not.toContain(craft);
+        expect(configuredBlocked).not.toContain(`${name}:${craft}`);
+      }
       expect(workerPolicies.deny_nested_agents?.function?.path).toBe(handlers.cel);
       const expression = policyExpression(workerPolicies.deny_nested_agents);
       for (const nestedTool of ["spawn_agent", "Agent", "Task"]) {
@@ -477,6 +574,112 @@ describe("polly-loopworks bundle contract", () => {
       }
     }
   });
+
+  it("makes the orchestrator host-skill-hermetic and blocks delegated orchestration and nesting", () => {
+    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
+    const orchestratorPolicies = policies(orchestrator);
+    expect(orchestrator.name).toBe("polly-loopworks");
+    expect(orchestrator.skills).toBe("none");
+    expect(orchestratorPolicies.block_orchestration_skills).toMatchObject({
+      function: {
+        path: handlers.blockSkills,
+        arguments: {
+          blocked: blockedSkillNames("polly-loopworks", classifiedSkills(), [
+            "orchestrate-issue-pr",
+          ]),
+        },
+      },
+    });
+    expect(orchestratorPolicies.deny_nested_agents?.function?.path).toBe(handlers.cel);
+    const expression = policyExpression(orchestratorPolicies.deny_nested_agents);
+    for (const nestedTool of ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_create"]) {
+      expect(expression).toContain(`"${nestedTool}"`);
+    }
+    expect(expression).not.toContain('"sys_session_send"');
+  });
+
+  runtimePolicyTest(
+    "loads craft as every implementer and denies orchestration as every worker in both name shapes",
+    { timeout: 30_000 },
+    () => {
+      const source = omnigentSource();
+      expect(
+        source,
+        "OMNIGENT_SOURCE_ROOT must point to the pinned Omnigent checkout",
+      ).toBeDefined();
+      expect(source?.revision).toBe(omnigentRevision);
+      const sourceRoot = source?.root as string;
+      const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
+      const actorPolicies = {
+        "polly-loopworks": policies(orchestrator).block_orchestration_skills,
+        ...Object.fromEntries(
+          Object.keys(expectedWorkers).map((name) => [
+            name,
+            policies(readAgent(name as keyof typeof expectedWorkers)).block_orchestration_skills,
+          ]),
+        ),
+      };
+      const payload = {
+        actorPolicies,
+        implementers: Object.keys(implementingWorkers),
+        orchestrationSkills: {
+          "polly-loopworks": "implement-issue-pr",
+          ...Object.fromEntries(
+            Object.keys(expectedWorkers).map((name) => [name, "orchestrate-issue-pr"]),
+          ),
+        },
+        craftSkill: "tdd-implement",
+      };
+      const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
+      const command = importPython ?? "uv";
+      const commandPrefix = importPython
+        ? []
+        : ["run", "--with", "pydantic>=2,<3", "--with", "pyyaml>=6,<7", "--no-project", "python"];
+      const probe = spawnSync(
+        command,
+        [
+          ...commandPrefix,
+          "-c",
+          [
+            "import json, sys",
+            "from omnigent.policies.builtins.safety import block_skills",
+            "payload = json.loads(sys.argv[1])",
+            "def load(skill):",
+            " return {'type': 'tool_call', 'data': {'name': 'Skill', 'arguments': {'skill': skill}}}",
+            "checks = {}",
+            "bad = {}",
+            "for actor, policy in payload['actorPolicies'].items():",
+            " blocked = policy['function']['arguments']['blocked']",
+            " evaluate = block_skills(blocked=blocked)",
+            " orchestration = payload['orchestrationSkills'][actor]",
+            " for shape in [orchestration, f'{actor}:{orchestration}']:",
+            "  label = f'{actor}.orchestration.{shape}'",
+            "  result = evaluate(load(shape))",
+            "  checks[label] = result",
+            "  if result.get('result') != 'DENY': bad[label] = {'expected': 'DENY', 'actual': result}",
+            " if actor in payload['implementers']:",
+            "  craft = payload['craftSkill']",
+            "  for shape in [craft, f'{actor}:{craft}']:",
+            "   label = f'{actor}.craft.{shape}'",
+            "   result = evaluate(load(shape))",
+            "   checks[label] = result",
+            "   if result.get('result') != 'ALLOW': bad[label] = {'expected': 'ALLOW', 'actual': result}",
+            "print(json.dumps({'checks': checks, 'bad': bad}, sort_keys=True))",
+            "raise SystemExit(1 if bad else 0)",
+          ].join("\n"),
+          JSON.stringify(payload),
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PYTHONPATH: [sourceRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+          },
+        },
+      );
+      expect(probe.status, `${probe.stdout}\n${probe.stderr}`).toBe(0);
+    },
+  );
 
   runtimePolicyTest(
     "uses public policy paths that resolve through real Python imports",
@@ -591,6 +794,7 @@ describe("polly-loopworks bundle contract", () => {
 
   it("defines a single-PR managed sequence with phase headers and a transition ledger", () => {
     const skill = readFileSync(orchestrationSkillPath, "utf8");
+    const normalized = skill.replace(/\s+/g, " ");
     expect(skill).toContain("name: orchestrate-issue-pr");
     expect(skill).toContain("Single PR only");
     expect(skill).not.toMatch(/stacked PR|gh-stack/i);
@@ -599,23 +803,50 @@ describe("polly-loopworks bundle contract", () => {
     }
     expect(skill).toContain("Every `args.input` must begin");
     expect(skill).toContain(".polly/workflow-state.md");
-    expect(skill).toContain("append after every phase transition");
+    expect(normalized).toContain("Record a chronological entry after every phase transition");
   });
 
-  it("bounds review reconciliation, preserves an independence floor, and publishes evidence", () => {
+  it("bootstraps the managed worktree before accepting red-test evidence", () => {
+    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
+    const prompt = orchestrator.prompt ?? "";
+    const skill = readFileSync(orchestrationSkillPath, "utf8");
+    for (const text of [prompt, skill]) {
+      expect(text).toContain("bun install");
+      expect(text).toContain("node_modules");
+      expect(text).toContain(".env.local");
+      expect(text).toContain("security:osv");
+      expect(text.toLowerCase()).toContain("before dispatch");
+    }
+  });
+
+  it("reports same-finding arbitration to the human without invoking a nonexistent ask tool", () => {
     const skill = readFileSync(orchestrationSkillPath, "utf8");
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const prompt = orchestrator.prompt ?? "";
+    const routing = readFileSync(path.join(bundleRoot, "ROUTING.md"), "utf8");
+    const adr = readFileSync(
+      path.join(repoRoot, "docs/adr/0034-project-scoped-polly-model-routing.md"),
+      "utf8",
+    );
+    const orchestratorYaml = readFileSync(path.join(bundleRoot, "config.yaml"), "utf8");
 
-    for (const text of [skill, prompt]) {
-      const normalized = text.toLowerCase();
-      expect(normalized).toContain("two reconciliation rounds");
+    for (const text of [skill, prompt, routing, adr, orchestratorYaml]) {
+      const normalized = text.toLowerCase().replace(/\s+/g, " ");
       expect(normalized).toContain("human operator");
       expect(normalized).toContain("publication remains blocked");
-      expect(normalized).toContain("both reviewers share the author's model lineage");
-      expect(normalized).toContain("explicit operator authorization");
+      expect(normalized).not.toContain("two reconciliation rounds");
       expect(text).not.toContain("Terra model override");
-      expect(text).toContain("`ask`");
+      expect(text).not.toContain("`ask`");
+      expect(text).not.toContain("ask_timeout");
+    }
+
+    for (const text of [skill, prompt, routing, adr]) {
+      const normalized = text.toLowerCase().replace(/\s+/g, " ");
+      expect(normalized).toContain("same finding");
+      expect(normalized).toContain("stop dispatching");
+      expect(normalized).toContain("normal output");
+      expect(normalized).toContain("root `agents.md`");
+      expect(normalized).toContain("assessment");
     }
 
     expect(skill).toContain(".polly/review-packet/reviewer-a.md");
@@ -675,6 +906,44 @@ describe("polly-loopworks bundle contract", () => {
     }
     expect(implementIssuePr).toContain("commit-signed-pr");
     expect(implementIssue).not.toContain("git commit -S");
+  });
+
+  it("pins the shared TDD craft contract used by human and managed workflows", () => {
+    const tdd = readFileSync(path.join(repoRoot, ".agents/skills/tdd-implement/SKILL.md"), "utf8");
+    const normalized = tdd.replace(/\s+/g, " ");
+    for (const contract of [
+      "Map every acceptance criterion",
+      "negative and boundary cases",
+      "tests before implementation",
+      "exact focused command",
+      "not red evidence",
+      "smallest production, configuration, or documentation change",
+      "AC-to-test map",
+      "exact red command",
+      "exact green command",
+      "requested handoff packet",
+    ]) {
+      expect(normalized).toContain(contract);
+    }
+  });
+
+  it("documents conditional runtime probes without claiming unenforced ledger or header state", () => {
+    const adr = readFileSync(
+      path.join(repoRoot, "docs/adr/0034-project-scoped-polly-model-routing.md"),
+      "utf8",
+    );
+    const routing = readFileSync(path.join(bundleRoot, "ROUTING.md"), "utf8");
+    const orchestrator = readFileSync(path.join(bundleRoot, "config.yaml"), "utf8");
+    const skill = readFileSync(orchestrationSkillPath, "utf8");
+    expect(adr).toContain("OMNIGENT_SOURCE_ROOT");
+    expect(adr.toLowerCase()).toContain("skipped");
+    for (const text of [adr, routing, orchestrator, skill]) {
+      expect(text).not.toContain("append-only");
+      expect(text).not.toContain("never overwrite");
+      expect(text).not.toContain("every dispatch carries");
+      expect(text).not.toContain("only phase-scoped craft skills");
+      expect(text).not.toContain("phase-scoped craft only");
+    }
   });
 
   it("protects ignored Polly scratch from cleanup and Markdownlint", () => {

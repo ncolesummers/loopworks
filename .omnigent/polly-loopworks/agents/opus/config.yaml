@@ -41,7 +41,7 @@ guardrails:
             event.type == "tool_call" &&
             event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
             "command" in event.data.arguments &&
-            event.data.arguments.command.matches("(?s).*\\bgh(?:\\s+(?:-R|--repo)(?:=|\\s+)\\S+)*\\s+(?:pr\\s+merge\\b|api\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b)).*")
+            event.data.arguments.command.matches("(?s).*\\bgh\\b.*(?:\\bpr\\b.*\\bmerge\\b|\\bapi\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b|\\bgraphql\\b.*\\bmergePullRequest\\b)).*")
             ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
             : {"result": "ALLOW"}
     block_orchestration_skills:
@@ -49,7 +49,7 @@ guardrails:
       function:
         path: omnigent.policies.builtins.safety.block_skills
         arguments:
-          blocked: [agent-browser, browser-validate, commit-signed-pr, eve, gh-stack, implement-issue, implement-issue-pr, tdd-implement]
+          blocked: [implement-issue, implement-issue-pr, "opus:implement-issue", "opus:implement-issue-pr", "opus:orchestrate-issue-pr", orchestrate-issue-pr]
     deny_nested_agents:
       type: function
       function:

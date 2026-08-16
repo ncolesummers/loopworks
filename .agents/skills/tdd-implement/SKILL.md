@@ -1,6 +1,8 @@
 ---
 name: tdd-implement
 description: Plan and implement a scoped LoopWorks change with a continuous tests-first red-to-green evidence chain. Use when an issue or finding needs code, configuration, tests, or documentation changes.
+metadata:
+  loopworks-skill-class: CRAFT
 ---
 
 # TDD Implement

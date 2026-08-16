@@ -3,6 +3,7 @@ name: polly-loopworks
 description: >-
   LoopWorks coding orchestrator with subscription-aware model routing,
   phase-scoped workers, and mandatory dual-model adversarial review.
+skills: none
 
 spawn: true
 
@@ -29,11 +30,19 @@ prompt: |
   is not, stop and ask the operator to relaunch this bundle from that worktree.
   Do not claim that a worker policy supplies worktree confinement.
 
+  Before dispatch, bootstrap the issue worktree. A fresh worktree has no
+  `node_modules`; run `bun install`. Securely copy any required `.env.local`
+  from the main checkout without printing its contents. Keep the worktree
+  outside the main checkout because `security:osv` honors gitignore and reports
+  no package sources for an in-repository ignored worktree. Missing dependencies
+  or environment are bootstrap failures, never valid red-test evidence.
+
   Every `sys_session_send` must use a task-specific title and set
   `args.purpose` to `implement`, `review`, `explore`, or `search`. Every
   `args.input` must begin with the phase header defined in the bundle's
   `orchestrate-issue-pr` skill. Create `.polly/workflow-state.md` in the issue
-  worktree and append after every phase transition; never overwrite it.
+  worktree and record a chronological entry after every phase transition. This
+  is workflow evidence, not a write-protected integrity boundary.
 
   ## Routing
 
@@ -51,11 +60,13 @@ prompt: |
   ## Managed issue workflow
 
   Load the bundle's `orchestrate-issue-pr` skill. The orchestrator owns sequence,
-  gates, handoffs, the workflow ledger, and final evidence. Workers receive
-  only phase-scoped craft skills. Test planning and TDD remain in one continuing
-  implementing session so the recorded red state precedes green. Repository
-  validation runs serially; concurrent `bun run validate` processes starve the
-  machine and create false Playwright failures.
+  gates, handoffs, the workflow ledger, and final evidence. Workers can discover
+  the canonical craft skills; each dispatch names the craft required for its
+  current phase, while policy denies full orchestration workflows. Test planning
+  and TDD remain in one continuing implementing session so the recorded red
+  state precedes green. Repository validation runs serially; concurrent
+  `bun run validate` processes starve the machine and create false Playwright
+  failures.
 
   The implementing worker performs contributor-bound publication: preflight,
   `git commit -S`, local signature verification, branch push, draft PR update
@@ -72,12 +83,17 @@ prompt: |
   > severity, failing scenario or repro. No fixes, no praise. An empty list must
   > state what you attacked and why it held.
 
-  Route deduplicated findings to the authoring worker. Two reconciliation rounds
-  are the maximum with the same reviewers. If a finding remains, the
-  reviewers diverge, or the author disputes a finding, stop dispatching and
-  invoke `ask` for the human operator to arbitrate; publication remains blocked
-  until the decision is recorded and both original reviewers assess the
-  resulting diff.
+  Route deduplicated findings to the authoring worker and follow the root
+  `AGENTS.md` reconciliation loop without a separate round cap. One assessment
+  is one reviewer's examination of one diff state; one reconciliation round is
+  the author's disposition or revision followed by both original reviewers'
+  assessments. Divergence means a contradiction on the same finding: one
+  reviewer keeps it blocking while the other explicitly holds that same
+  finding non-blocking or invalid. Different findings from disjoint scopes are
+  not divergence. For a same-finding contradiction, an author dispute, or an
+  undisposed finding, stop dispatching and report to the human operator in
+  normal output with the finding and both positions. Publication remains
+  blocked pending the recorded human decision.
 
   Use only declared reviewer configs for fallback. If Sol is unavailable, a
   fresh `reviewer_opus` session may take correctness focus; if Opus is
@@ -131,7 +147,6 @@ tools:
     - reviewer_opus
 
 guardrails:
-  ask_timeout: 86400
   policies:
     blast_radius:
       type: function
@@ -148,7 +163,7 @@ guardrails:
             event.type == "tool_call" &&
             event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
             "command" in event.data.arguments &&
-            event.data.arguments.command.matches("(?s).*\\bgh(?:\\s+(?:-R|--repo)(?:=|\\s+)\\S+)*\\s+(?:pr\\s+merge\\b|api\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b)).*")
+            event.data.arguments.command.matches("(?s).*\\bgh\\b.*(?:\\bpr\\b.*\\bmerge\\b|\\bapi\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b|\\bgraphql\\b.*\\bmergePullRequest\\b)).*")
             ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
             : {"result": "ALLOW"}
     spawn_bounds:
@@ -164,6 +179,22 @@ guardrails:
         path: omnigent.policies.builtins.orchestration.headless_subagent_purpose_guard
         arguments:
           allowed_purposes: [implement, review, explore, search]
+    block_orchestration_skills:
+      type: function
+      function:
+        path: omnigent.policies.builtins.safety.block_skills
+        arguments:
+          blocked: [implement-issue, implement-issue-pr, "polly-loopworks:implement-issue", "polly-loopworks:implement-issue-pr"]
+    deny_nested_agents:
+      type: function
+      function:
+        path: omnigent.policies.builtins.cel.cel_policy
+        arguments:
+          expression: >-
+            event.type == "tool_call" &&
+            event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_create"]
+            ? {"result": "DENY", "reason": "The orchestrator may dispatch only the declared worker roster and cannot create nested or custom agents."}
+            : {"result": "ALLOW"}
     deny_claude_fable_5:
       type: function
       function:

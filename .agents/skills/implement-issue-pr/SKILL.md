@@ -1,6 +1,8 @@
 ---
 name: implement-issue-pr
 description: Implement a numbered GitHub issue in an isolated LoopWorks worktree, validate it, create a signed commit, and publish a draft pull request.
+metadata:
+  loopworks-skill-class: ORCHESTRATION
 ---
 
 # Implement Issue PR

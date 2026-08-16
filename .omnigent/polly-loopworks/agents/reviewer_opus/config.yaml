@@ -52,7 +52,7 @@ guardrails:
       function:
         path: omnigent.policies.builtins.safety.block_skills
         arguments:
-          blocked: [agent-browser, browser-validate, commit-signed-pr, eve, gh-stack, implement-issue, implement-issue-pr, tdd-implement]
+          blocked: [implement-issue, implement-issue-pr, orchestrate-issue-pr, "reviewer_opus:implement-issue", "reviewer_opus:implement-issue-pr", "reviewer_opus:orchestrate-issue-pr"]
     deny_nested_agents:
       type: function
       function:

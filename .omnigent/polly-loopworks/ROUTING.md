@@ -14,9 +14,9 @@ A Linux deployment needs separate reviewer specs with an explicit
 
 The Antigravity native harness has no policy-enforcement path for this bundle:
 it discards the worker prompt and launches without a binding sandbox. Therefore
-there is no Gemini worker in the roster. Phase six stops after two
-reconciliation rounds and asks the human operator to settle unresolved or
-disputed findings.
+there is no Gemini worker in the roster. Phase six follows the root `AGENTS.md`
+reconciliation loop and reports unresolved or disputed findings to the human
+operator in normal output.
 
 ## Routing tiers
 
@@ -46,17 +46,21 @@ Both reviewer configs attempt defense in depth by:
 - retain `blast_radius` with `gate_pushes: true` as defense in depth.
 
 The `.polly` hidden directory is readable so reviewers can consume the packet,
-but it remains non-writable when the configured sandbox binds. Reviewers receive
-no bundle skills; `block_skills` is derived from every project-discoverable
-`.agents/skills/*` name, and CEL targets native agent-spawn tool names.
+but it remains non-writable when the configured sandbox binds. `skills: none`
+suppresses host skills but not bundle skills. The skill policy therefore denies
+each ORCHESTRATION-classified skill by its parsed frontmatter name in both bare
+and `<agent>:<skill>` forms; it does not deny CRAFT-classified skills. CEL
+targets native agent-spawn tool names.
 
-These policies are not a containment boundary for `reviewer_sol`. The
-codex-native executor can fail open when the Codex app-server is too old or
-workspace trust is rejected. Omnigent exposes `policy_hook_disabled_reason`
-once, but this bundle has no executable preflight that consumes it. In that
-state `read_only_os`, shell denial, nested-agent denial, and skill blocking do
-not bind. The Codex reviewer remains for routing capacity with this residual
-risk recorded; operators must not infer enforcement merely from the YAML.
+These policies are not a containment boundary for every codex-native worker:
+the implementers `sol`, `luna`, and `terra`, plus `reviewer_sol`. Their policy
+hook can fail open when the Codex app-server is too old or workspace trust is
+rejected. Omnigent exposes `policy_hook_disabled_reason` once, but this bundle
+has no executable preflight that consumes it. In that state merge, nested-agent,
+and skill policies do not bind for the implementers; direct-write, shell,
+nested-agent, and skill policies do not bind for `reviewer_sol`. These workers
+remain for routing capacity with this residual risk recorded; operators must
+not infer enforcement merely from the YAML.
 
 ### Implementers
 
@@ -68,22 +72,25 @@ operational precondition is not filesystem containment. Implementers remain
 trusted writers inside the launch workspace.
 
 Implementers use `gate_pushes: false` so authorized publication can run without
-an approval deadlock. A CEL command-pattern policy covers direct `gh pr merge`,
-repository-qualified `gh -R`/`gh --repo` forms, and `gh api` merge endpoints.
-It is a best-effort speed bump, not containment: command strings can be
-constructed indirectly, and other clients can call the API. The durable control
-is GitHub branch protection or a worker token without merge scope. Provisioning
-either durable control is out of scope for this PR, so merge prevention remains
-a recorded gap. The orchestrator uses `gate_pushes: true` and the same speed
-bump.
+an approval deadlock. A CEL command-pattern policy recognizes several common
+layouts: repository flags before or after `pr`, compact `-R`, REST merge
+endpoints, and GraphQL `mergePullRequest` mutations. It does not enumerate every
+valid CLI or API spelling. This is a best-effort speed bump, not containment:
+command strings can be constructed indirectly, and other clients can call the
+API. The durable control is GitHub branch protection or a worker token without
+merge scope. Provisioning either durable control is out of scope for this PR,
+so merge prevention remains a recorded gap. The orchestrator uses
+`gate_pushes: true` and the same speed bump.
 
 ### Nested agents and skills
 
-The bundle injects only `tdd-implement`, `browser-validate`, and
-`commit-signed-pr` into implementers; reviewers receive no bundle skills. Every
+Implementer filters select `tdd-implement`, `browser-validate`, and
+`commit-signed-pr`; reviewer filters suppress host skills. Bundle skills remain
+discoverable in Claude-native sessions regardless of the filter, so every
 worker also configures:
 
-- public `block_skills` denial derived from all project-discoverable skills; and
+- public `block_skills` denial of only ORCHESTRATION-classified frontmatter
+  names, including each worker's namespaced form; and
 - CEL denial for native and Omnigent agent-creation tool names.
 
 The human-facing issue skills explain managed mode. Bundle-local symlinks point
@@ -91,15 +98,29 @@ to the three canonical worker craft files, and the invariant suite compares the
 resolved contents byte-for-byte. Sequence, reviewer dispatch, and authority
 remain in the bundle-local `orchestrate-issue-pr` skill.
 
+The top-level orchestrator uses `skills: none` to suppress host skills and
+blocks the bare and `polly-loopworks:` names of both human issue composers. Its
+own bundle-local `orchestrate-issue-pr` route remains available because that is
+the sequence it is authorized to run. A separate CEL policy denies native and
+custom child creation while preserving `sys_session_send` to the declared
+worker roster.
+
 ## Review and provenance record
 
 Every issue change receives fresh `reviewer_sol` and `reviewer_opus` sessions
 in the same dispatch turn. Each sees only the issue, acceptance criteria, test
 plan, and diff by file path and never sees the other's findings. The authoring
-worker disposes findings; both reviewers assess the final diff. Reconciliation
-stops after two reconciliation rounds. Undisposed or disputed findings and
-reviewer divergence block publication until the human operator records a
-decision and both original reviewers assess the resulting final diff.
+worker disposes findings; both reviewers assess the final diff. One assessment
+is one reviewer's examination of one diff state; one reconciliation round is
+the author's disposition or revision followed by both original reviewers'
+assessments. Reconciliation follows the root `AGENTS.md` without a separate
+round cap. Divergence means a contradiction on the same finding: one reviewer
+keeps it blocking while the other explicitly holds that same finding
+non-blocking or invalid. Different findings from disjoint scopes are not
+divergence. For a same-finding contradiction, author dispute, or undisposed
+finding, the orchestrator must stop dispatching and report the finding and both
+positions to the human operator in normal output. Publication remains blocked
+pending the recorded human decision.
 
 Every PR body and handoff records:
 
@@ -123,10 +144,12 @@ pull-request layers are outside this skill because they require layer-specific
 review, validation, publication, and assembled-diff evidence that this sequence
 does not map.
 
-All dispatches begin with the fixed role/position/authority header in the
-bundle skill. `.polly/workflow-state.md` is append-only across transitions and
-orients resumed sessions, but the ignored `.polly/` directory is transient.
-Phase nine publishes the ledger and both final reviewer packets in one labeled
-PR comment and records its URL. Validation gates run serially. The
-contributor-bound worker performs preflight, signed commit, push, draft PR
-publication, and GitHub provenance. No actor marks ready or merges.
+The workflow instructs the orchestrator to prefix dispatches with the fixed
+role/position/authority header in the bundle skill; no policy validates that
+text. `.polly/workflow-state.md` records chronological transitions and orients
+resumed sessions, but unrestricted workers can rewrite it, so it is not an
+integrity boundary. The ignored `.polly/` directory is transient. Phase nine
+publishes the ledger and both final reviewer packets in one labeled PR comment
+and records its URL. Validation gates run serially. The contributor-bound worker
+performs preflight, signed commit, push, draft PR publication, and GitHub
+provenance. No actor marks ready or merges.

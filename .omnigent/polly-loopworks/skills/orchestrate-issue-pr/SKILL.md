@@ -1,6 +1,8 @@
 ---
 name: orchestrate-issue-pr
 description: Orchestrate one LoopWorks issue through managed TDD, independent review, serial gates, a signed commit, and a draft pull request.
+metadata:
+  loopworks-skill-class: ORCHESTRATION
 ---
 
 # Orchestrate Issue PR
@@ -8,8 +10,10 @@ description: Orchestrate one LoopWorks issue through managed TDD, independent re
 Single PR only. This managed workflow does not support dependent pull-request
 layers. Stop and hand the request back when the issue requires that shape.
 
-The orchestrator owns sequence and handoffs. Workers receive phase-scoped craft
-only. Root and directory `AGENTS.md` files remain authoritative.
+The orchestrator owns sequence and handoffs. Workers can discover the canonical
+craft skills; each dispatch names the craft required for its current phase,
+while policy denies full orchestration workflows. Root and directory
+`AGENTS.md` files remain authoritative.
 
 ## Dispatch envelope
 
@@ -31,9 +35,10 @@ Put the bounded task after the block. Do not paste a multiline diff into
 
 Create `.polly/workflow-state.md` in the issue worktree before the first
 dispatch. Record issue, worktree, branch, intended PR, phase owner, session id,
-input artifact, output artifact, command status, and timestamp. Both
-orchestrator and worker append after every phase transition. Never rewrite or
-delete prior entries. A resumed run reads the ledger before acting.
+input artifact, output artifact, command status, and timestamp. Record a
+chronological entry after every phase transition. The ledger is workflow
+evidence, not a write-protected integrity boundary. A resumed run reads the
+ledger before acting.
 
 ## Sequence
 
@@ -59,23 +64,30 @@ The unsandboxed orchestrator self-checks effective cwd, branch, and worktree
 registration. If any differ, stop and ask the operator to relaunch from the
 worktree; do not dispatch an implementer.
 
+Before dispatch, bootstrap the issue worktree. A fresh worktree has no
+`node_modules`; run `bun install`. Securely copy any required `.env.local` from
+the main checkout without printing its contents. Keep the worktree outside the
+main checkout because `security:osv` honors gitignore and reports no package
+sources for an in-repository ignored worktree. Missing dependencies or
+environment are bootstrap failures, never valid red-test evidence.
+
 ### Acceptance contract
 
 Read the issue and comments, root guide, nearest scoped guides, and relevant
 ADRs. Extract numbered acceptance criteria and identify conflicts. Write the
-contract to `.polly/review-packet/contract.md` and append the transition.
+contract to `.polly/review-packet/contract.md` and record the transition.
 
 ### Test plan and implementation
 
 Dispatch one implementing worker with the canonical `tdd-implement` craft and
 keep that phase in one conversation. Require its complete output in
-`.polly/review-packet/impl.md`, then append the transition. Do not restate or
+`.polly/review-packet/impl.md`, then record the transition. Do not restate or
 weaken the craft contract here.
 
 ### Browser validation
 
 When user-visible, continue the implementing session with the canonical
-`browser-validate` craft and require its complete evidence. Otherwise append
+`browser-validate` craft and require its complete evidence. Otherwise record
 why it is not applicable. Do not maintain a second browser-case list here.
 
 ### Independent review
@@ -91,11 +103,16 @@ Each receives only the path to the review packet and this brief:
 Write the independent outputs to `.polly/review-packet/reviewer-a.md` and
 `.polly/review-packet/reviewer-b.md`; neither reviewer receives the other's
 output. Dedupe findings and return them to the authoring worker.
-Two reconciliation rounds are the maximum with the same reviewers. If a finding remains
-undisposed, the reviewers diverge, or the author disputes a finding, stop
-dispatching and invoke `ask` for the human operator to arbitrate. Record the
-decision in the ledger; publication remains blocked until the decision is
-recorded and both original reviewers assess the resulting final diff.
+Follow the root `AGENTS.md` reconciliation loop without a separate round cap.
+One assessment is one reviewer's examination of one diff state; one
+reconciliation round is the author's disposition or revision followed by both
+original reviewers' assessments. Divergence means a contradiction on the same
+finding: one reviewer keeps it blocking while the other explicitly holds that
+same finding non-blocking or invalid. Different findings from disjoint scopes
+are not divergence. For a same-finding contradiction, an author dispute, or an
+undisposed finding, stop dispatching and report to the human operator in normal
+output with the finding and both positions. Publication remains blocked pending
+the recorded human decision.
 
 Record the actual author, Reviewer A, and Reviewer B models and providers, plus
 whether either reviewer shared the author's model lineage. Put that factual

@@ -1,6 +1,8 @@
 ---
 name: implement-issue
 description: Implement a numbered GitHub issue in the current LoopWorks worktree with TDD and validation, stopping before commit or publication.
+metadata:
+  loopworks-skill-class: ORCHESTRATION
 ---
 
 # Implement Issue
