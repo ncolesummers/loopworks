@@ -25,6 +25,7 @@ describe("auth allowlist", () => {
     });
   });
 
+  // Persona S03: local auth bypass cannot work in production environments.
   it("disables bypass mode in production", () => {
     const config = readAuthAllowlistConfig({
       LOOPWORKS_AUTH_BYPASS: "true",

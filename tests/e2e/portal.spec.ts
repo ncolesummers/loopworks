@@ -665,6 +665,9 @@ test.describe("Loopworks portal", () => {
     await expect.poll(isDark).toBe(!before);
   });
 
+  // Persona R02: the design-token and both-theme-axe half of the scenario. The
+  // changed-surface half has no product surface yet and is deferred (#266).
+  //
   // Design-system gate: axe (including color-contrast) must pass on the primary
   // surfaces in BOTH light and dark. The monochrome base + soft status fills are
   // the contrast risk, so contrast is intentionally NOT disabled here.

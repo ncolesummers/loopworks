@@ -127,6 +127,8 @@ describe("Vercel deployment helpers", () => {
     );
   });
 
+  // Persona M03: missing dev credentials return explicit fixture fallback
+  // metadata, and production never silently returns fixtures.
   it("falls back to fixtures when credentials are missing", async () => {
     const logger = createMockLogger();
     const client = createVercelDeploymentClient({

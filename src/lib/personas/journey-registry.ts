@@ -28,32 +28,16 @@ import {
  *
  * ## Deliberately absent scenarios
  *
- * A02, A03, R02, S05, and M02 are browser-applicable in the persona matrix but
- * describe product behaviour that does not exist yet:
+ * Some browser-applicable scenarios carry no journey here. Each one is recorded
+ * as `deferred` in the `coverage` list below, with its reason and the issue
+ * tracking it. That list is the only place those reasons live: restating them
+ * here would create a second copy that no gate compares against the first, and
+ * the stale one would be the one a reader believes.
  *
- * - A02 — `/approvals` renders exactly one gate (`mapApproval` in
- *   `src/lib/portal/records.ts` returns the highest-priority row or null), with
- *   no actor attribution. The five states live on the run-detail surface.
- * - A03 — `TimelineEvent.artifact` is a single string (`src/lib/types.ts`), so
- *   the Test-writing stage's two contracted artifacts collapse to one in the
- *   DOM, and "LLM review" is never a rendered label. Evidence vocabulary does
- *   exist ("Automated test plan", `test_plan`, "Red test evidence"); what is
- *   missing is a rendered ordering the browser can assert.
- * - R02 — no per-surface coverage or changed-surface field exists on any run
- *   record, so "coverage for the changed surface" has nothing to read. Design
- *   tokens are separately browser-verifiable already (`tests/e2e/portal.spec.ts`
- *   compares computed styles to CSS custom properties), so that half is covered
- *   and only the changed-surface half is blocked.
- * - S05 — needs two identities in one journey, and the approval confirm button
- *   closes its dialog without writing; nothing in `src/` calls the approval
- *   transition route.
- * - M02 — the routing toggle is React state only, so nothing persists and the
- *   skipped reason the UI shows is locally recomputed rather than the trigger
- *   path's own decision.
- *
- * Declaring journeys for them would hand #243 checkpoints no DOM can satisfy
- * and #242 fixture worlds for surfaces that do not exist. They move to their
- * own issue, to land once their product surfaces do.
+ * Several of those scenarios are already partly exercised by specs under
+ * `tests/e2e/`. What is deferred is a registry journey covering the whole
+ * scenario — declaring one now would hand #243 checkpoints no DOM can satisfy
+ * for the parts that remain unbuilt.
  */
 export const personaJourneyRegistry: PersonaJourneyRegistry = personaJourneyRegistrySchema.parse({
   version: 1,
@@ -561,5 +545,163 @@ export const personaJourneyRegistry: PersonaJourneyRegistry = personaJourneyRegi
       mutations: ["none"],
       budgets: { maxDurationMs: 60_000, maxActions: 4 },
     },
+  ],
+
+  /**
+   * Where every documented scenario stands, exhaustively.
+   *
+   * One classification per scenario, which is what makes the list answerable:
+   * "is this covered" has a single answer rather than a set of partial ones.
+   * The cost is that a scenario blocked in the browser but already covered by a
+   * unit test carries `deferred`, and its existing coverage is named inside the
+   * reason rather than in a field of its own. Those reasons say so explicitly.
+   *
+   * `tests/unit/loops/manifest.test.ts` fails when a documented scenario is
+   * missing from this list, and `tests/unit/personas/journey-coverage.test.ts`
+   * fails when a named journey or covering test does not resolve.
+   */
+  coverage: [
+    { scenarioId: "P01", kind: "browser_journey", journeyIds: ["operator-route-walk"] },
+    {
+      scenarioId: "P02",
+      kind: "deterministic_non_browser",
+      // Both clauses of the scenario, at the trigger boundary: "returns a
+      // planning trigger for an agent-ready issues webhook" asserts
+      // workflow: "development", and "routes spike agent-ready issues to the
+      // research workflow" asserts workflow: "research".
+      coveringTests: ["tests/unit/github/webhooks.test.ts"],
+    },
+    {
+      scenarioId: "P03",
+      kind: "not_applicable",
+      rationale:
+        "The planner stage exists (src/lib/loops/transitions/plan.ts stores a plan under " +
+        "agentName 'planner'), but neither the plan artifact nor any run record carries an ADR " +
+        "field: the only ADR references under src/ and agent/ are guidance prose. The " +
+        "decision-to-ADR link is an authoring convention enforced by human ADR review, " +
+        "recorded in docs/adr/README.md under Decision lifecycle & GitHub integration, not a " +
+        "relationship the product stores. So there is no rendered link for a browser to " +
+        "follow and no resolvable reference for a test to assert. Reclassify if a plan " +
+        "artifact ever records the ADR it produced.",
+    },
+    { scenarioId: "P04", kind: "browser_journey", journeyIds: ["theme-persistence"] },
+    { scenarioId: "P05", kind: "browser_journey", journeyIds: ["day-zero-activation"] },
+    { scenarioId: "P06", kind: "browser_journey", journeyIds: ["unauthenticated-orientation"] },
+    { scenarioId: "M01", kind: "browser_journey", journeyIds: ["catalog-metadata-and-filters"] },
+    {
+      scenarioId: "M02",
+      kind: "deferred",
+      reason:
+        "Partly covered already: tests/e2e/portal.spec.ts toggles each loop and asserts a " +
+        "skipped reason renders — though both cases assert the same 'loop_disabled' string, so " +
+        "the browser does not yet distinguish the loops. What no spec reaches is the " +
+        "scenario's actual claim — that trigger execution is prevented and no run is " +
+        "fabricated — because " +
+        "the toggle in src/components/portal/dashboard-view.tsx mutates React state and " +
+        "recomputes the reason locally, never reaching the trigger path. The trigger-path half " +
+        "is covered non-visually by tests/unit/github/webhooks.test.ts. A registry journey " +
+        "waits on the toggle persisting through the trigger decision.",
+      trackedBy: "#266",
+    },
+    {
+      scenarioId: "M03",
+      kind: "deterministic_non_browser",
+      // "falls back to fixtures when credentials are missing" and "does not
+      // silently return deployment fixtures in production" are the scenario's
+      // two halves.
+      coveringTests: ["tests/unit/vercel/client.test.ts"],
+    },
+    { scenarioId: "M04", kind: "browser_journey", journeyIds: ["day-zero-activation"] },
+    { scenarioId: "M05", kind: "browser_journey", journeyIds: ["day-zero-activation"] },
+    { scenarioId: "A01", kind: "browser_journey", journeyIds: ["run-detail-stage-sequence"] },
+    {
+      scenarioId: "A02",
+      kind: "deferred",
+      reason:
+        "Partly covered already: tests/e2e/portal.spec.ts asserts the requesting actor and " +
+        "reviewer evidence on /approvals. What is blocked is the rest of the scenario. " +
+        "mapApproval in src/lib/portal/records.ts returns the single highest-priority row or " +
+        "null, so requested, approved, rejected, bypassed, and expired cannot be observed " +
+        "together on one surface; only the requesting actor is rendered, not the resolving " +
+        "one; and the test-writing plan-approval requirement has no rendered surface at all. " +
+        "A registry journey waits on /approvals listing gates.",
+      trackedBy: "#266",
+    },
+    {
+      scenarioId: "A03",
+      kind: "deferred",
+      reason:
+        "Partly covered already: tests/e2e/portal.spec.ts asserts the stage sequence renders " +
+        "in order, so Test writing does precede Development in the DOM. What is blocked is " +
+        "the finer ordering the scenario names. TimelineEvent.artifact in src/lib/types.ts is " +
+        "a single string, so the test-writing stage's two contracted artifacts collapse to " +
+        "one node and the browser cannot separate AC-mapped expected-red evidence from the " +
+        "rest within the stage; 'LLM review' is never a rendered label at all. A registry " +
+        "journey waits on the timeline carrying artifacts as an ordered collection.",
+      trackedBy: "#266",
+    },
+    { scenarioId: "R01", kind: "browser_journey", journeyIds: ["pr-intent-linkage"] },
+    {
+      scenarioId: "R02",
+      kind: "deferred",
+      reason:
+        "No run record carries a per-surface coverage or changed-surface field, so 'browser " +
+        "workflow coverage for the changed surface' has nothing to read. The design-token half " +
+        "is already browser-verified — tests/e2e/portal.spec.ts compares computed styles " +
+        "against the CSS custom properties in both themes — so only the changed-surface half " +
+        "is blocked, and it depends on the selection artifact in #244.",
+      trackedBy: "#266",
+    },
+    {
+      scenarioId: "S01",
+      kind: "deterministic_non_browser",
+      // "rejects an invalid signature before parsing the webhook payload with
+      // bounded metric attributes" is the ordering claim the scenario makes.
+      coveringTests: ["tests/unit/github/webhooks.test.ts"],
+    },
+    {
+      scenarioId: "S02",
+      kind: "deterministic_non_browser",
+      // The unit file claims a delivery once; the pglite file proves the
+      // idempotency lock holds against a real engine rather than a fake.
+      coveringTests: [
+        "tests/unit/github/webhook-store.test.ts",
+        "tests/unit/github/webhook-store.integration.test.ts",
+      ],
+    },
+    {
+      scenarioId: "S03",
+      kind: "deterministic_non_browser",
+      // "disables bypass mode in production" and "defaults an omitted
+      // production bypass to disabled".
+      coveringTests: ["tests/unit/auth/allowlist.test.ts"],
+    },
+    {
+      scenarioId: "S04",
+      kind: "deterministic_non_browser",
+      // Covers the scenario's named field families plus arbitrary structured
+      // depth, and derives redaction paths from the config registry.
+      coveringTests: ["tests/unit/observability/logger.test.ts"],
+    },
+    {
+      scenarioId: "S05",
+      kind: "deferred",
+      reason:
+        "The browser half needs two identities inside one journey, and the approval confirm " +
+        "button closes its dialog without writing — nothing in src/ calls the approval " +
+        "transition route — so a persisted approval login cannot be observed. Allowlist " +
+        "rejection itself is covered by tests/unit/auth/allowlist.test.ts; the Playwright " +
+        "column is what waits on an approval write path.",
+      trackedBy: "#266",
+    },
+    {
+      scenarioId: "S06",
+      kind: "deterministic_non_browser",
+      // "rejects forged, cross-actor, wrong-app, and replayed setup callbacks
+      // without connecting" and "persists only after the user token matches the
+      // session and can access the installation".
+      coveringTests: ["tests/unit/github/installation-flow.test.ts"],
+    },
+    { scenarioId: "S07", kind: "browser_journey", journeyIds: ["denied-sign-in-copy"] },
   ],
 });

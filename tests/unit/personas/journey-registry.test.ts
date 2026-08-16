@@ -11,43 +11,38 @@ import {
   journeyCleanupForMutations,
   personaRolesForScenarioIds,
 } from "../../../schemas/persona-journey";
+import {
+  browserApplicableScenarioIds,
+  personaMatrixRows,
+  repoRoot,
+} from "../../helpers/persona-matrix";
 
-const repoRoot = path.resolve(__dirname, "../../..");
 const registryPath = "src/lib/personas/journey-registry.ts";
 
-/**
- * Rows of the persona matrix, parsed by column.
- *
- * Reading the whole row would let prose anywhere in a scenario description
- * ("previously covered by a Playwright spec") silently reclassify it.
- */
-function matrixRows(): Array<{ id: string; coverage: string }> {
-  const matrix = readFileSync(path.join(repoRoot, "docs/personas-and-test-scenarios.md"), "utf8");
-
-  return Array.from(matrix.matchAll(/^\| ([PMARS]\d{2}) \|(.+)\|\s*$/gm)).map(([, id, rest]) => {
-    const cells = (rest ?? "").split("|");
-    return { id: id as string, coverage: cells[cells.length - 1]?.trim() ?? "" };
-  });
-}
-
 function browserApplicableFromMatrix(): string[] {
-  const rows = matrixRows();
-
   // Total parse failure is not the interesting case. One padded cell silently
   // drops a single row, which would quietly narrow AC5 — so the row count is
   // pinned to the ID vocabulary instead of merely being non-zero.
-  expect(rows.length, "persona matrix rows did not parse one-to-one with the ID vocabulary").toBe(
-    personaTestIdValues.length,
-  );
+  expect(
+    personaMatrixRows().length,
+    "persona matrix rows did not parse one-to-one with the ID vocabulary",
+  ).toBe(personaTestIdValues.length);
 
-  return rows.filter((row) => /playwright/i.test(row.coverage)).map((row) => row.id);
+  return browserApplicableScenarioIds();
 }
 
 /**
  * Scenarios deliberately excluded because the product surface they describe
- * does not exist yet. Each is justified in the registry module's header.
+ * does not exist yet.
+ *
+ * Derived from the coverage classification rather than listed again here: a
+ * second copy would let the registry defer a scenario this file still expects a
+ * journey for, and the disagreement would surface as a confusing AC5 failure
+ * rather than as the drift it is.
  */
-const deferredScenarios = ["A02", "A03", "R02", "S05", "M02"];
+const deferredScenarios = personaJourneyRegistry.coverage
+  .filter((entry) => entry.kind === "deferred")
+  .map((entry) => entry.scenarioId as string);
 
 /** Product source, excluding stories and the registry itself. */
 function productSource(): string {
@@ -111,7 +106,6 @@ describe("persona journey registry", () => {
       expected.filter((id) => !declared.has(id)),
       "browser scenario with no journey",
     ).toEqual([]);
-    expect(deferredScenarios.filter((id) => !browserApplicable.includes(id))).toEqual([]);
   });
 
   it("declares no scenario the matrix does not mark browser-applicable", () => {
@@ -383,32 +377,17 @@ describe("persona journey registry", () => {
     expect([...(dayZero[0]?.personaTestIds ?? [])].sort()).toEqual(["M04", "M05", "P05"]);
   });
 
-  it("keeps every deferred scenario out of the registry, justified, and noted in the matrix", () => {
+  it("keeps every deferred scenario out of the registry", () => {
+    // Whether the matrix notes the same set is `matrixDeferralSectionMatchesRegistry`
+    // in journey-coverage.test.ts, which is testable against a mutated registry.
     const declared = new Set<string>(
       personaJourneyRegistry.journeys.flatMap((journey) => journey.personaTestIds),
     );
-    const module = readFileSync(path.join(repoRoot, registryPath), "utf8");
-    const matrix = readFileSync(path.join(repoRoot, "docs/personas-and-test-scenarios.md"), "utf8");
 
+    expect(deferredScenarios.length).toBeGreaterThan(0);
     for (const id of deferredScenarios) {
       expect(personaTestIdValues as readonly string[]).toContain(id);
       expect(declared.has(id), `${id} is deferred but still declared`).toBe(false);
-
-      // The reason must be a written list item, not the bare id typed into an
-      // array. Length is a floor against " - X — n/a".
-      const reason = module.match(
-        new RegExp(`^ \\* - ${id} — ([\\s\\S]*?)(?=\\n \\* - |\\n \\*\\n)`, "m"),
-      );
-      expect(
-        reason?.[1]?.trim().length ?? 0,
-        `${id} has no written deferral reason`,
-      ).toBeGreaterThan(80);
-
-      // #241 requires the narrative and the registry not to drift, so the
-      // matrix records the deferral too.
-      expect(matrix, `${id} is deferred with no note in the persona matrix`).toMatch(
-        new RegExp(`${id}[\\s\\S]{0,400}?deferred`, "i"),
-      );
     }
   });
 });

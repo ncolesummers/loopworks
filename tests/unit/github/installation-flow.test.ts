@@ -141,6 +141,8 @@ describe("GitHub App installation flow", () => {
     expect(url.searchParams.get("code_challenge")).not.toBe("pkce-verifier");
   });
 
+  // Persona S06: callbacks reject forged or replayed state and verify the
+  // active operator can access the installation before persisting it.
   it("rejects forged, cross-actor, wrong-app, and replayed setup callbacks without connecting", async () => {
     const { connected, flow, gateway } = createHarness();
     await flow.start({ actorId: "ncolesummers" });

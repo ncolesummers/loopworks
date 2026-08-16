@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { defaultLoopManifest, parseLoopManifest, validateLoopManifest } from "@/lib/loops/manifest";
+import { personaJourneyRegistry } from "@/lib/personas/journey-registry";
 import {
   issueTriggerStateValues,
   loopManifestSchema,
@@ -10,6 +11,7 @@ import {
   retryableStatusValues,
 } from "../../../schemas/loop-manifest";
 import loopManifestJsonSchema from "../../../schemas/loop-manifest.schema.json";
+import { documentedPersonaTestIds } from "../../helpers/persona-matrix";
 
 type JsonSchemaObject = {
   enum?: string[];
@@ -353,14 +355,24 @@ describe("loop manifest schema", () => {
     // personaTestIdValues is what the manifest may claim as acceptance coverage.
     // If it drifts from docs/personas-and-test-scenarios.md, seeded issues can
     // either claim ids that no scenario defines or miss ids that do exist.
-    const personas = readFileSync(
-      resolve(__dirname, "../../../docs/personas-and-test-scenarios.md"),
-      "utf8",
-    );
-    const documented = Array.from(personas.matchAll(/^\| ([PMARS]\d{2}) \|/gm)).map(([, id]) => id);
+    const documented = documentedPersonaTestIds();
 
     expect(documented.length).toBeGreaterThan(0);
     expect([...personaTestIdValues].sort()).toEqual([...new Set(documented)].sort());
+  });
+
+  it("classifies every documented scenario in the journey registry exactly once", () => {
+    // The third link in the same parity chain: matrix -> enum -> classification.
+    // Without it a scenario can be documented, admitted to the enum, and still
+    // have no statement anywhere about whether it is covered.
+    //
+    // The registry schema already rejects a scenario classified twice. What it
+    // cannot see is the matrix, so an omitted scenario is caught only here.
+    const documented = documentedPersonaTestIds();
+    const classified = personaJourneyRegistry.coverage.map((entry) => entry.scenarioId);
+
+    expect(classified.length).toBeGreaterThan(0);
+    expect([...new Set(classified)].sort()).toEqual([...new Set(documented)].sort());
   });
 
   it("keeps the JSON schema persona enum aligned with the Zod enum", () => {
