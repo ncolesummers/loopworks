@@ -7,7 +7,15 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!node_modules", "!.next", "!storybook-static", "!coverage", "!bun.lock"]
+    "includes": [
+      "**",
+      "!node_modules",
+      "!.next",
+      "!storybook-static",
+      "!coverage",
+      "!bun.lock",
+      "!schemas/persona-journey.v1.schema.json"
+    ]
   },
   "formatter": {
     "enabled": true,
