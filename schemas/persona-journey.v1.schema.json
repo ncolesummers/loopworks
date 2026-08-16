@@ -479,6 +479,59 @@
               "rationale"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string",
+                "enum": [
+                  "P01",
+                  "P02",
+                  "P03",
+                  "P04",
+                  "P05",
+                  "P06",
+                  "M01",
+                  "M02",
+                  "M03",
+                  "M04",
+                  "M05",
+                  "A01",
+                  "A02",
+                  "A03",
+                  "R01",
+                  "R02",
+                  "S01",
+                  "S02",
+                  "S03",
+                  "S04",
+                  "S05",
+                  "S06",
+                  "S07"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "deferred"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "trackedBy": {
+                "type": "string",
+                "pattern": "^#[1-9]\\d*$"
+              }
+            },
+            "required": [
+              "scenarioId",
+              "kind",
+              "reason",
+              "trackedBy"
+            ],
+            "additionalProperties": false
           }
         ]
       }

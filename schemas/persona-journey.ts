@@ -128,6 +128,7 @@ export const scenarioCoverageKindValues = [
   "browser_journey",
   "deterministic_non_browser",
   "not_applicable",
+  "deferred",
 ] as const;
 
 const slugSchema = z
@@ -399,6 +400,24 @@ export const scenarioCoverageSchema = z.discriminatedUnion("kind", [
       scenarioId: personaTestIdSchema,
       kind: z.literal("not_applicable"),
       rationale: nonBlankText,
+    })
+    .strict(),
+  // A scenario that genuinely belongs in a browser journey but whose product
+  // surface does not exist yet. Distinct from `not_applicable`, which asserts
+  // the scenario has no browser surface at all — recording a blocked scenario
+  // as inapplicable would quietly retire it. `trackedBy` makes the deferral
+  // recoverable: closing the issue is what removes the entry.
+  z
+    .object({
+      scenarioId: personaTestIdSchema,
+      kind: z.literal("deferred"),
+      reason: nonBlankText,
+      // Issue numbers start at 1, so `#0` and any zero-padded form reference no
+      // issue at all. Accepting them would make the deferral unrecoverable by
+      // the exact mechanism this field exists to provide.
+      trackedBy: z
+        .string()
+        .regex(/^#[1-9]\d*$/, "Expected a GitHub issue reference such as `#266`."),
     })
     .strict(),
 ]);

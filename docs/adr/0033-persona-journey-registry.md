@@ -120,6 +120,14 @@ that exist on disk, or `not_applicable` with a written rationale. Each kind
 carries its own evidence, so a classification is checkable rather than an
 unfalsifiable claim.
 
+A fourth classification, `deferred`, covers a scenario that genuinely belongs
+in a browser journey but whose product surface does not exist yet. It is
+deliberately distinct from `not_applicable`: recording a blocked scenario as
+inapplicable would quietly retire it, and the two are not the same claim. A
+`deferred` entry carries a written reason and a `trackedBy` issue reference, so
+closing that issue is what removes the entry rather than a maintainer
+remembering to.
+
 Two distinct mechanisms enforce "exactly one". A single entry mixing two kinds'
 keys is rejected by `.strict()` on each union member. A scenario classified
 twice across two separate entries is rejected by a registry-level refinement,

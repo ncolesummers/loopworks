@@ -390,6 +390,10 @@ describe("scenario coverage classification", () => {
       if (kind === "browser_journey") candidate.journeyIds = ["x"];
       if (kind === "deterministic_non_browser") candidate.coveringTests = ["x"];
       if (kind === "not_applicable") candidate.rationale = "x";
+      if (kind === "deferred") {
+        candidate.reason = "x";
+        candidate.trackedBy = "#266";
+      }
       return scenarioCoverageSchema.safeParse(candidate).success;
     });
     expect(accepted).toEqual([...scenarioCoverageKindValues]);
@@ -406,6 +410,36 @@ describe("scenario coverage classification", () => {
     expect(_bothDirections).toBe(true);
 
     expect(() => scenarioCoverageSchema.parse({ scenarioId: "P01", kind: "someday" })).toThrow();
+  });
+
+  it("distinguishes a blocked scenario from an inapplicable one", () => {
+    // `deferred` exists so a scenario whose product surface does not exist yet
+    // is not recorded as having no browser surface at all. It must name the
+    // issue that will retire it.
+    expect(
+      scenarioCoverageSchema.safeParse({
+        scenarioId: "A02",
+        kind: "deferred",
+        reason: "`/approvals` renders a single gate with no actor attribution.",
+        trackedBy: "#266",
+      }).success,
+    ).toBe(true);
+
+    for (const invalid of [
+      { scenarioId: "A02", kind: "deferred", reason: "Blocked." },
+      { scenarioId: "A02", kind: "deferred", trackedBy: "#266" },
+      { scenarioId: "A02", kind: "deferred", reason: "Blocked.", trackedBy: "266" },
+      { scenarioId: "A02", kind: "deferred", reason: "Blocked.", trackedBy: "see the backlog" },
+      { scenarioId: "A02", kind: "deferred", reason: " ", trackedBy: "#266" },
+      // Shaped like an issue reference but pointing at none: issue numbers
+      // start at 1, so these would make the deferral untrackable.
+      { scenarioId: "A02", kind: "deferred", reason: "Blocked.", trackedBy: "#0" },
+      { scenarioId: "A02", kind: "deferred", reason: "Blocked.", trackedBy: "#0266" },
+    ]) {
+      expect(scenarioCoverageSchema.safeParse(invalid).success, JSON.stringify(invalid)).toBe(
+        false,
+      );
+    }
   });
 
   it("requires each kind to carry its own evidence and no other kind's", () => {
