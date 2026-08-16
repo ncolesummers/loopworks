@@ -11,7 +11,11 @@ the orchestrator for the first time. That is a recorded exception, not an
 accident; see [#281](https://github.com/ncolesummers/loopworks/issues/281).
 
 > **What the bundle is.** `.omnigent/polly-loopworks/` is a **routing-only**
-> bundle: a model-pinned roster of six workers plus routing guidance. It does
+> bundle: a model-pinned roster of six workers plus routing guidance. Read
+> "model-pinned" narrowly. Each worker declares a fixed model and none pins
+> `claude-fable-5`, and the tested policy denies one specific override: a direct
+> `sys_session_send` to Fable. An *ordinary declared model override is allowed*;
+> `sys_session_create` is denied (`ROUTING.md`). The bundle does
 > **not** implement a managed issue-to-PR workflow. Review isolation,
 > arbitration, reconciliation and termination, orchestrator containment,
 > dispatch envelopes, ledger integrity, bootstrap gating, phase ownership, and
@@ -45,6 +49,27 @@ shell profile:
 export GH_TOKEN="$(gh auth token)"
 ```
 
+That token gives a worker your GitHub scope, and `main` is protected against it
+server-side, independently of anything in the bundle. Two **active** rulesets
+cover the default branch, and **both have an empty bypass actor list** — an
+empty list binds everyone, including the repository owner and admin tokens.
+That is the opposite of classic branch protection, where admins are exempt
+unless `enforce_admins` is set. A worker holding the token therefore cannot
+force-push or rewrite `main` (`non_fast_forward`), delete it (`deletion`), push
+directly to it around a pull request (`pull_request`), or merge with red or
+missing CI (`required_status_checks`: `validate`, `seeded-postgres-e2e`,
+`commit-provenance`).
+
+One residual gap: `required_approving_review_count` is `0`, so a green PR can be
+merged with no human approval. "The orchestrator never merges; you do" is a
+convention, not a server-enforced control.
+
+Operator note when you verify this yourself: the classic endpoint
+`repos/OWNER/REPO/branches/main/protection` returns
+`404 Branch not protected` on this repository. That is a **false negative** —
+this repository uses rulesets, not classic branch protection. The correct probe
+is `repos/OWNER/REPO/rulesets`.
+
 The roster is exactly six workers across those two harnesses — there are no
 optional extra CLIs to install and no additional vendors to configure. Because
 `reviewer_sol` is codex-native and `reviewer_opus` is claude-native, you need
@@ -57,7 +82,8 @@ nothing fails closed if a harness is missing.
 
 ## 2. Create the worktree — the rule that costs the most when missed
 
-**Worktrees must live OUTSIDE the repository.**
+**Keep worktrees out of ignored in-repository paths.** A sibling directory is
+the simplest way to satisfy that.
 
 ```sh
 git worktree add ../loopworks-worktrees/<issue#>-<slug> -b feat/<issue#>-<slug>
@@ -66,10 +92,13 @@ bun install          # a fresh worktree has no node_modules
 # copy any env file the change needs from the main checkout
 ```
 
-Why it matters: paths inside the repo (`.claude/worktrees/…`) are gitignored, and
-`security:osv` honours gitignore. Run from an in-repo worktree and `validate` fails
-with **"No package sources found"** — so no commit can ever pass, and the error
-points nowhere near the real cause.
+Why it matters: `ROUTING.md` asks you to keep worktrees outside **ignored**
+in-repository paths so `security:osv` can discover package sources. The common
+in-repo location, `.claude/worktrees/…`, is gitignored, and `security:osv`
+honours gitignore. Run from there and `validate` fails with **"No package
+sources found"** — so no commit can ever pass, and the error points nowhere near
+the real cause. An in-repo worktree at a path that is *not* ignored is outside
+what `ROUTING.md` warns about.
 
 Do this bootstrap yourself, before you launch. `ROUTING.md` records it as useful
 guidance and states plainly that no dispatched worker is guaranteed to receive or
@@ -91,34 +120,56 @@ Point the launcher at:
 
 ### 3.1 CRAFT and ORCHESTRATION skills
 
-A worker can load `tdd-implement` but not `orchestrate-issue-pr`, and the reason
-is a policy classification rather than anything in the skills themselves.
+A worker can load `tdd-implement` but not `orchestrate-issue-pr`. The denial
+does not come from the skills themselves, and it is not computed from the
+classification map. It comes from an explicit `blocked:` list that every actor
+carries in its own `block_orchestration_skills` policy — see
+`agents/sol/config.yaml` and the identical stanza in the orchestrator's
+`config.yaml` and in both reviewer configs.
 
-Classification lives in the repo-owned
+The manifest holds two separate lists, and they are not the same length.
+
+**The classification map** lives in the repo-owned
 `.omnigent/polly-loopworks/.claude-plugin/plugin.json`, under
 `metadata.loopworks.skillClassifications` — never in skill frontmatter. That
 placement is deliberate: reinstalling a vendored upstream skill such as
-`agent-browser`, `eve`, or `gh-stack` cannot erase the repo's policy.
+`agent-browser`, `eve`, or `gh-stack` cannot erase the repo's policy. It has
+twelve entries, three of them ORCHESTRATION:
 
-| Class | Skills |
+| Class | Skills in the classification map |
 | --- | --- |
 | CRAFT | `agent-browser`, `browser-validate`, `commit-signed-pr`, `eve`, `gh-stack`, `tdd-implement`, and the bundle-qualified `polly-loopworks:browser-validate`, `polly-loopworks:commit-signed-pr`, `polly-loopworks:tdd-implement` |
-| ORCHESTRATION | `implement-issue`, `implement-issue-pr`, `orchestrate-issue-pr`, `polly-loopworks:orchestrate-issue-pr` |
+| ORCHESTRATION | `implement-issue`, `implement-issue-pr`, `polly-loopworks:orchestrate-issue-pr` |
 
-The manifest's `orchestrationBlocklist` is exactly those four ORCHESTRATION
-names, and every actor — the orchestrator and all six workers — carries that
-same list in its `block_orchestration_skills` policy. CRAFT names appear in no
+**The runtime blocklist** is the separate `orchestrationBlocklist` key in the
+same manifest. It has **four** names: those three, plus bare
+`orchestrate-issue-pr` — which the classification map does not contain at all.
+That extra entry is the point. Because the blocklist is written out explicitly
+rather than derived from the map, the reserved name is denied in both forms:
+bare, and as the resolver-derived `polly-loopworks:orchestrate-issue-pr`. Both
+are needed because a Claude worker resolves bundle skills under the shared
+plugin namespace and would otherwise reach it by its qualified form.
+
+Every actor — the orchestrator and all six workers — carries that same
+four-name list in `block_orchestration_skills`, which routes to
+`omnigent.policies.builtins.safety.block_skills`. CRAFT names appear in no
 blocklist. Each implementer declares `skills: [tdd-implement, browser-validate,
 commit-signed-pr]`; both reviewers declare `skills: none`.
 
-The reserved name is blocked in both forms — bare `orchestrate-issue-pr` and the
-resolver-derived `polly-loopworks:orchestrate-issue-pr` — because a Claude worker
-resolves bundle skills under the shared plugin namespace and would otherwise
-reach it by its qualified name.
+Why the split matters, per skill:
 
-Why the split matters: an ORCHESTRATION skill runs a whole issue-to-PR workflow,
-including its own review and publication. A worker that loaded one would review
-and publish its own work. CRAFT skills do a bounded piece of work and return.
+- `implement-issue` and `implement-issue-pr` are real repo skills in
+  `.agents/skills/`, and each runs a whole issue end to end — AC extraction,
+  test-plan-first TDD, adversarial review, acceptance evidence; `-pr` also
+  isolates a worktree, commits, and opens draft PRs. A worker that loaded one
+  would review and publish its own work.
+- The bundle's own `orchestrate-issue-pr` is **not** such a workflow. Its
+  `SKILL.md` is a reserved placeholder that states PR #268 implements no
+  issue-to-PR workflow and defers the contract to
+  [issue #280](https://github.com/ncolesummers/loopworks/issues/280). It is
+  blocklisted as a reserved name, not as a working workflow.
+
+CRAFT skills do a bounded piece of work and return.
 
 Treat a classification edit as a policy change. CI pins the expected
 classification map independently, so an edit fails rather than silently
@@ -154,7 +205,10 @@ Your three jobs:
 1. **Approve the plan** before implementation starts.
 2. **Arbitrate** a disagreement that survives one reconciliation round. There is
    no tiebreak seat in the roster and no automated arbitration — see Known gaps.
-3. **Merge.** No agent should merge, and the merge block is best-effort only.
+3. **Merge.** No agent should merge. A `deny_merge` policy is configured on the
+   orchestrator and on the four implementers only, and it is best-effort. The
+   two reviewer configs carry no `deny_merge` policy at all; they deny the named
+   shell tools outright instead, so they have no shell to run `gh` from.
 
 You must assemble what the reviewers see. Give each reviewer the diff and the
 acceptance contract as files rather than a pointer to the implementer's
@@ -164,8 +218,9 @@ isolation."* Reviewers do have real mutation controls: `darwin_seatbelt` with no
 write paths, `read_only_os`, denial of named shell and edit tools, gated pushes,
 `permission_mode: plan` on `reviewer_opus`, and `yolo: false` on `reviewer_sol`.
 
-Every CLI worker runs in a real terminal, so you can watch one or take it over
-from the Subagents panel.
+Only the orchestrator declares a terminal — `terminals.shell`, running `bash`,
+in the bundle's `config.yaml`. No worker config declares one, and the bundle
+defines no worker-takeover mechanism.
 
 ## 5. Known gaps — read before you trust the guardrails
 
@@ -182,23 +237,29 @@ guard which lies is worse than an absent guard.
   confines or relocates a worker to a sibling worktree. Every implementer runs
   `cwd: .` with `sandbox: none` and `gate_pushes: false`; the orchestrator's own
   cwd check is self-attested, and its terminal keeps `allow_cwd_override: true`.
-  A runner-supplied workspace override (`OMNIGENT_RUNNER_WORKSPACE` in the
-  build used for the #267 run) supersedes the configured cwd, which is why the
-  earlier guard was removed as unenforceable rather than kept as a partial one.
-  Launching from the correct worktree is an *operational precondition you must
-  satisfy*: a mistaken launch can expose the main checkout or permit ungated
-  pushes.
-- **Merge denial is best-effort only.** The CEL expression matches common
+  The earlier guard was removed as unenforceable rather than kept as a partial
+  one. Launching from the correct worktree is an *operational precondition you
+  must satisfy*: a mistaken launch can expose the main checkout or permit
+  ungated pushes.
+- **Merge denial covers five of the seven actors, and is best-effort even
+  there.** `deny_merge` is configured on the orchestrator and on `sol`, `luna`,
+  `terra`, and `opus`. It is absent from both reviewer configs. The CEL
+  expression matches common
   `gh pr merge`, REST `/merge`, and GraphQL `mergePullRequest` forms through both
   `Bash` and `sys_os_shell`. It is a speed bump, not containment — command
   construction and other clients bypass string matching. The durable controls are
-  GitHub branch protection or a worker token without merge scope, and
-  provisioning them is out of scope for this bundle.
+  server-side GitHub protection or a worker token without merge scope, and
+  provisioning them is out of scope for this bundle. On this repository the
+  first of those is in place independently — see the ruleset disclosure in
+  section 1, including the one thing it does not require.
 - **The codex policy hook can fail open.** If the Codex app server is too old or
-  workspace trust is rejected, the named merge, agent, skill, write, and shell
-  policies do not bind for `sol`, `luna`, `terra`, or `reviewer_sol`. Omnigent
-  reports `policy_hook_disabled_reason`, but the bundle ships no executable
-  preflight that consumes it, so nothing warns you.
+  workspace trust is rejected, that actor's named policies do not bind — for
+  `sol`, `luna`, and `terra` that is `deny_merge`, `block_orchestration_skills`,
+  and `deny_nested_agents`; for `reviewer_sol` it is `read_only_os`,
+  `deny_shell`, `block_orchestration_skills`, and `deny_nested_agents`. Omnigent
+  does report `policy_hook_disabled_reason` — that report *is* your warning. What
+  is missing is enforcement: the bundle ships no executable preflight that
+  consumes it, so nothing fails closed on it and nobody reads it for you.
 - **The orchestrator is not contained.** It keeps an unrestricted shell and can
   launch clients outside the named agent tools. Denying nested-agent tools and
   custom session creation is defense in depth; the roster and prompt are routing
@@ -228,7 +289,7 @@ publication boundary — never treat a local ledger there as verified state.
 **A worker spawned its own reviewers.** Repo skills are discovered by walking up
 from cwd, so a worker in this checkout finds skills written for a single
 all-powerful agent. Every actor's `block_orchestration_skills` policy denies the
-four ORCHESTRATION names, but there is no dispatch header mechanism to tell a
+four blocklisted names, but there is no dispatch header mechanism to tell a
 worker that review is owned upstream — put that in your own dispatch text. If you
 see nested review, check whether the blocklist has drifted from the skill set.
 
