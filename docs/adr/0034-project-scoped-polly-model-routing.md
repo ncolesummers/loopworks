@@ -1,4 +1,4 @@
-# ADR 0033: Project-Scoped Polly Routing With Explicit Enforcement Boundaries
+# ADR 0034: Project-Scoped Polly Routing With Explicit Enforcement Boundaries
 
 Status: Proposed
 Date: 2026-08-15

@@ -225,11 +225,13 @@ describe("polly-loopworks bundle contract", () => {
 
     const routing = readFileSync(path.join(bundleRoot, "ROUTING.md"), "utf8");
     const adr = readFileSync(
-      path.join(repoRoot, "docs/adr/0033-project-scoped-polly-model-routing.md"),
+      path.join(repoRoot, "docs/adr/0034-project-scoped-polly-model-routing.md"),
       "utf8",
     );
+    const adrIndex = readFileSync(path.join(repoRoot, "docs/adr/README.md"), "utf8");
     expect(routing).not.toContain("worktree_guard");
     expect(adr).not.toContain("worktree_guard");
+    expect(adrIndex).toContain("[0034](0034-project-scoped-polly-model-routing.md)");
   });
 
   it("denies merge commands for the orchestrator and every implementer", () => {
