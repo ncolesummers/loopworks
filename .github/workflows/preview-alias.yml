@@ -97,8 +97,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          HOLDERS="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls?state=open&per_page=100" \
-            --jq '[.[][] | select(any(.labels[]; .name == "preview:alias")) | .number] | join(",")')"
+          HOLDERS="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls?state=open&per_page=100" |
+            jq -r '[.[][] | select(any(.labels[]; .name == "preview:alias")) | .number] | join(",")')"
           bun run scripts/assert-preview-alias-lease.ts \
             --pull-request "$PULL_REQUEST_NUMBER" \
             --holders "$HOLDERS"

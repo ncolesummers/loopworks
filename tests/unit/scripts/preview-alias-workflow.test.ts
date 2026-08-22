@@ -12,4 +12,11 @@ describe("preview alias hosted-validation workflow", () => {
     expect(workflow).toContain('--pull-request "$PULL_REQUEST_NUMBER"');
     expect(workflow).not.toContain("--not-before");
   });
+
+  it("slurps paginated holder responses before jq processing", () => {
+    const workflow = readFileSync(".github/workflows/preview-alias.yml", "utf8");
+
+    expect(workflow).not.toMatch(/gh api --paginate --slurp [^|]+--jq/s);
+    expect(workflow).toMatch(/gh api --paginate --slurp [^|]+\|\s*jq -r/s);
+  });
 });
