@@ -32,7 +32,8 @@ Use two independent read-only subagents in fresh contexts with the same brief.
 Give them only the issue, acceptance criteria, test plan, and diff—never the
 implementing session's reasoning. For a stack, review each proposed PR diff in
 dependency context and the assembled top-of-stack diff before submitting any
-layer.
+layer. One round is the default. A round is one pass by both independent
+reviewers over every diff required for that implementation.
 
 Use this brief verbatim:
 
@@ -41,11 +42,22 @@ Use this brief verbatim:
 > severity, failing scenario or repro. No fixes, no praise. An empty list must
 > state what you attacked and why it held.
 
-Dedupe both findings lists. Fix or defer every finding with a stated reason,
-then return the revised diff to both reviewers. Repeat until both have reviewed
-the final diff and no finding remains undisposed, then rerun the checks required
-by the Validation section. If tool policy cannot provide two independent
-reviewers, stop before final handoff or publication and report the blocker.
+Dedupe both findings lists. Fix every in-scope critical-severity finding;
+critical-severity findings cannot be deferred. Fix or explicitly defer
+non-critical findings with a stated reason. Non-critical findings do not
+require another review round. A critical finding in the immediately preceding
+round requires the next review round to verify its fix. Never exceed three
+review rounds for one issue implementation. At that cap, any unresolved
+in-scope critical finding blocks handoff or publication; it never authorizes a
+fourth round.
+
+When a finding is outside the issue's acceptance criteria, record it in a
+linked backlog issue if it is actionable. Out-of-scope findings do not extend
+or block the current implementation. After the bounded review is complete,
+rerun the checks required by the Validation section and report the round count
+and every finding's disposition. If tool policy cannot provide two independent
+reviewers for the mandatory first round, stop before final handoff or
+publication and report the blocker.
 
 ## Commit provenance
 
