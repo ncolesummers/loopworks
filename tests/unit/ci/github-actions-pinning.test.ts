@@ -6,15 +6,16 @@ import { isAlias, isScalar, parseDocument, visit } from "yaml";
 const repositoryRoot = path.resolve(__dirname, "../../..");
 const workflowsDirectory = path.join(repositoryRoot, ".github/workflows");
 
-// Resolved from each publisher's GitHub tag ref during #234 review. Keeping the
-// revision and release together makes an action upgrade an explicit contract
-// change rather than accepting any string that merely resembles a SHA.
+// #234 introduced this registry. Each action revision is resolved from its
+// publisher's GitHub tag during the review that upgrades that revision. Keeping
+// the revision and release together makes an action upgrade an explicit
+// contract change rather than accepting any string that merely resembles a SHA.
 const approvedActions = new Map([
   ["actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"],
   ["actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"],
   ["actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", "v7.0.1"],
   ["actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", "v6.1.0"],
-  ["astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9", "v9.0.0"],
+  ["astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d", "v10.0.1"],
   ["oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6", "v2.2.0"],
 ]);
 

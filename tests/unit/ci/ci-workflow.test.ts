@@ -17,11 +17,13 @@ type WorkflowStep = {
 };
 
 type WorkflowJob = {
+  "runs-on"?: string;
   "timeout-minutes"?: number;
   steps: WorkflowStep[];
 };
 
 type Workflow = {
+  on: Record<string, unknown>;
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -134,6 +136,53 @@ const isVersionResolver = (step: WorkflowStep) =>
 const isBrowserInstall = (step: WorkflowStep) =>
   step.run?.includes("playwright install --with-deps chromium") === true;
 
+const setupUvV10 = "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d";
+const automaticUvCacheDisabledEvents = ["pull_request_target", "release", "workflow_run"];
+const unsafeAutomaticUvCacheWorkflows: [string, Workflow, string][] = [
+  [
+    "self-hosted runners",
+    {
+      jobs: { validate: { "runs-on": "self-hosted", steps: [] } },
+      on: { pull_request: null, push: { branches: ["main"] }, workflow_dispatch: {} },
+    },
+    "setup-uv v10 automatic caching requires a GitHub-hosted runner",
+  ],
+  [
+    "tag pushes",
+    {
+      jobs: { validate: { "runs-on": "ubuntu-latest", steps: [] } },
+      on: { pull_request: null, push: { branches: ["main"], tags: ["v*"] }, workflow_dispatch: {} },
+    },
+    "setup-uv v10 automatic caching must not include tag pushes",
+  ],
+];
+
+function assertAutomaticUvCacheSafe(candidate: Workflow): void {
+  if (candidate.jobs.validate?.["runs-on"] !== "ubuntu-latest") {
+    throw new Error("setup-uv v10 automatic caching requires a GitHub-hosted runner");
+  }
+
+  const push = candidate.on.push;
+  if (
+    typeof push !== "object" ||
+    push === null ||
+    Array.isArray(push) ||
+    "tags" in push ||
+    JSON.stringify(push) !== JSON.stringify({ branches: ["main"] })
+  ) {
+    throw new Error("setup-uv v10 automatic caching must not include tag pushes");
+  }
+
+  expect(Object.keys(candidate.on).sort()).toEqual(["pull_request", "push", "workflow_dispatch"]);
+  for (const event of automaticUvCacheDisabledEvents) {
+    expect(
+      candidate.on[event],
+      `CI must not rely on setup-uv's cache for ${event}`,
+    ).toBeUndefined();
+  }
+  expect(candidate.on.pull_request).toBeNull();
+}
+
 describe("ci workflow", () => {
   afterAll(() => {
     rmSync(probeDirectory, { force: true, recursive: true });
@@ -173,6 +222,25 @@ describe("ci workflow", () => {
 
     expect(nodeIndex).toBeLessThan(bunIndex);
   });
+
+  it("uses setup-uv v10 automatic caching only on its safe CI triggers", () => {
+    const setupUv = stepsOf("validate").find((step) => step.name === "Setup uv");
+
+    expect(setupUv?.uses).toBe(setupUvV10);
+    expect(setupUv?.with?.["enable-cache"]).toBeUndefined();
+
+    // setup-uv v10 defaults `enable-cache` to `auto`, which disables caching
+    // for self-hosted runners and these privileged, tag-push, or
+    // publish-triggered events to prevent poisoning.
+    assertAutomaticUvCacheSafe(workflow);
+  });
+
+  it.each(unsafeAutomaticUvCacheWorkflows)(
+    "rejects v10 automatic caching on %s",
+    (_scenario, unsafeWorkflow, error) => {
+      expect(() => assertAutomaticUvCacheSafe(unsafeWorkflow)).toThrow(error);
+    },
+  );
 
   it.each(cachingJobs)("caches the Bun install store in `%s`", (jobName) => {
     const cache = stepsOf(jobName)[cacheIndexFor(jobName, "~/.bun/install/cache")];
