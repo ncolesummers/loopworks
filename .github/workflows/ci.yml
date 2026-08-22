@@ -108,9 +108,11 @@ jobs:
 
       # uv comes from its publisher's own action rather than a piped installer
       # script, which has no published checksum to verify. The immutable action
-      # revision is reviewed alongside the scanner pins below.
+      # revision is reviewed alongside the scanner pins below. setup-uv v10's
+      # default `enable-cache: auto` disables caching for privileged and
+      # publish-triggered events; this workflow runs only its safe triggers.
       - name: Setup uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       # Semgrep is a Python tool with no single release binary to digest-pin, so
       # the `==` pin is trust-on-first-use against PyPI and its transitive tree
