@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import { readSuppliedStringConfig } from "@/lib/config/registry";
+import { assertLiveExclusivePreviewAliasLease } from "./assert-preview-alias-lease";
 
 export type VercelDeploymentSummary = {
   uid: string;
@@ -11,7 +12,7 @@ export type VercelDeploymentSummary = {
   state?: string;
   /** `null` for preview deployments, `"production"` for production ones. */
   target?: string | null;
-  meta?: Record<string, string | undefined>;
+  meta?: Record<string, unknown>;
 };
 
 export type VercelProjectLink = { projectId: string; orgId: string };
@@ -71,6 +72,12 @@ function isReady(deployment: VercelDeploymentSummary): boolean {
   return (deployment.readyState ?? deployment.state) === "READY";
 }
 
+function canonicalPullRequestId(value: unknown): string | undefined {
+  if (typeof value === "string" && /^[1-9][0-9]*$/.test(value)) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);
+  return undefined;
+}
+
 /**
  * Picks the newest READY preview deployment built from `commitSha`. Production
  * deployments are excluded outright so a misfiring workflow can never repoint
@@ -78,14 +85,16 @@ function isReady(deployment: VercelDeploymentSummary): boolean {
  */
 export function selectPreviewDeployment(
   deployments: readonly VercelDeploymentSummary[],
-  input: { commitSha: string },
+  input: { commitSha: string; pullRequestId: string },
 ): VercelDeploymentSummary | undefined {
   return deployments
     .filter(
       (deployment) =>
         deployment.target !== "production" &&
         isReady(deployment) &&
-        deployment.meta?.githubCommitSha === input.commitSha,
+        typeof deployment.meta?.githubCommitSha === "string" &&
+        deployment.meta.githubCommitSha === input.commitSha &&
+        canonicalPullRequestId(deployment.meta.githubPrId) === input.pullRequestId,
     )
     .reduce<VercelDeploymentSummary | undefined>(
       (newest, deployment) =>
@@ -113,15 +122,41 @@ async function requestVercel(url: URL, token: string, init: RequestInit = {}): P
 export async function fetchProjectDeployments(
   request: VercelApiRequest,
 ): Promise<VercelDeploymentSummary[]> {
-  const url = new URL(deploymentsEndpoint);
-  url.searchParams.set("projectId", request.projectId);
-  url.searchParams.set("teamId", request.orgId);
-  url.searchParams.set("target", "preview");
-  url.searchParams.set("limit", "40");
-
-  const body = await requestVercel(url, request.token);
-  const deployments = (body as { deployments?: VercelDeploymentSummary[] }).deployments;
-  return deployments ?? [];
+  const deployments: VercelDeploymentSummary[] = [];
+  const visitedCursors = new Set<number>();
+  let until: number | undefined;
+  do {
+    const url = new URL(deploymentsEndpoint);
+    url.searchParams.set("projectId", request.projectId);
+    url.searchParams.set("teamId", request.orgId);
+    url.searchParams.set("target", "preview");
+    url.searchParams.set("limit", "100");
+    if (until !== undefined) url.searchParams.set("until", String(until));
+    const body = await requestVercel(url, request.token);
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !Array.isArray((body as { deployments?: unknown }).deployments)
+    ) {
+      throw new Error("Vercel deployment listing returned malformed deployments.");
+    }
+    deployments.push(...(body as { deployments: VercelDeploymentSummary[] }).deployments);
+    const pagination = (body as { pagination?: unknown }).pagination;
+    if (pagination === undefined) return deployments;
+    if (typeof pagination !== "object" || pagination === null || !("next" in pagination)) {
+      throw new Error("Vercel deployment listing returned malformed pagination.");
+    }
+    const next = (pagination as { next?: unknown }).next;
+    if (next === null) return deployments;
+    if (typeof next !== "number" || !Number.isSafeInteger(next) || next < 0) {
+      throw new Error("Vercel deployment listing returned malformed pagination cursor.");
+    }
+    if (visitedCursors.has(next))
+      throw new Error("Vercel deployment listing returned cyclic pagination.");
+    visitedCursors.add(next);
+    until = next;
+  } while (until !== undefined);
+  return deployments;
 }
 
 export async function assignDeploymentAlias(input: {
@@ -136,6 +171,47 @@ export async function assignDeploymentAlias(input: {
     method: "POST",
     body: JSON.stringify({ alias: parseAliasHost(input.alias) }),
   });
+}
+
+/**
+ * The lease is rechecked only after a deployment is READY, directly before the
+ * mutation. Checking before the READY wait leaves a race where another pull
+ * request can acquire `preview:alias` while Vercel finishes the build.
+ */
+export async function assignReadyPreviewAlias(
+  input: {
+    alias: string;
+    commitSha: string;
+    pullRequestId: string;
+    link: VercelProjectLink;
+    token: string;
+  },
+  dependencies: {
+    assertLease: () => Promise<void>;
+    assignAlias: (input: {
+      alias: string;
+      deploymentId: string;
+      orgId: string;
+      token: string;
+    }) => Promise<void>;
+    fetchDeployments: (request: VercelApiRequest) => Promise<VercelDeploymentSummary[]>;
+  },
+): Promise<boolean> {
+  const deployments = await dependencies.fetchDeployments({ ...input.link, token: input.token });
+  const deployment = selectPreviewDeployment(deployments, {
+    commitSha: input.commitSha,
+    pullRequestId: input.pullRequestId,
+  });
+  if (!deployment) return false;
+
+  await dependencies.assertLease();
+  await dependencies.assignAlias({
+    alias: input.alias,
+    deploymentId: deployment.uid,
+    orgId: input.link.orgId,
+    token: input.token,
+  });
+  return true;
 }
 
 export function previewAliasComment(input: { alias: string; commitSha: string }): string {
@@ -158,11 +234,22 @@ async function main(argv: readonly string[]): Promise<void> {
 
   const commitSha = flag("--commit-sha");
   const alias = parseAliasHost(flag("--alias") ?? "");
+  const pullRequestId = flag("--pull-request") ?? "";
+  const pullRequest = Number(pullRequestId);
+  const repository = flag("--repository");
   const timeoutSeconds = Number(flag("--timeout-seconds") ?? "600");
   if (!commitSha) throw new Error("--commit-sha is required.");
+  if (!Number.isSafeInteger(pullRequest) || pullRequest < 1) {
+    throw new Error("--pull-request must be a positive integer.");
+  }
+  if (!repository) throw new Error("--repository is required.");
+  if (String(pullRequest) !== pullRequestId)
+    throw new Error("--pull-request must be a canonical integer.");
 
   const token = readSuppliedStringConfig("VERCEL_ACCESS_TOKEN", process.env);
   if (!token) throw new Error("VERCEL_ACCESS_TOKEN is required to assign a preview alias.");
+  const githubToken = readSuppliedStringConfig("GH_TOKEN", process.env);
+  if (!githubToken) throw new Error("GH_TOKEN is required to recheck the preview:alias lease.");
 
   const link = resolveVercelProjectLink({
     projectId: flag("--project-id"),
@@ -172,10 +259,21 @@ async function main(argv: readonly string[]): Promise<void> {
   const deadline = Date.now() + timeoutSeconds * 1000;
 
   while (Date.now() < deadline) {
-    const deployments = await fetchProjectDeployments({ ...link, token });
-    const deployment = selectPreviewDeployment(deployments, { commitSha });
-    if (deployment) {
-      await assignDeploymentAlias({ ...link, token, deploymentId: deployment.uid, alias });
+    const assigned = await assignReadyPreviewAlias(
+      { alias, commitSha, link, pullRequestId, token },
+      {
+        fetchDeployments: fetchProjectDeployments,
+        assertLease: () =>
+          assertLiveExclusivePreviewAliasLease({
+            expectedCommitSha: commitSha,
+            pullRequest,
+            repository,
+            token: githubToken,
+          }),
+        assignAlias: assignDeploymentAlias,
+      },
+    );
+    if (assigned) {
       console.log(previewAliasComment({ alias, commitSha }));
       return;
     }

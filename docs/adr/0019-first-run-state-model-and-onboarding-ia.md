@@ -129,7 +129,7 @@ row counts are not what answers it.
 
 A singleton `store_identity` row records the identity of the store itself,
 issued by migration `0003` when the database is created and reissuable with
-`bun run db:provision`. Production reads compare it against
+`bun run db:provision`. Hosted reads compare it against
 `LOOPWORKS_EXPECTED_STORE_ID` before reading anything else, and a store that
 does not verify returns `source: "unavailable"` with the distinct error
 `Portal data store identity is unverified.` Three states fail closed and are
@@ -141,22 +141,12 @@ logged, never the identifiers themselves.
 
 Three properties of that decision are load-bearing:
 
-- **Production only, and not Preview.** Development and the fixture and seeded
-  lanes are not production runtimes at all. Vercel Previews are — they build
-  with `NODE_ENV=production`, which is why `resolveConfigRuntimeContext`
-  classifies them as production — but ADR 0018 requires each Preview to receive
-  a provider-created branch that is destroyed with the Preview lifecycle, so no
-  project-level variable can name the store a given preview will be handed and
-  enforcing there would fail every preview rather than catch anything.
-  `isPreviewRuntime` opts them out. This is a trade-off, not a free choice:
-  preview and production still share project-level database variables until
-  [#70](https://github.com/ncolesummers/loopworks/issues/70) finishes the Neon
-  wiring, so today a preview could in principle be verified against the same
-  identity as production. Binding the gate to that arrangement would make it
-  break the moment #70 lands, and the checked-in behavior would then have to
-  change under a deployment migration. Preview keeps its prior behavior, and its
-  runbook's Stage E "No production data" step remains a *manual* check of the
-  inverse property; it is not a substitute for this one.
+- **Hosted Production and Preview.** Development and the fixture and seeded
+  lanes are not production runtimes. ADR 0035 gives Preview one fixed,
+  disposable database with a distinct configured identity, so Vercel Preview
+  now follows the same fail-closed read gate as Production. This proves the
+  deployment reached its named store; it does not prove freshness or replace
+  the separate-project and no-Production-data operator checks.
 - **Checked before the read**, because there is nothing worth reading from a
   store that cannot be identified.
 - **Never reissued over an existing identity.** Provisioning a store that
@@ -197,14 +187,12 @@ to the selection runtime and the write paths needs its own issue, because each
 needs an error contract of its own rather than a shared "unavailable" record
 shape.
 
-`LOOPWORKS_EXPECTED_STORE_ID` is declared in the config registry but is
-deliberately *not* `requiredIn: production`. The registry has no Preview context
-to exempt, so marking it production-required would demand a value from every
-preview that could never be the right one. The production read is the
-enforcement instead: unset, it fails closed as `not_configured`. The cost is
-that the gap surfaces at the first production read rather than at
-`bun run config:check`, which is why the deployment runbook makes reading and
-setting the value part of the rollout.
+`LOOPWORKS_EXPECTED_STORE_ID` remains runtime-verified for Production to
+preserve its rollout ordering. ADR 0035 adds a target-specific Preview writer
+contract that requires a distinct value before any Preview value is sent to
+Vercel. In either hosted environment, an unset value fails closed as
+`not_configured`; the deployment runbook makes reading and setting it part of
+the rollout.
 
 Issue [#127](https://github.com/ncolesummers/loopworks/issues/127) retains
 actionable routing for the portal empty states this relaxation now makes
@@ -249,8 +237,8 @@ case cannot pass by construction. Its Settings cases prove the connect-the-App
 action is absent whenever the identity is unverified.
 
 `tests/unit/portal/portal-records.test.ts` covers the log events, that a
-verified store stays silent, that raw identifiers never reach the log, and that
-neither a non-production runtime nor a Vercel Preview runs the check.
+verified store stays silent, that raw identifiers never reach the log, that
+non-production bypasses the check, and that Preview fails closed on a mismatch.
 `tests/unit/runs/run-record.test.ts` covers the same gate on `/runs`, which
 reads through a different function. `tests/unit/scripts/provision-store-identity.test.ts`
 covers the recovery CLI.

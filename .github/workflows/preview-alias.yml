@@ -21,11 +21,13 @@ on:
 
 permissions: {}
 
-# Latest wins; an older run finishing second would leave the alias behind the
-# commit the pull request comment claims it serves.
+# `preview:alias` itself is the exclusive lease for hosted validation. The holder
+# keeps the label until evidence is complete; competing holders fail before they
+# can repoint the alias. Vercel creates builds before this workflow can run, and
+# migrations remain separately serialized by the database advisory lock.
 concurrency:
   group: preview-alias
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   alias:
@@ -88,14 +90,30 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Assert exclusive Preview validation lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ steps.resolve.outputs.pull_request }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          HOLDERS="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls?state=open&per_page=100" \
+            --jq '[.[][] | select(any(.labels[]; .name == "preview:alias")) | .number] | join(",")')"
+          bun run scripts/assert-preview-alias-lease.ts \
+            --pull-request "$PULL_REQUEST_NUMBER" \
+            --holders "$HOLDERS"
+
       # Waits for the preview build to reach READY, then repoints the alias.
       # The script refuses any deployment whose target is production.
       - name: Assign preview alias
         id: alias
         env:
           VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
+          PULL_REQUEST_NUMBER: ${{ steps.resolve.outputs.pull_request }}
           PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          REPOSITORY: ${{ github.repository }}
           ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
         run: |
@@ -113,10 +131,19 @@ jobs:
             bun run scripts/vercel-preview-alias.ts \
               --commit-sha "$HEAD_SHA" \
               --alias "$PREVIEW_ALIAS" \
+              --pull-request "$PULL_REQUEST_NUMBER" \
               --project-id "$PROJECT_ID" \
-              --org-id "$ORG_ID"
+              --org-id "$ORG_ID" \
+              --repository "$REPOSITORY"
             echo 'PREVIEW_ALIAS_EOF'
           } >> "$GITHUB_OUTPUT"
+
+      - name: Validate assigned Preview alias reachability
+        env:
+          PREVIEW_ALIAS: ${{ vars.VERCEL_PREVIEW_ALIAS }}
+        run: |
+          set -euo pipefail
+          bun run scripts/verify-preview-alias.ts --alias "$PREVIEW_ALIAS"
 
       - name: Comment the alias on the pull request
         env:

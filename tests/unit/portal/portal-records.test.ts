@@ -386,17 +386,8 @@ describe("portal records (pglite integration)", () => {
     expect(logged).not.toContain(otherStoreId);
   });
 
-  /**
-   * A Vercel Preview builds with `NODE_ENV=production`, so it reaches every other
-   * production gate. Its database is provider-owned and turns over with the
-   * Preview lifecycle (ADR 0018), so no project-level value can name it and the
-   * check would fail every preview rather than catch anything. Asserted with a
-   * store that would fail both ways — wrong id *and* no identity row — so the
-   * exclusion cannot pass by accident.
-   */
-  it("does not verify store identity in a Vercel preview", async () => {
+  it("fails closed when the fixed Preview database identity differs", async () => {
     const logger = { warn: vi.fn() };
-    await context.db.delete(storeIdentity);
 
     const result = await getPortalRecordsForPortal({
       database: context.db,
@@ -411,12 +402,9 @@ describe("portal records (pglite integration)", () => {
       requires: [],
     });
 
-    expect(result).toMatchObject({ source: "db" });
-    expect(getPortalSourceLabel(result)).toBe("Live database");
-    expect(logger.warn).not.toHaveBeenCalledWith(
-      expect.anything(),
-      "portal_store_identity_unverified",
-    );
+    expect(result).toMatchObject({ source: "unavailable" });
+    expect(getPortalSourceLabel(result)).toBe("Unavailable");
+    expect(logger.warn).toHaveBeenCalledWith(expect.anything(), "portal_store_identity_unverified");
   });
 
   it("still verifies store identity when VERCEL_ENV names production", async () => {
