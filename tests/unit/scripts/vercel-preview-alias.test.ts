@@ -1,6 +1,7 @@
 import { HttpResponse, http } from "msw";
 import {
   assignDeploymentAlias,
+  assignReadyPreviewAlias,
   fetchProjectDeployments,
   parseAliasHost,
   previewAliasComment,
@@ -21,7 +22,7 @@ function deployment(overrides: Partial<VercelDeploymentSummary> = {}): VercelDep
     created: 200,
     readyState: "READY",
     target: null,
-    meta: { githubCommitSha: headSha },
+    meta: { githubCommitSha: headSha, githubPrId: "285" },
     ...overrides,
   };
 }
@@ -93,7 +94,7 @@ describe("vercel-preview-alias", () => {
       expect(
         selectPreviewDeployment(
           [deployment({ uid: "dpl_older", created: 100 }), newest, deployment({ created: 200 })],
-          { commitSha: headSha },
+          { commitSha: headSha, pullRequestId: "285" },
         ),
       ).toBe(newest);
     });
@@ -102,6 +103,7 @@ describe("vercel-preview-alias", () => {
       expect(
         selectPreviewDeployment([deployment({ meta: { githubCommitSha: olderSha } })], {
           commitSha: headSha,
+          pullRequestId: "285",
         }),
       ).toBeUndefined();
     });
@@ -109,14 +111,20 @@ describe("vercel-preview-alias", () => {
     it("ignores deployments that are not ready yet", () => {
       for (const readyState of ["BUILDING", "QUEUED", "ERROR", "CANCELED"]) {
         expect(
-          selectPreviewDeployment([deployment({ readyState })], { commitSha: headSha }),
+          selectPreviewDeployment([deployment({ readyState })], {
+            commitSha: headSha,
+            pullRequestId: "285",
+          }),
         ).toBeUndefined();
       }
     });
 
     it("never aliases a production deployment", () => {
       expect(
-        selectPreviewDeployment([deployment({ target: "production" })], { commitSha: headSha }),
+        selectPreviewDeployment([deployment({ target: "production" })], {
+          commitSha: headSha,
+          pullRequestId: "285",
+        }),
       ).toBeUndefined();
     });
 
@@ -124,8 +132,44 @@ describe("vercel-preview-alias", () => {
       expect(
         selectPreviewDeployment([{ ...deployment(), readyState: undefined, state: "READY" }], {
           commitSha: headSha,
+          pullRequestId: "285",
         }),
       ).toBeDefined();
+    });
+
+    it("requires the exact pull-request metadata and rejects absent or malformed metadata", () => {
+      expect(
+        selectPreviewDeployment([deployment({ meta: { githubCommitSha: headSha } })], {
+          commitSha: headSha,
+          pullRequestId: "285",
+        } as never),
+      ).toBeUndefined();
+      expect(
+        selectPreviewDeployment(
+          [deployment({ meta: { githubCommitSha: headSha, githubPrId: "286" } })],
+          { commitSha: headSha, pullRequestId: "285" } as never,
+        ),
+      ).toBeUndefined();
+      expect(
+        selectPreviewDeployment([deployment()], {
+          commitSha: headSha,
+          pullRequestId: "285",
+        } as never),
+      ).toBeDefined();
+      expect(
+        selectPreviewDeployment(
+          [deployment({ meta: { githubCommitSha: headSha, githubPrId: 285 } })],
+          { commitSha: headSha, pullRequestId: "285" } as never,
+        ),
+      ).toBeDefined();
+      for (const githubPrId of [true, "0285", "none"]) {
+        expect(
+          selectPreviewDeployment(
+            [deployment({ meta: { githubCommitSha: headSha, githubPrId } })],
+            { commitSha: headSha, pullRequestId: "285" } as never,
+          ),
+        ).toBeUndefined();
+      }
     });
   });
 
@@ -152,6 +196,57 @@ describe("vercel-preview-alias", () => {
       expect(requestUrl?.searchParams.get("projectId")).toBe("prj_abc");
       expect(requestUrl?.searchParams.get("teamId")).toBe("team_xyz");
       expect(requestUrl?.searchParams.get("target")).toBe("preview");
+    });
+
+    it("paginates Vercel deployments, stops on exhaustion, and rejects malformed or cyclic cursors", async () => {
+      let requestCount = 0;
+      mswServer.use(
+        http.get("https://api.vercel.com/v6/deployments", ({ request }) => {
+          requestCount += 1;
+          const url = new URL(request.url);
+          if (!url.searchParams.has("until")) {
+            return HttpResponse.json({
+              deployments: [deployment({ uid: "dpl_first" })],
+              pagination: { next: 123 },
+            });
+          }
+          return HttpResponse.json({
+            deployments: [deployment({ uid: "dpl_second" })],
+            pagination: { next: null },
+          });
+        }),
+      );
+      await expect(
+        fetchProjectDeployments({ token: "vercel-token", projectId: "prj_abc", orgId: "team_xyz" }),
+      ).resolves.toHaveLength(2);
+      expect(requestCount).toBe(2);
+    });
+
+    it("fails closed on malformed and cyclic Vercel pagination cursors", async () => {
+      let calls = 0;
+      mswServer.use(
+        http.get("https://api.vercel.com/v6/deployments", () => {
+          calls += 1;
+          return HttpResponse.json({ deployments: [], pagination: { next: calls === 1 ? 7 : 7 } });
+        }),
+      );
+      await expect(
+        fetchProjectDeployments({ token: "vercel-token", projectId: "prj_abc", orgId: "team_xyz" }),
+      ).rejects.toThrow(/cyclic pagination/);
+    });
+
+    it("fails closed on a malformed Vercel pagination cursor without exposing the token", async () => {
+      mswServer.use(
+        http.get("https://api.vercel.com/v6/deployments", () =>
+          HttpResponse.json({ deployments: [], pagination: { next: "not-an-epoch" } }),
+        ),
+      );
+      await expect(
+        fetchProjectDeployments({ token: "vercel-token", projectId: "prj_abc", orgId: "team_xyz" }),
+      ).rejects.toThrow(/malformed pagination cursor/);
+      await expect(
+        fetchProjectDeployments({ token: "vercel-token", projectId: "prj_abc", orgId: "team_xyz" }),
+      ).rejects.not.toThrow(/vercel-token/);
     });
 
     it("throws without echoing the token when the API rejects the request", async () => {
@@ -206,6 +301,39 @@ describe("vercel-preview-alias", () => {
           alias: "https://loopworks-preview.vercel.app",
         }),
       ).rejects.toThrow(/hostname/i);
+    });
+  });
+
+  describe("assignReadyPreviewAlias", () => {
+    it("rechecks the lease after READY and before the alias mutation", async () => {
+      const events: string[] = [];
+
+      await expect(
+        assignReadyPreviewAlias(
+          {
+            alias: "loopworks-preview.vercel.app",
+            commitSha: headSha,
+            pullRequestId: "285",
+            link: { projectId: "prj_abc", orgId: "team_xyz" },
+            token: "vercel-token",
+          },
+          {
+            fetchDeployments: async () => {
+              events.push("ready");
+              return [deployment()];
+            },
+            assertLease: async () => {
+              events.push("recheck");
+              throw new Error("competing lease holder");
+            },
+            assignAlias: async () => {
+              events.push("mutate");
+            },
+          },
+        ),
+      ).rejects.toThrow(/competing lease holder/);
+
+      expect(events).toEqual(["ready", "recheck"]);
     });
   });
 

@@ -2,9 +2,10 @@
 #   bun run vercel-env:write preview --file vercel-env.local
 # Do not commit the filled-in copy: it holds live secrets.
 #
-# Preview and Production need the SAME variable set. A Vercel Preview runs with
-# NODE_ENV=production, so the config registry enforces the full production
-# contract there and a missing value 500s every route before middleware.
+# Preview and Production share the registry-derived application contract. A
+# Preview runs with NODE_ENV=production, so a missing required app value 500s
+# every route before middleware. Database ownership differs: Production keeps
+# integration-owned URLs; Preview owns its fixed disposable database URLs.
 #
 # Keep one file per environment. The declared target below must match the
 # `vercel-env:write` argument, which is what stops production credentials from
@@ -36,6 +37,16 @@ AUTH_GITHUB_SECRET=""
 # --- App registers, not a per-branch deployment hostname.
 LOOPWORKS_PUBLIC_URL="https://loopworks-preview.vercel.app"
 LOOPWORKS_ALLOWED_GITHUB_USERS="ncolesummers"
+
+# --- Preview database. These values are required only when
+# --- LOOPWORKS_ENV_TARGET="preview". Use the fixed disposable Preview root
+# --- database in the separate Neon project: pooled for runtime, direct for
+# --- migrations, and its distinct identity. Never copy Production values here.
+DATABASE_URL=""
+DATABASE_URL_UNPOOLED=""
+LOOPWORKS_EXPECTED_STORE_ID=""
+# Least-privilege GitHub token for authenticated Preview PR lease checks only.
+LOOPWORKS_PREVIEW_GITHUB_TOKEN=""
 
 # --- Secrets: generate with `openssl rand -hex 32`
 AUTH_SECRET=""

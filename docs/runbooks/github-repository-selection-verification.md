@@ -97,7 +97,7 @@ hook, before middleware. Now set: `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`,
 `vercel-build` runs `db:migrate && build`, so production migrations apply on
 every deploy — the schema is current.
 
-To change a value later:
+To initialize a previously empty environment:
 
 ```bash
 cp scripts/vercel-env.example vercel-env.local  # fill in; gitignored, holds live secrets
@@ -105,6 +105,10 @@ cp scripts/vercel-env.example vercel-env.local  # fill in; gitignored, holds liv
 bun run vercel-env:write production --file vercel-env.local
 vercel redeploy <production-deployment-id>      # not `deploy --prod`, see below
 ```
+
+The writer refuses to replace any existing target variable before mutation;
+update existing Production values only through an explicitly authorized
+operator procedure, then rerun the name-only check.
 
 `bun run vercel-env:check production` reports missing names without reading any
 value. The same contract governs Preview — see

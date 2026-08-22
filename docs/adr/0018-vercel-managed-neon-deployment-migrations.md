@@ -1,6 +1,6 @@
 # ADR 0018: Vercel-Managed Neon Deployment Migrations
 
-Status: Proposed
+Status: Superseded by [0035](0035-cost-bounded-neon-preview-database-topology.md)
 Date: 2026-08-02
 Issue: [#70](https://github.com/ncolesummers/loopworks/issues/70)
 

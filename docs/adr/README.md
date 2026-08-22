@@ -38,7 +38,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0015](0015-stage-orchestrator-and-isolated-subagent-handoffs.md) | Proposed | Use a neutral root orchestrator, independent sibling subagents, and typed artifact handoffs between isolated sandboxes. |
 | [0016](0016-run-reconciliation-and-terminal-reasons.md) | Proposed | Reconcile active runs with typed terminal reasons, read-only tracker refresh, and injected execution liveness. |
 | [0017](0017-durable-dispatch-leases-and-retry-backoff.md) | Proposed | Serialize manifest admission with durable leases and preserve bounded retry evidence across restarts. |
-| [0018](0018-vercel-managed-neon-deployment-migrations.md) | Proposed | Use Vercel-managed Neon with pooled runtime queries, direct deployment migrations, and provider-managed Preview branches. |
+| [0018](0018-vercel-managed-neon-deployment-migrations.md) | Superseded by [0035](0035-cost-bounded-neon-preview-database-topology.md) | Historical Vercel-managed Neon migration decision. |
 | [0019](0019-first-run-state-model-and-onboarding-ia.md) | Accepted | Derive no-installation, no-repositories, and no-loops server-side while keeping unavailable data distinct. |
 | [0020](0020-central-validated-configuration-registry.md) | Accepted | Centralize validated environment metadata while preserving injected readers and build-safe startup policy. |
 | [0021](0021-secure-github-app-installation-callback.md) | Proposed | Verify GitHub App installations with one-time actor-bound state, PKCE, and transient user authorization before persistence. |
@@ -55,6 +55,7 @@ Loopworks uses ADRs for durable technical and product architecture decisions. Gi
 | [0032](0032-operator-bound-repository-selection-access.md) | Proposed | Bind repository-selection reads and applies to the acting operator's same-App installation access with a 60-second positive-only cache. |
 | [0033](0033-persona-journey-registry.md) | Proposed | Define persona journeys and exhaustive scenario coverage as a versioned registry that is the executable projection of the persona narrative. |
 | [0034](0034-project-scoped-polly-model-routing.md) | Proposed | Encode subscription-aware model tiers, read-only dual review, and contributor-safe issue publication in a project-scoped Polly bundle. |
+| [0035](0035-cost-bounded-neon-preview-database-topology.md) | Proposed | Bound Preview Neon cost with one disposable root database in a separate project while preserving Production and migration safeguards. |
 
 ## Template
 
