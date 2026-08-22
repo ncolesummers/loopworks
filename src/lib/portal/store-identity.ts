@@ -4,7 +4,7 @@ import type { db } from "@/db/client";
 import { storeIdentity } from "@/db/schema";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import type { LoopworksLogger } from "@/lib/observability/logger";
-import { isPreviewRuntime, isProductionRuntime } from "@/lib/runtime";
+import { isProductionRuntime } from "@/lib/runtime";
 
 export type StoreIdentityDatabase = Pick<typeof db, "select">;
 export type StoreIdentityProvisionDatabase = Pick<typeof db, "insert" | "select">;
@@ -145,20 +145,17 @@ export async function verifyStoreIdentity(input: {
  * unguarded, which rendered "Live runs" over an empty list against a store the
  * rest of the portal was refusing to trust.
  *
- * Scoped to the one deployment whose store identity is knowable and stable.
- * Development and the fixture and seeded lanes are not production runtimes at all.
- * Vercel Previews are — they build with `NODE_ENV=production` — but their
- * databases are provider-owned and turn over with the Preview lifecycle
- * (ADR 0018), so no project-level variable can name the store a given preview
- * will be handed, and requiring one would fail every preview instead of catching
- * anything.
+ * Scoped to deployments whose store identities are explicitly configured.
+ * Development and the fixture and seeded lanes are not production runtimes.
+ * The fixed Preview database is configured with its own expected identity, so
+ * Preview follows the same fail-closed verification as Production (ADR 0035).
  */
 export async function findUnverifiedStoreIdentity(input: {
   database: StoreIdentityDatabase;
   env: Partial<NodeJS.ProcessEnv>;
   logger?: LoopworksLogger;
 }): Promise<StoreIdentityVerification | null> {
-  if (!isProductionRuntime(input.env) || isPreviewRuntime(input.env)) {
+  if (!isProductionRuntime(input.env)) {
     return null;
   }
 

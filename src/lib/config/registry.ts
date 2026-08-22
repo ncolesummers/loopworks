@@ -177,18 +177,28 @@ export const configRegistry = defineRegistry([
     schema: storeIdSchema,
     group: "database",
     description:
-      "Identity of the Postgres store production expects; read it with `bun run db:provision --check`.",
+      "Identity of the Postgres store this hosted deployment expects; read it with `bun run db:provision --check`.",
     /*
      * Enforced by the production portal read rather than declared production-
-     * required (#158). `resolveConfigRuntimeContext` classifies a Vercel Preview
-     * as production, and a preview cannot know the ephemeral database it will be
-     * handed (ADR 0018), so requiring it here would demand a value that is
-     * meaningless in preview. Production reads fail closed when it is unset.
+     * required (#158). Preview has a target-specific required set in
+     * `sync-vercel-env.ts`: its fixed disposable database must supply a distinct
+     * value, while Production remains runtime-verified for backward-compatible
+     * rollout ordering (ADR 0035).
      */
     requiredIn: notRequired,
     secret: false,
     readOnly: false,
     exampleValue: "00000000-0000-0000-0000-000000000000",
+  },
+  {
+    name: "LOOPWORKS_PREVIEW_GITHUB_TOKEN",
+    schema: stringSchema,
+    group: "github",
+    description: "Least-privilege GitHub token used only by Preview migration lease checks.",
+    requiredIn: notRequired,
+    secret: true,
+    readOnly: false,
+    exampleValue: "",
   },
   {
     name: "LOOPWORKS_PUBLIC_URL",
@@ -415,6 +425,7 @@ export const configRegistry = defineRegistry([
   ...(
     [
       ["VERCEL_ACCESS_TOKEN", "Vercel API access token used for deployment visibility.", true],
+      ["GH_TOKEN", "GitHub Actions token used only to recheck the Preview alias lease.", true],
       ["VERCEL_TEAM_ID", "Optional Vercel team identifier.", false],
       ["VERCEL_TEAM_SLUG", "Optional Vercel team slug.", false],
     ] as const
