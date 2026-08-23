@@ -55,7 +55,10 @@ green-only report is not evidence.
 ### 4. Adversarial review
 
 Run the universal adversarial review from root `AGENTS.md` after the first
-green, then resolve findings and re-run focused checks.
+green, then resolve findings and re-run focused checks. One round is the
+default; only critical-severity findings can require another round, and the
+three-round hard cap always applies. Route actionable out-of-scope findings to
+a linked backlog issue instead of extending the implementation.
 
 ### 5. Validate and pause
 
@@ -111,7 +114,12 @@ Exception: the test-plan subagent may start and explore the app with
 
 Follow the universal contract in root `AGENTS.md` after the first green and
 before handoff or publication. It applies whether the work stops without a PR,
-ships as one PR, or ships as a stack.
+ships as one PR, or ships as a stack. One round is the default and includes
+both independent reviewers. Additional rounds are only for critical-severity
+findings from the preceding round. Never exceed three review rounds; an
+unresolved in-scope critical finding at the cap blocks handoff or publication.
+Record actionable out-of-scope findings in a linked backlog issue; they do not
+extend or block the current implementation.
 
 ## Acceptance evidence
 

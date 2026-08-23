@@ -99,10 +99,12 @@ green-only report is not evidence.
 ### 5. Adversarial review
 
 Run the universal adversarial review from root `AGENTS.md` after the first
-green, then resolve findings and re-run focused checks. For one PR, do not
-commit until both reviewers have reviewed the final diff and every finding is
-fixed or deferred with a stated reason. A stack repeats this review against its
-materialized layer diffs in step 7 before any branch is submitted.
+green, then resolve findings and re-run focused checks. One round is the
+default; only critical-severity findings can require another round, and the
+three-round hard cap always applies. Route actionable out-of-scope findings to
+a linked backlog issue instead of extending the implementation. A stack
+reviews all materialized layer diffs and the assembled diff within each round
+before any branch is submitted.
 
 ### 6. Validate
 
@@ -153,16 +155,14 @@ For one PR, stop on any mismatch:
 
 For a stack, keep steps 1 through 6 and the acceptance-evidence section intact,
 but apply them per layer: resolve the issue and plan the whole stack once in
-steps 2 and 3, then repeat TDD, adversarial review, validation, preflight, and a
-signed locally verified commit for each layer from bottom to top. Use the
-stacked-PR guide and `gh-stack` skill for branch creation and submission. Once
-those local commits materialize the proposed layers, run the root guide's
-stack-specific adversarial review against every layer and the assembled top
-diff. Resolve or defer findings, return the revised diffs to both reviewers,
-and repeat until both have reviewed the final stack. Rerun affected layer
-checks and the whole-stack validation at the top. Only then may `gh stack
-submit --auto` publish the draft PRs. Run GitHub provenance for every resulting
-PR.
+steps 2 and 3, then repeat TDD, validation, preflight, and a signed locally
+verified commit for each layer from bottom to top. Use the stacked-PR guide and
+`gh-stack` skill for branch creation and submission. Once those local commits
+materialize the proposed layers, review all layer diffs and the assembled
+top-of-stack diff in the same round under the root guide's bounded policy.
+Resolve findings under that policy, rerun affected layer checks and the
+whole-stack validation at the top, then use `gh stack submit --auto` to publish
+the draft PRs. Run GitHub provenance for every resulting PR.
 
 Report the branch, worktree path, commit list, and PR URL. Leave the worktree
 in place for the user; `/clean_gone` removes it and its branch once the branch
@@ -193,7 +193,12 @@ Exception: the test-plan subagent may start and explore the app with
 
 Follow the universal contract in root `AGENTS.md` after the first green and
 before handoff or publication. It applies whether the work stops without a PR,
-ships as one PR, or ships as a stack.
+ships as one PR, or ships as a stack. One round is the default and includes
+both independent reviewers. Additional rounds are only for critical-severity
+findings from the preceding round. Never exceed three review rounds; an
+unresolved in-scope critical finding at the cap blocks handoff or publication.
+Record actionable out-of-scope findings in a linked backlog issue; they do not
+extend or block the current implementation.
 
 ## Acceptance evidence
 

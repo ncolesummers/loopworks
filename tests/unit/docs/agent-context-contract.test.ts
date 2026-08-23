@@ -87,6 +87,32 @@ describe("agent context budget", () => {
     }
   });
 
+  it("bounds adversarial review rounds and routes out-of-scope findings to backlog", () => {
+    for (const context of [rootGuide, implementIssueSkill, implementIssuePrSkill]) {
+      const normalized = context.replaceAll(/\s+/g, " ");
+      expect(normalized).toContain("One round is the default");
+      expect(normalized).toContain("both independent reviewers");
+      expect(normalized).toContain("critical-severity findings");
+      expect(normalized).toContain("Never exceed three review rounds");
+      expect(normalized).toContain("blocks handoff or publication");
+      expect(normalized).toContain("linked backlog issue");
+      expect(normalized).toContain("do not extend or block the current implementation");
+      expect(normalized).not.toContain("repeat until both");
+      expect(normalized).not.toContain("until both have reviewed");
+    }
+
+    const normalizedRoot = rootGuide.replaceAll(/\s+/g, " ");
+    expect(normalizedRoot).toContain("critical-severity findings cannot be deferred");
+    expect(normalizedRoot).toContain("requires the next review round");
+    expect(normalizedRoot).not.toContain("defer every in-scope finding");
+
+    const normalizedWorktreeSkill = implementIssuePrSkill.replaceAll(/\s+/g, " ");
+    expect(normalizedWorktreeSkill).not.toContain("repeat TDD, adversarial review");
+    expect(normalizedWorktreeSkill).toContain(
+      "all layer diffs and the assembled top-of-stack diff in the same round",
+    );
+  });
+
   it("ships the worktree variant through the shared .agents skill directory", () => {
     expect(readlinkSync(".claude/skills/implement-issue-pr")).toBe(
       "../../.agents/skills/implement-issue-pr",
