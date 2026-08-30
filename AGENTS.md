@@ -30,10 +30,14 @@ stops without a PR, ships as one PR, or ships as a stack.
 
 Use two independent read-only subagents in fresh contexts with the same brief.
 Give them only the issue, acceptance criteria, test plan, and diff—never the
-implementing session's reasoning. For a stack, review each proposed PR diff in
-dependency context and the assembled top-of-stack diff before submitting any
-layer. One round is the default. A round is one pass by both independent
-reviewers over every diff required for that implementation.
+implementing session's reasoning. A stack is a team scheduling primitive:
+implement it from bottom to top and publish each independently reviewable
+lower layer as a draft after its own gates so human review can overlap work on
+a later layer, unless the user explicitly requires atomic publication. Before
+publishing the first layer, review that layer. Before publishing each later
+layer, review its diff in dependency context and the assembled top-of-stack
+diff. One round is the default. A round is one pass by both independent
+reviewers over every diff in the current publication scope.
 
 Use this brief verbatim:
 
@@ -47,9 +51,10 @@ critical-severity findings cannot be deferred. Fix or explicitly defer
 non-critical findings with a stated reason. Non-critical findings do not
 require another review round. A critical finding in the immediately preceding
 round requires the next review round to verify its fix. Never exceed three
-review rounds for one issue implementation. At that cap, any unresolved
-in-scope critical finding blocks handoff or publication; it never authorizes a
-fourth round.
+review rounds for one review scope. At that cap, any unresolved in-scope
+critical finding blocks handoff or publication for that scope; it never
+authorizes a fourth round. For a stack, each layer publication is a distinct
+bounded review scope, so the cap does not impose a three-layer limit.
 
 When a finding is outside the issue's acceptance criteria, record it in a
 linked backlog issue if it is actionable. Out-of-scope findings do not extend
@@ -58,6 +63,18 @@ rerun the checks required by the Validation section and report the round count
 and every finding's disposition. If tool policy cannot provide two independent
 reviewers for the mandatory first round, stop before final handoff or
 publication and report the blocker.
+
+For an authorized stack, complete the current layer's TDD, scoped review,
+validation, preflight, signed commit, local signature verification, draft PR,
+template, and GitHub provenance before implementing the next layer. Do not
+build later layers in one combined working tree and split them afterward unless
+the user explicitly requires atomic publication. Feedback that changes a
+published lower layer starts a new bounded review scope and invalidates affected
+upper-layer evidence: preserve any in-progress upper work, update the lower
+layer, cascade-rebase the upper layers, rerun their affected checks and
+signature verification, refresh each affected PR's acceptance-evidence table
+and review dispositions, and refresh GitHub provenance after pushing. Keep
+whole-stack validation at the final layer.
 
 ## Commit provenance
 

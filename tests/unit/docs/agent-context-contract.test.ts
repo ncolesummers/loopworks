@@ -35,6 +35,7 @@ const appGuide = readFileSync("src/AGENTS.md", "utf8");
 const implementIssueSkill = readFileSync(".agents/skills/implement-issue/SKILL.md", "utf8");
 const implementIssuePrSkill = readFileSync(".agents/skills/implement-issue-pr/SKILL.md", "utf8");
 const adrIndex = readFileSync("docs/adr/README.md", "utf8");
+const developmentGuide = readFileSync("docs/development.md", "utf8");
 
 /** Sections both skills must keep byte-identical. */
 const sharedSkillSections = [
@@ -108,9 +109,53 @@ describe("agent context budget", () => {
 
     const normalizedWorktreeSkill = implementIssuePrSkill.replaceAll(/\s+/g, " ");
     expect(normalizedWorktreeSkill).not.toContain("repeat TDD, adversarial review");
-    expect(normalizedWorktreeSkill).toContain(
-      "all layer diffs and the assembled top-of-stack diff in the same round",
+    expect(normalizedWorktreeSkill).toContain("each later layer in dependency context");
+    expect(normalizedWorktreeSkill).toContain("assembled top-of-stack diff");
+  });
+
+  it("publishes an authorized stack incrementally for concurrent human review", () => {
+    const normalizedRoot = rootGuide.replaceAll(/\s+/g, " ");
+    const normalizedSkill = implementIssuePrSkill.replaceAll(/\s+/g, " ");
+    const normalizedDevelopment = developmentGuide.replaceAll(/\s+/g, " ");
+
+    expect(normalizedRoot).not.toContain("before submitting any layer");
+    expect(normalizedRoot).not.toContain("three review rounds for one issue implementation");
+    expect(normalizedRoot).toMatch(/publish each independently reviewable lower layer as a draft/);
+    expect(normalizedRoot).toMatch(/human review can overlap work on a later layer/);
+    expect(normalizedRoot).toContain("new bounded review scope");
+    expect(normalizedSkill).not.toContain(
+      "Once those local commits materialize the proposed layers",
     );
+    expect(normalizedSkill).toMatch(/Do not implement later layers .* split them afterward/);
+    expect(normalizedSkill).toContain("new bounded review scope");
+
+    for (const context of [normalizedRoot, normalizedSkill, normalizedDevelopment]) {
+      expect(context).toMatch(/unless the user explicitly requires atomic publication/);
+      expect(context).toMatch(/cascade-rebase/);
+      expect(context).toMatch(/acceptance-evidence/);
+    }
+
+    const orderedModelSteps = [
+      "# Run the model layer's TDD",
+      "bun run commit:preflight",
+      'git commit -S -m "feat(model): add the issue model"',
+      "git verify-commit HEAD",
+      "gh stack submit --auto",
+      'gh pr edit <model-pr> --body-file "$MODEL_PR_BODY"',
+      "bun run commit:provenance --github <model-pr>",
+      "gh stack add agent/123-service",
+    ];
+    let previousIndex = -1;
+    for (const step of orderedModelSteps) {
+      const index = developmentGuide.indexOf(step);
+      expect(index, `missing or misordered model step: ${step}`).toBeGreaterThan(previousIndex);
+      previousIndex = index;
+    }
+
+    expect(normalizedDevelopment).toContain("git stash push -u -m");
+    expect(normalizedDevelopment).toContain("git stash list --format='%gd %s'");
+    expect(normalizedDevelopment).not.toContain("git stash apply stash@{0}");
+    expect(normalizedDevelopment).toMatch(/Refresh .* PR body .* acceptance-evidence/);
   });
 
   it("ships the worktree variant through the shared .agents skill directory", () => {
