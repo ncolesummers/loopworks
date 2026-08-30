@@ -32,7 +32,7 @@ code, read the relevant guide there first.
 Loopworks uses Bun. Run eve commands through `bunx eve ...`. Restore the
 committed dependency graph with `bun install`. If an issue-backed migration
 changes the runtime pair, pin both packages exactly; the current contract is
-`bun add --exact eve@0.33.2 ai@7.0.58`. Then update this skill and its contract
+`bun add --exact eve@0.44.0 ai@7.0.74`. Then update this skill and its contract
 test before reading the newly installed bundled docs.
 
 Translate upstream package-manager examples to the repository's Bun contract:
@@ -64,3 +64,37 @@ stage sends must use `turnPolicy: "queue"` unless replacement is an explicit,
 tested product behavior. `respond(inputResponses, options)` answers a pending
 request and never steers; use explicit cancellation when work should stop
 without a replacement message.
+
+## Trace audience contract
+
+Eve 0.44's provider pipeline is public-only by default.
+Built-in channels classify their audience as `public`, `private`, or `unknown`,
+and provider `otel()` uses that classification as its default head gate.
+Loopworks currently uses the legacy single-file instrumentation layout with
+`experimental.instrumentationProviders` disabled, so it does not apply the
+provider pipeline's audience head gate. Do not describe `private` or `unknown`
+traces as rejected by the current repository configuration.
+
+Keep raw inputs and outputs behind Loopworks' existing telemetry opt-in. Before
+adding a broader exporter, use a separately reviewed provider-layout migration
+with audience tests, or configure and test an equivalent explicit destination
+filter. Zero-configuration local tracing may retain unclassified HTTP and TUI
+sessions when no authored instrumentation replaces it.
+
+## Background task and HITL contract
+
+Loopworks does not enable `experimental.tasks`. If an issue enables it,
+background executors can report progress and terminal results through
+`task.send`, but the in-process callback is not restart-safe for authored
+cross-process work. Eve removed the `task_sleep` framework tool; task-mode
+parents wake from lifecycle notifications instead.
+
+Keep human responses separate from ordinary messages. Pass exact response
+literals to `respond(inputResponses, options)`, or values validated by
+`parseInputResponses()`. A background child's HITL prompt is surfaced on its
+parent session and routes back to the child without invoking the parent model.
+
+Persistent subagent continuations forward the active caller rather than
+inheriting previous authority. Upgrade both remote deployments before resuming
+existing persistent sessions; an incompatible receiver must reject the
+continuation instead of falling back to service authority.

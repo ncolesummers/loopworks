@@ -3,6 +3,7 @@
 Status: Proposed
 Date: 2026-08-11
 Issue: [#181](https://github.com/ncolesummers/loopworks/issues/181)
+Updated by: [#296](https://github.com/ncolesummers/loopworks/issues/296)
 
 ## Context
 
@@ -12,11 +13,13 @@ waited. Treating the version named when the issue was drafted as authoritative
 would preserve stale APIs and peer requirements.
 
 The npm registry's `latest` tag resolved to `eve@0.33.2` when implementation
-began on 2026-08-11. That release requires Node.js 24 or newer and a non-optional
-`ai@^7.0.58` peer. Loopworks already uses Node.js 24, OpenTelemetry API 1.x, and
-Just Bash 3.x, so the compatible exact runtime pair is `eve@0.33.2` and
-`ai@7.0.58`. Exact pins keep a fast-moving preview runtime from changing without
-a reviewed lockfile update.
+began on 2026-08-11. Issue #296 advances that reviewed baseline to `eve@0.44.0`
+and the exact AI SDK version proposed with the same Dependabot batch,
+`ai@7.0.74`. Eve 0.44 still requires Node.js 24 or newer and declares
+`ai@^7.0.58`, OpenTelemetry API 1.x, and Just Bash 3.x peers. The selected pair
+satisfies those constraints without changing Loopworks' Node floor. Exact pins
+keep a fast-moving preview runtime from changing without a reviewed lockfile
+update.
 
 The session protocol also changed between the old and selected lines. Eve
 0.31.0 removed continuation-token client routing in favor of fixed,
@@ -38,6 +41,33 @@ rolled back. Loopworks does not currently author a channel or call the Eve
 client from application source, so no live message path silently changes in
 this migration.
 
+Eve 0.44's provider pipeline is public-only by default.
+Built-in messaging channels now classify conversations as `public`, `private`,
+or `unknown`, and the provider `otel()` pipeline applies that audience as a head
+gate. Loopworks remains on Eve's legacy single-file instrumentation layout with
+`experimental.instrumentationProviders` disabled, so it does not apply that
+provider head gate. The current file registers no external exporter and retains
+the repository's existing explicit opt-in for raw model inputs and outputs.
+Zero-configuration local tracing may still retain unclassified HTTP and TUI
+sessions when no authored instrumentation file replaces it.
+
+The intermediate task and HITL contracts also changed. Eve 0.43 lets
+experimental in-process background tools report progress and terminal results
+through `task.send`, while warning that the callback is not restart-safe for
+authored cross-process executors. Eve 0.42 removed the `task_sleep` framework
+tool; task-mode parents now wake from lifecycle notifications. HITL
+`respond()` calls accept exact response literals or values validated with
+`parseInputResponses()`. Loopworks does not enable `experimental.tasks`, so
+these changes add no active background executor. Existing approval and
+question flows continue to park durably at `session.waiting`.
+
+Persistent local and remote subagent continuations now forward the active
+caller so user-scoped connections resolve for the current turn rather than
+reusing prior authority. A receiver that cannot verify continuation forwarding
+rejects the request instead of falling back to service authority. Loopworks
+does not enable persistent subagent sessions, but any future rollout must
+upgrade both deployments before resuming an existing remote session.
+
 The existing Vercel project previously built only the Next.js portal even
 though the repository also contained the Eve agent. Eve 0.33's `withEve()`
 integration can emit the portal and agent as sibling Build Output services in
@@ -49,12 +79,12 @@ intended same-origin portal-and-agent topology.
 
 ## Decision
 
-1. Pin `eve@0.33.2` and its required AI SDK peer `ai@7.0.58` exactly in
+1. Pin `eve@0.44.0` and its selected AI SDK peer `ai@7.0.74` exactly in
    `package.json` and `bun.lock`, and declare Eve's `engines.node` floor as
    Node.js `>=24` in the application manifest.
 2. Keep authored agents on Eve's documented filesystem contracts and verify
    discovery, tools, sandboxes, instrumentation, and evals against the bundled
-   0.33.2 documentation and CLI.
+   0.44.0 documentation and CLI.
 3. Use fixed `sessionId` handles for new Eve client or channel work. Ordinary
    messages use positional `send(message, options)`; human-input responses use
    `respond(inputResponses, options)`.
@@ -79,6 +109,17 @@ intended same-origin portal-and-agent topology.
 9. Exclude `/eve/*` from the portal's Auth.js proxy. Eve owns authentication on
    that route family: health is public, while session and inspection routes use
    Eve's fail-closed route policy.
+10. Keep the legacy single-file instrumentation layout for this runtime-only
+    migration and do not claim the provider pipeline's public-only head gate is
+    active. Keep raw input/output capture behind the existing explicit telemetry
+    policy. Before enabling a broader export, either migrate to the provider
+    layout under a separate issue with its experimental flag and audience tests,
+    or install an equivalent explicit destination filter and verify it.
+11. Keep experimental background tasks disabled until an issue defines their
+    restart, authorization, cancellation, HITL, and result-delivery contract.
+    Do not reintroduce `task_sleep`; lifecycle notifications are the supported
+    wake mechanism, and any in-process executor may use `task.send` only within
+    its documented non-restart-safe boundary.
 
 ## Consequences
 
