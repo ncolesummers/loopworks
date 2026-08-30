@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 type DependabotUpdate = {
+  "commit-message"?: { prefix?: string };
   directory?: string;
   groups?: Record<
     string,
@@ -15,11 +16,20 @@ type DependabotUpdate = {
     }
   >;
   "open-pull-requests-limit"?: number;
+  "multi-ecosystem-group"?: string;
   "package-ecosystem"?: string;
+  patterns?: string[];
   schedule?: { day?: string; interval?: string; time?: string; timezone?: string };
 };
 
 type DependabotConfig = {
+  "multi-ecosystem-groups"?: Record<
+    string,
+    {
+      "commit-message"?: { prefix?: string };
+      schedule?: { day?: string; interval?: string; time?: string; timezone?: string };
+    }
+  >;
   updates?: DependabotUpdate[];
   version?: number;
 };
@@ -35,38 +45,46 @@ describe("Dependabot version updates", () => {
     expect(config.version).toBe(2);
   });
 
-  it("updates the Bun lockfile weekly without hiding runtime migrations in a group", () => {
+  it("uses one monthly cross-ecosystem version-update group", () => {
+    expect(config["multi-ecosystem-groups"]).toEqual({
+      "monthly-version-updates": {
+        "commit-message": { prefix: "chore(deps)" },
+        schedule: {
+          interval: "monthly",
+          time: "09:00",
+          timezone: "America/Los_Angeles",
+        },
+      },
+    });
+
+    const groupSchedule = config["multi-ecosystem-groups"]?.["monthly-version-updates"]?.schedule;
+    expect(groupSchedule?.day).toBeUndefined();
+  });
+
+  it("assigns every Bun and GitHub Actions version update to the monthly group", () => {
+    expect(config.updates).toHaveLength(2);
+
     const bun = config.updates?.find((update) => update["package-ecosystem"] === "bun");
     expect(bun).toMatchObject({
       directory: "/",
-      "open-pull-requests-limit": 10,
-      schedule: {
-        day: "monday",
-        interval: "weekly",
-        time: "09:00",
-        timezone: "America/Los_Angeles",
-      },
+      "multi-ecosystem-group": "monthly-version-updates",
+      patterns: ["*"],
     });
-    expect(bun?.groups?.["production-non-major"]).toMatchObject({
-      "dependency-type": "production",
-      "update-types": ["minor", "patch"],
-    });
-    expect(bun?.groups?.["production-non-major"]?.["exclude-patterns"]).toEqual(
-      expect.arrayContaining(["eve", "next", "next-auth", "@auth/*", "@opentelemetry/*"]),
-    );
-    expect(bun?.groups?.["development-non-major"]).toMatchObject({
-      "dependency-type": "development",
-      "update-types": ["minor", "patch"],
-    });
-  });
-
-  it("updates GitHub Actions weekly", () => {
     const actions = config.updates?.find(
       (update) => update["package-ecosystem"] === "github-actions",
     );
     expect(actions).toMatchObject({
       directory: "/",
-      schedule: { day: "monday", interval: "weekly" },
+      "multi-ecosystem-group": "monthly-version-updates",
+      patterns: ["*"],
     });
+
+    for (const update of config.updates ?? []) {
+      expect(update.schedule).toBeUndefined();
+      expect(update.groups).toBeUndefined();
+      expect(update.patterns).toEqual(["*"]);
+      expect(update["multi-ecosystem-group"]).toBe("monthly-version-updates");
+      expect(update["commit-message"]).toBeUndefined();
+    }
   });
 });
