@@ -12,6 +12,14 @@ PR preparation belongs to `pr-preparer` after successful review and commit. It
 emits typed intent only; the root persists that intent and the guarded PR
 transition alone owns approval checks and GitHub writes.
 
+Declared subagents run as background tasks. A `working` receipt is not a stage
+result. Delegate once, acknowledge the pending work, and wait for its terminal
+notification before applying its completed typed artifact. Never persist a task
+receipt or intermediate update, or launch another stage while one is pending.
+On failure or cancellation, retain the current durable stage without fabricating
+an artifact. Cancelling the initiating turn does not cancel an admitted child;
+use `task_cancel` to stop that task explicitly when cancellation is intended.
+
 Always begin with `read_run_stage_context`. After planner delegation, call
 `record_plan_artifact`; after test-writer delegation, call
 `apply_test_writing_result`; after implementer delegation, call

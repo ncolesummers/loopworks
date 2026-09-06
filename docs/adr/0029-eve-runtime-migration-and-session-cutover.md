@@ -3,7 +3,8 @@
 Status: Proposed
 Date: 2026-08-11
 Issue: [#181](https://github.com/ncolesummers/loopworks/issues/181)
-Updated by: [#296](https://github.com/ncolesummers/loopworks/issues/296)
+Updated by: [#296](https://github.com/ncolesummers/loopworks/issues/296),
+[#309](https://github.com/ncolesummers/loopworks/issues/309)
 
 ## Context
 
@@ -13,10 +14,10 @@ waited. Treating the version named when the issue was drafted as authoritative
 would preserve stale APIs and peer requirements.
 
 The npm registry's `latest` tag resolved to `eve@0.33.2` when implementation
-began on 2026-08-11. Issue #296 advances that reviewed baseline to `eve@0.44.0`
+began on 2026-08-11. Issue #309 advances the issue #296 baseline to `eve@0.51.0`
 and the exact AI SDK version proposed with the same Dependabot batch,
-`ai@7.0.74`. Eve 0.44 still requires Node.js 24 or newer and declares
-`ai@^7.0.58`, OpenTelemetry API 1.x, and Just Bash 3.x peers. The selected pair
+`ai@7.0.92`. Eve 0.51 still requires Node.js 24 or newer and declares
+`ai@^7.0.82`, OpenTelemetry API 1.x, and Just Bash 3.x peers. The selected pair
 satisfies those constraints without changing Loopworks' Node floor. Exact pins
 keep a fast-moving preview runtime from changing without a reviewed lockfile
 update.
@@ -57,8 +58,12 @@ through `task.send`, while warning that the callback is not restart-safe for
 authored cross-process executors. Eve 0.42 removed the `task_sleep` framework
 tool; task-mode parents now wake from lifecycle notifications. HITL
 `respond()` calls accept exact response literals or values validated with
-`parseInputResponses()`. Loopworks does not enable `experimental.tasks`, so
-these changes add no active background executor. Existing approval and
+`parseInputResponses()`. Eve 0.51 removes the experimental task gate and runs every declared subagent
+as a background task. A delegation returns a working receipt, followed by a
+terminal notification containing the result. The orchestrator must wait for
+that result before applying an artifact; no synchronous compatibility setting
+is documented. Admitted children survive initiating-turn cancellation and must
+be stopped with `task_cancel`; parent-session finalization cancels them. Existing approval and
 question flows continue to park durably at `session.waiting`.
 
 Persistent local and remote subagent continuations now forward the active
@@ -79,12 +84,12 @@ intended same-origin portal-and-agent topology.
 
 ## Decision
 
-1. Pin `eve@0.44.0` and its selected AI SDK peer `ai@7.0.74` exactly in
+1. Pin `eve@0.51.0` and its selected AI SDK peer `ai@7.0.92` exactly in
    `package.json` and `bun.lock`, and declare Eve's `engines.node` floor as
    Node.js `>=24` in the application manifest.
 2. Keep authored agents on Eve's documented filesystem contracts and verify
    discovery, tools, sandboxes, instrumentation, and evals against the bundled
-   0.44.0 documentation and CLI.
+   0.51.0 documentation and CLI.
 3. Use fixed `sessionId` handles for new Eve client or channel work. Ordinary
    messages use positional `send(message, options)`; human-input responses use
    `respond(inputResponses, options)`.
@@ -115,11 +120,15 @@ intended same-origin portal-and-agent topology.
     policy. Before enabling a broader export, either migrate to the provider
     layout under a separate issue with its experimental flag and audience tests,
     or install an equivalent explicit destination filter and verify it.
-11. Keep experimental background tasks disabled until an issue defines their
-    restart, authorization, cancellation, HITL, and result-delivery contract.
-    Do not reintroduce `task_sleep`; lifecycle notifications are the supported
-    wake mechanism, and any in-process executor may use `task.send` only within
-    its documented non-restart-safe boundary.
+11. Adopt the required background lifecycle for declared subagents. Keep one
+    stage pending at a time, never apply a working receipt or intermediate
+    update, and retain the stage on failure or cancellation. Explicitly cancel
+    admitted tasks with `task_cancel`. Keep authored tools foreground and do
+    not add cross-process background executors in this migration.
+12. Remove obsolete `glob` and `grep` disable files because these tools are
+    opt-in in 0.51; a disable sentinel without a lower-precedence source prevents
+    startup. Keep dangerous defaults disabled, including root copy delegation,
+    and assert the actual compiled root and sibling tool surfaces.
 
 ## Consequences
 
@@ -156,8 +165,8 @@ presented as resumed.
 ## Validation
 
 1. The red-first dependency/runtime contract asserts the exact package and
-   lockfile versions, this rationale, the session cutover, and the repo-local
-   skill's fixed-session API guidance.
+   lockfile versions and installed fixed-session API, then compiles the real
+   agent and checks its discovery and guarded tool surface.
 2. `bun test tests/unit/agent` covers agent discovery, guarded tools, sandbox
    definitions, instrumentation, and eval contracts on the selected runtime.
 3. `bunx eve info --json` reports the root and declared siblings without
@@ -167,6 +176,15 @@ presented as resumed.
    and the old-session disposition. It must also show the public health route,
    protected session route, and unchanged portal route. Fixture-only evidence
    does not satisfy this item. The pull request remains draft until this passes.
+   For [#311](https://github.com/ncolesummers/loopworks/issues/311), the approved
+   runtime-only scope uses an isolated hosted diagnostic agent with the candidate
+   dependency graph and security patches. Real model calls, durable child tasks,
+   parent-forwarded tool approval, denial, and explicit task cancellation count
+   as runtime evidence; mocked events only test the evidence checker. Pair this
+   with the exact-head Loopworks preview health, auth, session and cancellation
+   smoke. This does not establish Loopworks run authorization, automatic dispatch,
+   or portal approval/resume integration. Those remain separate product work.
+   Follow the [runtime probe runbook](../runbooks/eve-runtime-probe.md).
 5. `bun run validate` and `bun run build` pass before merge.
 
 ## Follow-Ups

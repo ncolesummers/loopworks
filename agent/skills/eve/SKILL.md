@@ -32,7 +32,7 @@ code, read the relevant guide there first.
 Loopworks uses Bun. Run eve commands through `bunx eve ...`. Restore the
 committed dependency graph with `bun install`. If an issue-backed migration
 changes the runtime pair, pin both packages exactly; the current contract is
-`bun add --exact eve@0.44.0 ai@7.0.74`. Then update this skill and its contract
+`bun add --exact eve@0.51.0 ai@7.0.92`. Then update this skill and its contract
 test before reading the newly installed bundled docs.
 
 Translate upstream package-manager examples to the repository's Bun contract:
@@ -83,11 +83,22 @@ sessions when no authored instrumentation replaces it.
 
 ## Background task and HITL contract
 
-Loopworks does not enable `experimental.tasks`. If an issue enables it,
-background executors can report progress and terminal results through
-`task.send`, but the in-process callback is not restart-safe for authored
-cross-process work. Eve removed the `task_sleep` framework tool; task-mode
-parents wake from lifecycle notifications instead.
+Eve 0.51 runs every declared subagent as a durable background task without an
+experimental flag. A delegation returns a `working` receipt; only the later
+terminal notification carries the completed result. Delegate one stage at a
+time and apply only that completed typed artifact. An admitted child survives
+cancellation of its initiating turn; use `task_cancel` to stop it. Parent-session
+finalization cancels remaining tasks. Test these boundaries before promotion.
+
+Authored tools remain foreground unless explicitly configured for background
+execution. `task.send` remains an in-process, non-restart-safe callback for
+authored executors. Do not reintroduce `task_sleep`; parents wake through task
+lifecycle notifications.
+
+`glob` and `grep` are opt-in exports in this release, so leave their files absent
+instead of exporting invalid `disableTool()` sentinels. Keep other dangerous
+defaults disabled, including the root copy-agent tool; verify the compiled tool
+surface rather than inferring permissions from filenames.
 
 Keep human responses separate from ordinary messages. Pass exact response
 literals to `respond(inputResponses, options)`, or values validated by
