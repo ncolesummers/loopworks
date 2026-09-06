@@ -99,12 +99,14 @@ green-only report is not evidence.
 ### 5. Adversarial review
 
 Run the universal adversarial review from root `AGENTS.md` after the first
-green, then resolve findings and re-run focused checks. One round is the
-default; only critical-severity findings can require another round, and the
-three-round hard cap always applies. Route actionable out-of-scope findings to
-a linked backlog issue instead of extending the implementation. A stack
-reviews all materialized layer diffs and the assembled diff within each round
-before any branch is submitted.
+green, then resolve findings and re-run focused checks. Exactly one adversarial
+review round is allowed; verify fixes with targeted tests and required
+validation without restarting review. Route actionable out-of-scope findings to
+a linked backlog issue instead of extending the implementation. A stack is a
+team scheduling primitive: review the first lower layer after its first green,
+then review each later layer in dependency context together with the assembled
+top-of-stack diff before publishing that layer. Each newly implemented layer gets one round; repairs do not restart
+adversarial review.
 
 ### 6. Validate
 
@@ -154,15 +156,26 @@ For one PR, stop on any mismatch:
    handoff evidence.
 
 For a stack, keep steps 1 through 6 and the acceptance-evidence section intact,
-but apply them per layer: resolve the issue and plan the whole stack once in
-steps 2 and 3, then repeat TDD, validation, preflight, and a signed locally
-verified commit for each layer from bottom to top. Use the stacked-PR guide and
-`gh-stack` skill for branch creation and submission. Once those local commits
-materialize the proposed layers, review all layer diffs and the assembled
-top-of-stack diff in the same round under the root guide's bounded policy.
-Resolve findings under that policy, rerun affected layer checks and the
-whole-stack validation at the top, then use `gh stack submit --auto` to publish
-the draft PRs. Run GitHub provenance for every resulting PR.
+but apply them incrementally from bottom to top. Resolve the issue and plan the
+whole stack once in steps 2 and 3. Then complete the current layer's TDD,
+scoped adversarial review, validation, preflight, signed locally verified
+commit, `gh stack submit --auto`, filled PR template, and GitHub provenance
+before creating or implementing the next branch. This makes the draft
+available for human review while work continues on a later layer. Do not
+implement later layers in one combined working tree and split them afterward
+unless the user explicitly requires atomic publication.
+
+For each later layer, have both reviewers inspect that layer in dependency
+context and the assembled top-of-stack diff under the root guide's bounded
+policy. Rerun affected layer checks, keep whole-stack validation at the final
+layer, submit the newly eligible draft, and run GitHub provenance for every PR
+whose head changed. If feedback changes a published lower layer, fix it on its
+own branch after preserving any in-progress upper-layer work. Fixes, feedback,
+and rebases do not restart adversarial review: cascade-rebase the affected
+upper layers, restore the preserved work on the rebased head, rerun relevant
+checks and signature verification, push, refresh each
+affected PR's acceptance-evidence table and review dispositions, and refresh
+GitHub provenance.
 
 Report the branch, worktree path, commit list, and PR URL. Leave the worktree
 in place for the user; `/clean_gone` removes it and its branch once the branch
@@ -193,10 +206,12 @@ Exception: the test-plan subagent may start and explore the app with
 
 Follow the universal contract in root `AGENTS.md` after the first green and
 before handoff or publication. It applies whether the work stops without a PR,
-ships as one PR, or ships as a stack. One round is the default and includes
-both independent reviewers. Additional rounds are only for critical-severity
-findings from the preceding round. Never exceed three review rounds; an
-unresolved in-scope critical finding at the cap blocks handoff or publication.
+ships as one PR, or ships as a stack. Exactly one adversarial review round
+includes both independent reviewers per issue implementation or newly
+implemented stack layer. Fix critical-severity findings and verify fixes with
+targeted tests and required validation. An unresolved in-scope critical finding
+blocks handoff or publication. Fixes, feedback, and rebases do not restart
+adversarial review or reset its count.
 Record actionable out-of-scope findings in a linked backlog issue; they do not
 extend or block the current implementation.
 

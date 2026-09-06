@@ -27,6 +27,8 @@ const migrationAdrPath = path.join(
 );
 const skillPath = path.join(repoRoot, "agent/skills/eve/SKILL.md");
 const nextConfig = readFileSync(path.join(repoRoot, "next.config.ts"), "utf8");
+const agentConfig = readFileSync(path.join(repoRoot, "agent/agent.ts"), "utf8");
+const instrumentationConfig = readFileSync(path.join(repoRoot, "agent/instrumentation.ts"), "utf8");
 const proxySource = readFileSync(path.join(repoRoot, "src/proxy.ts"), "utf8");
 const markdownlintConfig = readFileSync(path.join(repoRoot, ".markdownlint-cli2.yaml"), "utf8");
 const clientSessionsDeclaration = readFileSync(
@@ -40,12 +42,12 @@ const clientSessionDeclaration = readFileSync(
 
 describe("Eve runtime migration contract", () => {
   it("pins the selected Eve and AI SDK releases exactly", () => {
-    expect(packageJson.dependencies.eve).toBe("0.33.2");
-    expect(packageJson.dependencies.ai).toBe("7.0.58");
-    expect(lockfile).toContain('"eve": "0.33.2"');
-    expect(lockfile).toContain('"ai": "7.0.58"');
-    expect(lockfile).toContain('"eve": ["eve@0.33.2"');
-    expect(lockfile).toContain('"ai": ["ai@7.0.58"');
+    expect(packageJson.dependencies.eve).toBe("0.44.0");
+    expect(packageJson.dependencies.ai).toBe("7.0.74");
+    expect(lockfile).toContain('"eve": "0.44.0"');
+    expect(lockfile).toContain('"ai": "7.0.74"');
+    expect(lockfile).toContain('"eve": ["eve@0.44.0"');
+    expect(lockfile).toContain('"ai": ["ai@7.0.74"');
     expect(installedEvePackage.version).toBe(packageJson.dependencies.eve);
     expect(installedEvePackage.peerDependencies.ai).toBe("^7.0.58");
     expect(packageJson.engines?.node).toBe(installedEvePackage.engines.node);
@@ -117,8 +119,8 @@ describe("Eve runtime migration contract", () => {
     const adr = readFileSync(migrationAdrPath, "utf8");
     expect(adr).toContain("Status: Proposed");
     expect(adr).toContain("2026-08-11");
-    expect(adr).toContain("eve@0.33.2");
-    expect(adr).toContain("ai@7.0.58");
+    expect(adr).toContain("eve@0.44.0");
+    expect(adr).toContain("ai@7.0.74");
     expect(adr).toContain("Node.js 24");
     expect(adr).toContain("0.22.5");
     expect(adr).toContain("0.30.3–0.30.8");
@@ -132,6 +134,11 @@ describe("Eve runtime migration contract", () => {
     expect(adr).toMatch(/completed\s+side effects\s+are not\s+rolled back/i);
     expect(adr).toContain("Codex session plugin");
     expect(adr).toContain("same Vercel preview");
+    expect(adr).toContain("provider pipeline is public-only by default");
+    expect(adr).toContain("legacy single-file instrumentation layout");
+    expect(adr).toMatch(/does not apply that\s+provider head gate/);
+    expect(adr).toContain("task.send");
+    expect(adr).toContain("task_sleep");
   });
 
   it("keeps the repo-local skill aligned with the fixed-session APIs and Bun", () => {
@@ -141,10 +148,17 @@ describe("Eve runtime migration contract", () => {
     expect(skill).toContain("send(message, options)");
     expect(skill).toContain("respond(inputResponses, options)");
     expect(skill).toContain("bunx eve");
-    expect(skill).toContain("bun add --exact eve@0.33.2 ai@7.0.58");
+    expect(skill).toContain("bun add --exact eve@0.44.0 ai@7.0.74");
     expect(skill).not.toContain("bun add eve");
     expect(skill).toContain('turnPolicy: "steer"');
     expect(skill).toContain('turnPolicy: "queue"');
     expect(skill).toMatch(/completed\s+side effects\s+are not\s+rolled back/i);
+    expect(skill).toContain("provider pipeline is public-only by default");
+    expect(skill).toContain("legacy single-file instrumentation layout");
+    expect(skill).toMatch(/does not apply the\s+provider pipeline's audience head gate/);
+    expect(agentConfig).not.toContain("instrumentationProviders");
+    expect(instrumentationConfig).toContain("defineInstrumentation");
+    expect(skill).toContain("task.send");
+    expect(skill).toContain("task_sleep");
   });
 });

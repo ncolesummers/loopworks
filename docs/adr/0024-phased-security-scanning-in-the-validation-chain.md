@@ -5,7 +5,8 @@ Date: 2026-08-08
 Issue: [#175](https://github.com/ncolesummers/loopworks/issues/175)
 Updated by: [#177](https://github.com/ncolesummers/loopworks/issues/177),
 [#184](https://github.com/ncolesummers/loopworks/issues/184),
-[#234](https://github.com/ncolesummers/loopworks/issues/234)
+[#234](https://github.com/ncolesummers/loopworks/issues/234),
+[#296](https://github.com/ncolesummers/loopworks/issues/296)
 
 ## Context
 
@@ -79,13 +80,22 @@ separate advisory lane, deferred until their false-positive and runtime
 baselines have been reviewed, and tracked as #231 and #232 rather than left as
 prose.
 
-**Dependabot supplies update intake, not the security verdict.** Weekly Bun and
-GitHub Actions version updates are configured in the repository, and repository
-vulnerability alerts plus automated security fixes are enabled. GitHub does not
-support Dependabot security updates for the Bun ecosystem, so OSV remains the
-blocking source of truth. Routine non-major changes may be grouped; Eve,
-Next.js, Auth.js, OpenTelemetry, and the Vercel OTel integration remain isolated
-because their migrations require focused review.
+**Dependabot supplies update intake, not the security verdict.** Bun and GitHub
+Actions version updates share one cross-ecosystem group that runs monthly at
+09:00 America/Los_Angeles. The group matches every dependency, so major, minor,
+patch, production, development, and formerly isolated runtime updates arrive in
+one review batch. Supported Dependabot security updates remain independently
+triggered and do not wait for this monthly version-update schedule. GitHub does
+not support Dependabot security updates for the Bun ecosystem, so blocking OSV
+remains the repository verdict for Bun dependencies. SHA-pinned Actions receive
+version-update proposals with reviewed replacement SHAs; the monthly policy does
+not imply an immediate security-update PR for them.
+
+GitHub's default three-day cooldown applies to version updates, not supported
+security updates. Because the group runs on the first day of each month, a
+release published during the final three days of the previous month is still in
+cooldown at the scheduled run and is reconsidered at a later version-update
+run rather than entering that month's pull request.
 
 **Every third-party action is pinned to an immutable full commit SHA.** A
 trailing release-version comment preserves reviewability, while Dependabot's
@@ -140,6 +150,13 @@ run and artifact handoff, but preserves the read-only boundary of PR execution,
 creates no empty commit when the generated lock is unchanged, and leaves the
 normal frozen install as the gate that verifies the committed result.
 
+One broad monthly version-update pull request reduces routine review and CI
+churn, but it deliberately couples unrelated ecosystems and runtime migrations.
+That makes a failed batch more expensive to review and bisect than the former
+weekly isolated pull requests. The blocking scanner, frozen-lockfile, build,
+route, and compatibility evidence therefore apply to the complete batch; a
+runtime incompatibility blocks the batch instead of being silently omitted.
+
 ## Validation
 
 - `tests/unit/scripts/run-security-scanner.test.ts` — the enforcement policy as
@@ -158,8 +175,9 @@ normal frozen install as the gate that verifies the committed result.
   the `Deferred` section of `docs/security-review.md` is a list item linking the
   issue that carries it, so work phased out of this ADR cannot survive as
   untracked prose.
-- `tests/unit/ci/dependabot.test.ts` — the Bun and GitHub Actions schedules,
-  grouping policy, and isolated runtime migrations remain explicit.
+- `tests/unit/ci/dependabot.test.ts` — the single monthly cross-ecosystem
+  schedule, all-dependency matching, and conventional commit prefix remain
+  explicit, with no unmatched or legacy isolated version-update groups.
 - `tests/unit/ci/dependabot-lockfile.test.ts` — the PR actor/repository guard,
   read-only generator, scripts-disabled install, immutable artifact binding,
   minimal privileged permissions, stale-head guard, and changed-only commit.

@@ -249,18 +249,30 @@ analyzer applying rules nobody reviewed, so it fails rather than skips.
 
 ### Dependabot update intake
 
-Dependabot vulnerability alerts and automated security-fix pull requests are
-enabled for the public repository. `.github/dependabot.yml` also requests
-weekly version updates for the Bun lockfile and GitHub Actions. GitHub's Bun
-integration supports the text `bun.lock` for version updates but not security
-updates, so the blocking OSV gate remains the dependency-vulnerability source
-of truth.
+Dependabot vulnerability alerts and supported automated security-fix pull
+requests are enabled for the public repository. `.github/dependabot.yml`
+requests one cross-ecosystem version-update pull request for the Bun lockfile
+and GitHub Actions at 09:00 America/Los_Angeles on the first day of each month.
+The group matches every dependency: major, minor, patch, production,
+development, and formerly isolated runtime packages share one review batch.
+Every Dependabot pull request still traverses the same blocking CI and scanner
+chain shown above.
 
-Routine production and development minor/patch updates are grouped separately.
-Eve, Next.js, Auth.js, OpenTelemetry, and the Vercel OTel integration are
-excluded from the production group so their migrations arrive as isolated pull
-requests with focused evidence. Every Dependabot pull request still traverses
-the same blocking CI and scanner chain shown above.
+Supported security updates remain independently triggered and do not wait for
+the monthly version-update group. That does not create immediate security PRs
+where Dependabot lacks ecosystem support: GitHub's Bun integration supports the
+text `bun.lock` for version updates but not security updates, so blocking OSV
+remains the dependency-vulnerability verdict for Bun. SHA-pinned Actions are
+updated through reviewed version-update proposals that replace the immutable
+SHA; the monthly group does not imply a separate immediate security-update PR
+for them.
+
+GitHub's default three-day cooldown applies to version updates but not supported
+security updates. A release published during the final three days of a month is
+still cooling down when the first-of-month group runs, so it is reconsidered at
+a later version-update run instead of entering that month's pull request. The
+single batch reduces routine PR and CI churn, while coupling both ecosystems
+increases review scope and makes a failed update more expensive to bisect.
 
 Package security updates can still arrive through an ecosystem that updates
 `package.json` without understanding Bun's text lockfile. Lockfile repair is

@@ -278,8 +278,15 @@ tests and repository validation because GitHub evaluates every layer against
 the stack's trunk rules.
 
 The root guide's adversarial review is universal, not a single-PR workflow
-step. Before submitting a stack, both reviewers inspect every proposed PR diff
-in dependency context and the assembled top-of-stack diff.
+step. A stack is a team scheduling primitive, so work from bottom to top and
+publish each independently reviewable layer after its own gates. This lets
+human review of a lower draft overlap implementation of a later layer, unless
+the user explicitly requires atomic publication. Before publishing the first
+layer, both reviewers inspect that layer. Before publishing each later layer,
+both inspect its diff in dependency context and the assembled top-of-stack
+diff. Each newly implemented layer gets exactly one round. Fixes, feedback,
+and rebases do not reset the count; verify corrections with targeted tests and
+required validation. Unresolved in-scope critical findings block publication.
 
 ### Work with a stack
 
@@ -308,24 +315,31 @@ git config extensions.worktreeConfig true
 git config --worktree rerere.enabled true
 git config --worktree remote.pushDefault origin
 gh stack init agent/123-model
-# Run the model layer's TDD, dual-review loop, validation, and preflight.
+# Run the model layer's TDD, scoped dual-review round, and validation.
 bun run commit:preflight
 git add path/to/model.test.ts path/to/model.ts
 git commit -S -m "feat(model): add the issue model"
 git verify-commit HEAD
+# Publish this eligible lower layer immediately, fill its PR template, and run
+# GitHub provenance so human review can begin before service implementation.
+gh stack submit --auto
+gh stack view --json
+gh pr edit <model-pr> --body-file "$MODEL_PR_BODY"
+bun run commit:provenance --github <model-pr>
 
 gh stack add agent/123-service
-# Repeat TDD, dual review, validation, and preflight for the service layer.
+# Run service TDD, then have both reviewers inspect the service diff in model
+# dependency context and the assembled model-plus-service diff.
 bun run commit:preflight
 git add path/to/service.test.ts path/to/service.ts
 git commit -S -m "feat(service): consume the issue model"
 git verify-commit HEAD
-
-# Have both reviewers inspect every layer and the assembled top diff. Resolve
-# findings, return revised diffs to both, and repeat until the stack is clear.
+# Run whole-stack validation at the final layer, then append its draft PR.
 bun run validate
 gh stack submit --auto
 gh stack view --json
+gh pr edit <service-pr> --body-file "$SERVICE_PR_BODY"
+bun run commit:provenance --github <service-pr>
 ```
 
 Run `bun run commit:preflight` before committing. Before `submit` pushes any
@@ -345,27 +359,45 @@ validation. Review the stack bottom-up so foundational feedback reaches
 dependent layers early; distinct domain reviewers may review ready layers
 concurrently.
 
-When feedback changes a lower layer, commit the fix on that branch and cascade
-it upward:
+Do not implement multiple later layers in one combined working tree and split
+them into branches afterward. That can produce coherent final diffs, but it
+withholds an eligible lower PR from the team and defeats the stack's scheduling
+value. Finish and publish the current layer before beginning the next one
+unless the user explicitly requires atomic publication.
+
+When feedback changes a lower layer, its affected upper-layer evidence is
+invalid. First preserve any in-progress upper-layer work, recording the exact
+stash ref rather than assuming `stash@{0}` belongs to this workflow. Then
+commit the fix on the lower branch and cascade-rebase it upward:
 
 ```bash
+# On the dirty upper branch, if `git status --short` reports work in progress:
+git stash push -u -m "issue-123-service-before-model-feedback"
+git stash list --format='%gd %s' # record the returned stash ref
+
 gh stack checkout agent/123-model
 # Edit, test, validate, and create another signed commit on this layer.
 gh stack rebase --upstack
 gh stack view --json
 # Visit every rewritten layer, rerun its relevant checks, and verify every
 # rewritten commit's signature. Run bun run validate from the top layer.
-# Return every rewritten layer diff and the assembled top diff to both
-# adversarial reviewers; resolve findings and repeat until both clear it.
+# Verify findings with targeted tests and required validation. Repairs and
+# rebases do not restart adversarial review.
+gh stack top
+git stash apply <recorded-stash-ref>
+# Resolve against the rebased upper head, rerun affected checks, and retain the
+# stash until the restored work is verified.
 gh stack push
 gh stack view --json
 ```
 
 Do not push after a rebase until every rewritten layer passes its checks and all
-rewritten commits pass local signature verification, and both reviewers have
-reviewed the final rewritten stack. Rerun GitHub provenance checks after
-pushing. Do not use GitHub rebase-and-merge; ADR 0026 disallows it because it
-cannot satisfy the signature contract.
+rewritten commits pass local signature verification. Verify fixes with targeted
+tests and record their dispositions without restarting adversarial review. Rerun GitHub provenance checks after
+pushing. Refresh each affected PR body so its acceptance-evidence table, review
+dispositions, commands, and head SHA describe the rebased diff rather than the
+superseded one. Do not use GitHub rebase-and-merge; ADR 0026 disallows it
+because it cannot satisfy the signature contract.
 
 The installed `gh-stack` skill explains merge mechanics, not LoopWorks merge
 authority. Agents stop at draft PRs and never run its merge command. Version
