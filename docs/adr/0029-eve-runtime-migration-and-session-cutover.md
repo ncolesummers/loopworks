@@ -176,6 +176,15 @@ presented as resumed.
    and the old-session disposition. It must also show the public health route,
    protected session route, and unchanged portal route. Fixture-only evidence
    does not satisfy this item. The pull request remains draft until this passes.
+   For [#311](https://github.com/ncolesummers/loopworks/issues/311), the approved
+   runtime-only scope uses an isolated hosted diagnostic agent with the candidate
+   dependency graph and security patches. Real model calls, durable child tasks,
+   parent-forwarded tool approval, denial, and explicit task cancellation count
+   as runtime evidence; mocked events only test the evidence checker. Pair this
+   with the exact-head Loopworks preview health, auth, session and cancellation
+   smoke. This does not establish Loopworks run authorization, automatic dispatch,
+   or portal approval/resume integration. Those remain separate product work.
+   Follow the [runtime probe runbook](../runbooks/eve-runtime-probe.md).
 5. `bun run validate` and `bun run build` pass before merge.
 
 ## Follow-Ups
