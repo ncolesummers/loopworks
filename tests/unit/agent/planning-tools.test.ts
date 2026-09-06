@@ -6,8 +6,6 @@ const eveFrameworkToolNames = new Set([
   "agent",
   "ask_question",
   "bash",
-  "glob",
-  "grep",
   "load_skill",
   "read_file",
   "todo",
@@ -17,12 +15,13 @@ const eveFrameworkToolNames = new Set([
 ]);
 
 describe("Planning agent tool boundary", () => {
-  it("does not expose a planner bash override and keeps root bash disabled", async () => {
+  it("disables bash explicitly for both planner and root", async () => {
     const plannerToolsDirectory = join(process.cwd(), "agent", "subagents", "planner", "tools");
     const plannerTools = await readdir(plannerToolsDirectory);
     const rootBashSource = await readFile(join(process.cwd(), "agent", "tools", "bash.ts"), "utf8");
 
-    expect(plannerTools).not.toContain("bash.ts");
+    expect(plannerTools).toContain("bash.ts");
+    expect(await readFile(join(plannerToolsDirectory, "bash.ts"), "utf8")).toContain("disableTool");
     expect(plannerTools).toEqual(
       expect.arrayContaining([
         "list_github_backlog.ts",
@@ -92,7 +91,7 @@ describe("Planning agent tool boundary", () => {
     }
 
     expect(disabledToolNames).toEqual(
-      expect.arrayContaining(["ask_question", "glob", "grep", "read_file", "write_file"]),
+      expect.arrayContaining(["agent", "ask_question", "bash", "read_file", "write_file"]),
     );
     expect(disabledToolNames.filter((toolName) => !eveFrameworkToolNames.has(toolName))).toEqual(
       [],

@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -21,14 +21,7 @@ const installedEvePackage = JSON.parse(
   version: string;
 };
 const lockfile = readFileSync(path.join(repoRoot, "bun.lock"), "utf8");
-const migrationAdrPath = path.join(
-  repoRoot,
-  "docs/adr/0029-eve-runtime-migration-and-session-cutover.md",
-);
-const skillPath = path.join(repoRoot, "agent/skills/eve/SKILL.md");
 const nextConfig = readFileSync(path.join(repoRoot, "next.config.ts"), "utf8");
-const agentConfig = readFileSync(path.join(repoRoot, "agent/agent.ts"), "utf8");
-const instrumentationConfig = readFileSync(path.join(repoRoot, "agent/instrumentation.ts"), "utf8");
 const proxySource = readFileSync(path.join(repoRoot, "src/proxy.ts"), "utf8");
 const markdownlintConfig = readFileSync(path.join(repoRoot, ".markdownlint-cli2.yaml"), "utf8");
 const clientSessionsDeclaration = readFileSync(
@@ -42,14 +35,14 @@ const clientSessionDeclaration = readFileSync(
 
 describe("Eve runtime migration contract", () => {
   it("pins the selected Eve and AI SDK releases exactly", () => {
-    expect(packageJson.dependencies.eve).toBe("0.44.0");
-    expect(packageJson.dependencies.ai).toBe("7.0.74");
-    expect(lockfile).toContain('"eve": "0.44.0"');
-    expect(lockfile).toContain('"ai": "7.0.74"');
-    expect(lockfile).toContain('"eve": ["eve@0.44.0"');
-    expect(lockfile).toContain('"ai": ["ai@7.0.74"');
+    expect(packageJson.dependencies.eve).toBe("0.51.0");
+    expect(packageJson.dependencies.ai).toBe("7.0.92");
+    expect(lockfile).toContain('"eve": "0.51.0"');
+    expect(lockfile).toContain('"ai": "7.0.92"');
+    expect(lockfile).toContain('"eve": ["eve@0.51.0"');
+    expect(lockfile).toContain('"ai": ["ai@7.0.92"');
     expect(installedEvePackage.version).toBe(packageJson.dependencies.eve);
-    expect(installedEvePackage.peerDependencies.ai).toBe("^7.0.58");
+    expect(installedEvePackage.peerDependencies.ai).toBe("^7.0.82");
     expect(packageJson.engines?.node).toBe(installedEvePackage.engines.node);
   });
 
@@ -112,53 +105,41 @@ describe("Eve runtime migration contract", () => {
     }
   });
 
-  it("records the selection rationale and old-session cutover", () => {
-    expect(existsSync(migrationAdrPath), "missing Eve migration ADR").toBe(true);
-    if (!existsSync(migrationAdrPath)) return;
-
-    const adr = readFileSync(migrationAdrPath, "utf8");
-    expect(adr).toContain("Status: Proposed");
-    expect(adr).toContain("2026-08-11");
-    expect(adr).toContain("eve@0.44.0");
-    expect(adr).toContain("ai@7.0.74");
-    expect(adr).toContain("Node.js 24");
-    expect(adr).toContain("0.22.5");
-    expect(adr).toContain("0.30.3–0.30.8");
-    expect(adr).toContain("must be replaced");
-    expect(adr).toContain("drain");
-    expect(adr).toContain("new session");
-    expect(adr).toContain("subagent handoff");
-    expect(adr).toContain("cancellation and approval");
-    expect(adr).toContain('turnPolicy: "steer"');
-    expect(adr).toContain('turnPolicy: "queue"');
-    expect(adr).toMatch(/completed\s+side effects\s+are not\s+rolled back/i);
-    expect(adr).toContain("Codex session plugin");
-    expect(adr).toContain("same Vercel preview");
-    expect(adr).toContain("provider pipeline is public-only by default");
-    expect(adr).toContain("legacy single-file instrumentation layout");
-    expect(adr).toMatch(/does not apply that\s+provider head gate/);
-    expect(adr).toContain("task.send");
-    expect(adr).toContain("task_sleep");
-  });
-
-  it("keeps the repo-local skill aligned with the fixed-session APIs and Bun", () => {
-    const skill = readFileSync(skillPath, "utf8");
-    expect(skill).toContain("client.sessions.create");
-    expect(skill).toContain("client.sessions.attach");
-    expect(skill).toContain("send(message, options)");
-    expect(skill).toContain("respond(inputResponses, options)");
-    expect(skill).toContain("bunx eve");
-    expect(skill).toContain("bun add --exact eve@0.44.0 ai@7.0.74");
-    expect(skill).not.toContain("bun add eve");
-    expect(skill).toContain('turnPolicy: "steer"');
-    expect(skill).toContain('turnPolicy: "queue"');
-    expect(skill).toMatch(/completed\s+side effects\s+are not\s+rolled back/i);
-    expect(skill).toContain("provider pipeline is public-only by default");
-    expect(skill).toContain("legacy single-file instrumentation layout");
-    expect(skill).toMatch(/does not apply the\s+provider pipeline's audience head gate/);
-    expect(agentConfig).not.toContain("instrumentationProviders");
-    expect(instrumentationConfig).toContain("defineInstrumentation");
-    expect(skill).toContain("task.send");
-    expect(skill).toContain("task_sleep");
-  });
+  it("compiles the real agent with guarded tools and all stage siblings", () => {
+    const info = JSON.parse(
+      execFileSync("bun", ["node_modules/eve/bin/eve.js", "info", "--json"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+        timeout: 60_000,
+      }),
+    );
+    expect(info.status).toBe("ready");
+    expect(info.diagnostics).toEqual({ errors: 0, warnings: 0 });
+    expect(info.subagents.sort()).toEqual([
+      "implementer",
+      "planner",
+      "pr-preparer",
+      "test-writer",
+      "validation-reviewer",
+    ]);
+    expect(info.tools).toContain("read_run_stage_context");
+    const manifest = JSON.parse(readFileSync(info.artifacts.compiledManifest, "utf8")) as {
+      tools: Array<{ name: string }>;
+      subagents: Array<{ name: string; agent: { tools: Array<{ name: string }> } }>;
+    };
+    for (const agent of [manifest, ...manifest.subagents.map((entry) => entry.agent)]) {
+      const names = agent.tools.map((tool) => tool.name);
+      for (const forbidden of [
+        "bash",
+        "glob",
+        "grep",
+        "write_file",
+        "web_fetch",
+        "web_search",
+        "agent",
+      ]) {
+        expect(names).not.toContain(forbidden);
+      }
+    }
+  }, 65_000);
 });

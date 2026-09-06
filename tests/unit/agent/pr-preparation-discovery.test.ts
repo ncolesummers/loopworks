@@ -46,8 +46,6 @@ describe("PR preparer discovery", () => {
     for (const disabled of [
       "ask_question.ts",
       "bash.ts",
-      "glob.ts",
-      "grep.ts",
       "load_skill.ts",
       "read_file.ts",
       "todo.ts",

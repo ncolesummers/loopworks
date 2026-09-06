@@ -69,7 +69,7 @@ describe("Eve stage orchestrator discovery", () => {
         "summarize_validation_requirements.ts",
       ]),
     );
-    expect(plannerTools).not.toContain("bash.ts");
+    expect(plannerTools).toContain("bash.ts");
     expect(testWriterTools).toEqual(
       expect.arrayContaining([
         "emit_test_writing_artifacts.ts",

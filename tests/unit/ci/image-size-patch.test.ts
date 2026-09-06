@@ -59,7 +59,9 @@ describe("patched image-size parsers", () => {
   it("installs the reviewed patch through Bun", () => {
     const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
       patchedDependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
     };
+    expect(packageJson.devDependencies?.["image-size"]).toBe("2.0.2");
     expect(packageJson.patchedDependencies?.["image-size@2.0.2"]).toBe(
       "patches/image-size@2.0.2.patch",
     );

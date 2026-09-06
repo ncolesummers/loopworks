@@ -25,12 +25,13 @@ describe("OpenTelemetry 2 toolchain", () => {
 
     expect(directPackages).toEqual({
       "@opentelemetry/api": "^1.9.0",
-      "@opentelemetry/context-async-hooks": "^2.10.0",
-      "@opentelemetry/core": "^2.10.0",
-      "@opentelemetry/exporter-metrics-otlp-proto": "^0.221.0",
-      "@opentelemetry/instrumentation": "^0.221.0",
-      "@opentelemetry/sdk-metrics": "^2.10.0",
-      "@opentelemetry/sdk-trace-base": "^2.10.0",
+      "@opentelemetry/context-async-hooks": "^2.11.0",
+      "@opentelemetry/core": "^2.11.0",
+      "@opentelemetry/exporter-metrics-otlp-proto": "^0.222.0",
+      "@opentelemetry/instrumentation": "^0.222.0",
+      "@opentelemetry/sdk-metrics": "^2.11.0",
+      "@opentelemetry/sdk-logs": "^0.222.0",
+      "@opentelemetry/sdk-trace-base": "^2.11.0",
     });
     expect(manifest.dependencies?.["@vercel/otel"]).toBe("2.1.3");
     expect(manifest.patchedDependencies?.["@vercel/otel@2.1.3"]).toBe(
@@ -46,20 +47,20 @@ describe("OpenTelemetry 2 toolchain", () => {
       .sort();
 
     expect([...new Set(resolvedPackages)]).toEqual([
-      "@opentelemetry/api-logs@0.221.0",
+      "@opentelemetry/api-logs@0.222.0",
       "@opentelemetry/api@1.9.1",
-      "@opentelemetry/context-async-hooks@2.10.0",
-      "@opentelemetry/core@2.10.0",
-      "@opentelemetry/exporter-metrics-otlp-http@0.221.0",
-      "@opentelemetry/exporter-metrics-otlp-proto@0.221.0",
-      "@opentelemetry/instrumentation@0.221.0",
-      "@opentelemetry/otlp-exporter-base@0.221.0",
-      "@opentelemetry/otlp-transformer@0.221.0",
-      "@opentelemetry/resources@2.10.0",
-      "@opentelemetry/sdk-logs@0.221.0",
-      "@opentelemetry/sdk-metrics@2.10.0",
-      "@opentelemetry/sdk-trace-base@2.10.0",
-      "@opentelemetry/sdk-trace@2.10.0",
+      "@opentelemetry/context-async-hooks@2.11.0",
+      "@opentelemetry/core@2.11.0",
+      "@opentelemetry/exporter-metrics-otlp-http@0.222.0",
+      "@opentelemetry/exporter-metrics-otlp-proto@0.222.0",
+      "@opentelemetry/instrumentation@0.222.0",
+      "@opentelemetry/otlp-exporter-base@0.222.0",
+      "@opentelemetry/otlp-transformer@0.222.0",
+      "@opentelemetry/resources@2.11.0",
+      "@opentelemetry/sdk-logs@0.222.0",
+      "@opentelemetry/sdk-metrics@2.11.0",
+      "@opentelemetry/sdk-trace-base@2.11.0",
+      "@opentelemetry/sdk-trace@2.11.0",
       "@opentelemetry/semantic-conventions@1.43.0",
     ]);
   });

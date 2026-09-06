@@ -36,8 +36,6 @@ describe("validation reviewer discovery", () => {
         "ask_question.ts",
         "bash.ts",
         "emit_validation_review_result.ts",
-        "glob.ts",
-        "grep.ts",
         "list_repository_files.ts",
         "load_skill.ts",
         "read_file.ts",
@@ -57,8 +55,6 @@ describe("validation reviewer discovery", () => {
     for (const disabled of [
       "ask_question.ts",
       "bash.ts",
-      "glob.ts",
-      "grep.ts",
       "load_skill.ts",
       "read_file.ts",
       "todo.ts",
