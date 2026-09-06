@@ -91,10 +91,10 @@ describe("agent context budget", () => {
   it("bounds adversarial review rounds and routes out-of-scope findings to backlog", () => {
     for (const context of [rootGuide, implementIssueSkill, implementIssuePrSkill]) {
       const normalized = context.replaceAll(/\s+/g, " ");
-      expect(normalized).toContain("One round is the default");
+      expect(normalized).toContain("Exactly one adversarial review round");
       expect(normalized).toContain("both independent reviewers");
       expect(normalized).toContain("critical-severity findings");
-      expect(normalized).toContain("Never exceed three review rounds");
+      expect(normalized).not.toMatch(/three.round|additional rounds|next review round/i);
       expect(normalized).toContain("blocks handoff or publication");
       expect(normalized).toContain("linked backlog issue");
       expect(normalized).toContain("do not extend or block the current implementation");
@@ -102,9 +102,11 @@ describe("agent context budget", () => {
       expect(normalized).not.toContain("until both have reviewed");
     }
 
+    const normalizedDevelopment = developmentGuide.replaceAll(/\s+/g, " ");
+    expect(normalizedDevelopment).not.toMatch(/repeat until|three.round|new bounded review scope/i);
     const normalizedRoot = rootGuide.replaceAll(/\s+/g, " ");
     expect(normalizedRoot).toContain("critical-severity findings cannot be deferred");
-    expect(normalizedRoot).toContain("requires the next review round");
+    expect(normalizedRoot).toContain("Verify fixes with targeted tests");
     expect(normalizedRoot).not.toContain("defer every in-scope finding");
 
     const normalizedWorktreeSkill = implementIssuePrSkill.replaceAll(/\s+/g, " ");
@@ -122,12 +124,12 @@ describe("agent context budget", () => {
     expect(normalizedRoot).not.toContain("three review rounds for one issue implementation");
     expect(normalizedRoot).toMatch(/publish each independently reviewable lower layer as a draft/);
     expect(normalizedRoot).toMatch(/human review can overlap work on a later layer/);
-    expect(normalizedRoot).toContain("new bounded review scope");
+    expect(normalizedRoot).toContain("do not restart adversarial review");
     expect(normalizedSkill).not.toContain(
       "Once those local commits materialize the proposed layers",
     );
     expect(normalizedSkill).toMatch(/Do not implement later layers .* split them afterward/);
-    expect(normalizedSkill).toContain("new bounded review scope");
+    expect(normalizedSkill).toContain("do not restart adversarial review");
 
     for (const context of [normalizedRoot, normalizedSkill, normalizedDevelopment]) {
       expect(context).toMatch(/unless the user explicitly requires atomic publication/);

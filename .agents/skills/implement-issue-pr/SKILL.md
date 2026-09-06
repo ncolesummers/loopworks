@@ -99,14 +99,14 @@ green-only report is not evidence.
 ### 5. Adversarial review
 
 Run the universal adversarial review from root `AGENTS.md` after the first
-green, then resolve findings and re-run focused checks. One round is the
-default; only critical-severity findings can require another round, and the
-three-round hard cap always applies. Route actionable out-of-scope findings to
+green, then resolve findings and re-run focused checks. Exactly one adversarial
+review round is allowed; verify fixes with targeted tests and required
+validation without restarting review. Route actionable out-of-scope findings to
 a linked backlog issue instead of extending the implementation. A stack is a
 team scheduling primitive: review the first lower layer after its first green,
 then review each later layer in dependency context together with the assembled
-top-of-stack diff before publishing that layer. Each layer publication is a
-new bounded review scope under the root guide's three-round cap.
+top-of-stack diff before publishing that layer. Each newly implemented layer gets one round; repairs do not restart
+adversarial review.
 
 ### 6. Validate
 
@@ -170,10 +170,10 @@ context and the assembled top-of-stack diff under the root guide's bounded
 policy. Rerun affected layer checks, keep whole-stack validation at the final
 layer, submit the newly eligible draft, and run GitHub provenance for every PR
 whose head changed. If feedback changes a published lower layer, fix it on its
-own branch after preserving any in-progress upper-layer work. That change starts
-a new bounded review scope: cascade-rebase the affected upper layers, restore
-the preserved work on the rebased head, rerun relevant checks and signature
-verification, return the affected diffs to both reviewers, push, refresh each
+own branch after preserving any in-progress upper-layer work. Fixes, feedback,
+and rebases do not restart adversarial review: cascade-rebase the affected
+upper layers, restore the preserved work on the rebased head, rerun relevant
+checks and signature verification, push, refresh each
 affected PR's acceptance-evidence table and review dispositions, and refresh
 GitHub provenance.
 
@@ -206,10 +206,12 @@ Exception: the test-plan subagent may start and explore the app with
 
 Follow the universal contract in root `AGENTS.md` after the first green and
 before handoff or publication. It applies whether the work stops without a PR,
-ships as one PR, or ships as a stack. One round is the default and includes
-both independent reviewers. Additional rounds are only for critical-severity
-findings from the preceding round. Never exceed three review rounds; an
-unresolved in-scope critical finding at the cap blocks handoff or publication.
+ships as one PR, or ships as a stack. Exactly one adversarial review round
+includes both independent reviewers per issue implementation or newly
+implemented stack layer. Fix critical-severity findings and verify fixes with
+targeted tests and required validation. An unresolved in-scope critical finding
+blocks handoff or publication. Fixes, feedback, and rebases do not restart
+adversarial review or reset its count.
 Record actionable out-of-scope findings in a linked backlog issue; they do not
 extend or block the current implementation.
 

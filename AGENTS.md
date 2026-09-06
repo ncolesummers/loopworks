@@ -36,8 +36,9 @@ lower layer as a draft after its own gates so human review can overlap work on
 a later layer, unless the user explicitly requires atomic publication. Before
 publishing the first layer, review that layer. Before publishing each later
 layer, review its diff in dependency context and the assembled top-of-stack
-diff. One round is the default. A round is one pass by both independent
-reviewers over every diff in the current publication scope.
+diff. Exactly one adversarial review round is allowed per issue implementation
+or newly implemented stack layer. A round is one pass by both independent
+reviewers over every diff in that scope.
 
 Use this brief verbatim:
 
@@ -48,13 +49,12 @@ Use this brief verbatim:
 
 Dedupe both findings lists. Fix every in-scope critical-severity finding;
 critical-severity findings cannot be deferred. Fix or explicitly defer
-non-critical findings with a stated reason. Non-critical findings do not
-require another review round. A critical finding in the immediately preceding
-round requires the next review round to verify its fix. Never exceed three
-review rounds for one review scope. At that cap, any unresolved in-scope
-critical finding blocks handoff or publication for that scope; it never
-authorizes a fourth round. For a stack, each layer publication is a distinct
-bounded review scope, so the cap does not impose a three-layer limit.
+non-critical findings with a stated reason. Verify fixes with targeted tests
+and required validation, including security regressions for critical findings.
+Any unresolved in-scope critical finding blocks handoff or publication.
+Fixes, feedback, and rebases do not restart adversarial review or reset its
+count. A newly implemented stack layer gets its own single round; repairing
+an existing layer does not create a new scope.
 
 When a finding is outside the issue's acceptance criteria, record it in a
 linked backlog issue if it is actionable. Out-of-scope findings do not extend
@@ -69,8 +69,7 @@ validation, preflight, signed commit, local signature verification, draft PR,
 template, and GitHub provenance before implementing the next layer. Do not
 build later layers in one combined working tree and split them afterward unless
 the user explicitly requires atomic publication. Feedback that changes a
-published lower layer starts a new bounded review scope and invalidates affected
-upper-layer evidence: preserve any in-progress upper work, update the lower
+published lower layer invalidates affected upper-layer validation evidence: preserve any in-progress upper work, update the lower
 layer, cascade-rebase the upper layers, rerun their affected checks and
 signature verification, refresh each affected PR's acceptance-evidence table
 and review dispositions, and refresh GitHub provenance after pushing. Keep

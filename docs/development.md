@@ -284,8 +284,9 @@ human review of a lower draft overlap implementation of a later layer, unless
 the user explicitly requires atomic publication. Before publishing the first
 layer, both reviewers inspect that layer. Before publishing each later layer,
 both inspect its diff in dependency context and the assembled top-of-stack
-diff. Each layer publication is its own bounded review scope under the root
-guide's three-round cap.
+diff. Each newly implemented layer gets exactly one round. Fixes, feedback,
+and rebases do not reset the count; verify corrections with targeted tests and
+required validation. Unresolved in-scope critical findings block publication.
 
 ### Work with a stack
 
@@ -380,8 +381,8 @@ gh stack rebase --upstack
 gh stack view --json
 # Visit every rewritten layer, rerun its relevant checks, and verify every
 # rewritten commit's signature. Run bun run validate from the top layer.
-# Return each affected layer diff and the assembled top diff to both
-# adversarial reviewers as a new bounded review scope.
+# Verify findings with targeted tests and required validation. Repairs and
+# rebases do not restart adversarial review.
 gh stack top
 git stash apply <recorded-stash-ref>
 # Resolve against the rebased upper head, rerun affected checks, and retain the
@@ -391,8 +392,8 @@ gh stack view --json
 ```
 
 Do not push after a rebase until every rewritten layer passes its checks and all
-rewritten commits pass local signature verification, and both reviewers have
-reviewed the final rewritten stack. Rerun GitHub provenance checks after
+rewritten commits pass local signature verification. Verify fixes with targeted
+tests and record their dispositions without restarting adversarial review. Rerun GitHub provenance checks after
 pushing. Refresh each affected PR body so its acceptance-evidence table, review
 dispositions, commands, and head SHA describe the rebased diff rather than the
 superseded one. Do not use GitHub rebase-and-merge; ADR 0026 disallows it
