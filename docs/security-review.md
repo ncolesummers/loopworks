@@ -338,10 +338,14 @@ dir="$HOME/.local/osv-scanner-$version"
 mkdir -p "$dir" && cd "$dir"
 gh release download "v$version" -R google/osv-scanner \
   -p osv-scanner_darwin_arm64 -p osv-scanner_SHA256SUMS --clobber
-grep darwin_arm64 osv-scanner_SHA256SUMS | shasum -a 256 -c -
-install -m 0755 osv-scanner_darwin_arm64 osv-scanner
-export PATH="$dir:$PATH"
+grep darwin_arm64 osv-scanner_SHA256SUMS | shasum -a 256 -c - \
+  && install -m 0755 osv-scanner_darwin_arm64 osv-scanner \
+  && export PATH="$dir:$PATH"
 ```
+
+The install and the `PATH` change are chained to the checksum result on
+purpose: a download that fails verification is never installed or put on
+`PATH`.
 
 The same shape works for Gitleaks from `gitleaks/gitleaks`. If Homebrew
 already holds the pinned version, `brew pin osv-scanner` keeps it there.
