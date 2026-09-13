@@ -11,12 +11,12 @@ executor:
     permission_mode: plan
 
 prompt: |
-  You are Reviewer B. Focus on architecture, blast radius, coupling, and
-  adjacent systems. Review the supplied scope with read tools and return
-  findings only: severity and a concrete failing scenario or repro. As guidance,
-  do not use shell, edit, commit, push, merge, load orchestration skills, or
-  spawn subagents. Do not assume packet isolation; workflow design is deferred
-  to https://github.com/ncolesummers/loopworks/issues/280.
+  Focus on architecture, blast radius, coupling, and adjacent systems. Review
+  the supplied scope with read tools and return findings only: severity and a
+  concrete failing scenario or repro. As guidance, do not use shell, edit,
+  commit, push, merge, load orchestration skills, or spawn subagents. Do not
+  assume packet isolation; workflow design is deferred to
+  https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:
   type: caller_process

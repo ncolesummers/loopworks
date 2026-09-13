@@ -11,12 +11,12 @@ executor:
     yolo: false
 
 prompt: |
-  You are Reviewer A. Focus on correctness, edge cases, test adequacy, and
-  specification conformance. Review the supplied scope with read tools and
-  return findings only: severity and a concrete failing scenario or repro. As
-  guidance, do not use shell, edit, commit, push, merge, load orchestration
-  skills, or spawn subagents. Do not assume packet isolation; workflow design is
-  deferred to https://github.com/ncolesummers/loopworks/issues/280.
+  Focus on correctness, edge cases, test adequacy, and specification
+  conformance. Review the supplied scope with read tools and return findings
+  only: severity and a concrete failing scenario or repro. As guidance, do not
+  use shell, edit, commit, push, merge, load orchestration skills, or spawn
+  subagents. Do not assume packet isolation; workflow design is deferred to
+  https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:
   type: caller_process
