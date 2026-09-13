@@ -236,7 +236,7 @@ default branch, and disabling rebase-and-merge. Until the second lands, ruleset
 
 | Scanner | Version | Command | Covers | Enforcement |
 | --- | --- | --- | --- | --- |
-| OSV-Scanner | 2.5.0 | `bun run security:osv` | Dependency vulnerabilities | Blocking |
+| OSV-Scanner | 2.5.1 | `bun run security:osv` | Dependency vulnerabilities | Blocking |
 | Gitleaks | 8.30.1 | `bun run security:gitleaks` | Secrets in the working tree | Blocking |
 | Gitleaks | 8.30.1 | `bun run security:gitleaks:history` | Secrets in committed history | Blocking, CI only |
 | Semgrep | 1.172.0 | `bun run security:semgrep` | Curated LoopWorks rules | Blocking |
@@ -321,6 +321,37 @@ Install locally:
 brew install gitleaks osv-scanner
 uv tool install semgrep==1.172.0
 ```
+
+#### Pinned scanner binaries
+
+`scripts/run-security-scanner.ts` pins each scanner to one exact version and
+fails closed on any other, because CI installs that exact version and a range
+would let the two disagree. Homebrew serves only its current formula, so a
+`brew upgrade` that moves past the pin blocks every commit until the pinned
+binary is back on `PATH`. To install the pinned version without changing the
+Homebrew formula, download it from the upstream release and verify it against
+the published checksum, then put its directory first on `PATH`:
+
+```bash
+version=2.5.1
+dir="$HOME/.local/osv-scanner-$version"
+mkdir -p "$dir" && cd "$dir"
+gh release download "v$version" -R google/osv-scanner \
+  -p osv-scanner_darwin_arm64 -p osv-scanner_SHA256SUMS --clobber
+grep darwin_arm64 osv-scanner_SHA256SUMS | shasum -a 256 -c - \
+  && install -m 0755 osv-scanner_darwin_arm64 osv-scanner \
+  && export PATH="$dir:$PATH"
+```
+
+The install and the `PATH` change are chained to the checksum result on
+purpose: a download that fails verification is never installed or put on
+`PATH`.
+
+The same shape works for Gitleaks from `gitleaks/gitleaks`. If Homebrew
+already holds the pinned version, `brew pin osv-scanner` keeps it there.
+Moving the pin itself is a reviewed change: update the registry, the CI
+download URL and checksum in `.github/workflows/ci.yml`, and the inventory
+table above together.
 
 ### Enforcement policy
 
@@ -424,6 +455,25 @@ repository-local Vercel CLI, same-major overrides, and the reviewed
 Moderate exception plus two locally fixed High advisories that OSV still
 matches by version. With those exact entries applied, the blocking scan reports
 zero unhandled findings.
+
+Two later advisories are held closed by exact `overrides` in `package.json`
+rather than parent upgrades, because no parent release resolves them
+(#314):
+
+- `smol-toml` is overridden to 1.8.0 (GHSA-7w5x-hrqm-74c2, fixed in 1.7.1).
+  `markdownlint-cli2` 0.23.2, the latest release, pins 1.7.0 exactly; the
+  root `devDependencies` range is already `^1.8.0`, so the override keeps one
+  copy in the tree. Remove it once `markdownlint-cli2` depends on 1.7.1 or
+  later.
+- `baseline-browser-mapping` is overridden to 2.11.23 (GHSA-w5vr-8v7q-w6rv,
+  fixed in 2.11.0). `browserslist` and `next` declare compatible ranges but
+  a plain update kept nested 2.10.44 copies. Remove the override once both
+  parents resolve 2.11.0 or later on their own.
+
+Overrides change `bun.lock` but do not prune a nested copy that an earlier
+install left under a parent's `node_modules`, so after an override lands run a
+clean install (`rm -rf node_modules && bun install --frozen-lockfile`) before
+trusting a local scan or build.
 
 ### Triage
 

@@ -134,6 +134,7 @@ describe("parseSemanticVersion", () => {
   it.each([
     ["8.30.1", "8.30.1"],
     ["osv-scanner version 2.5.0\ncommit: abc123", "2.5.0"],
+    ["osv-scanner version: 2.5.1\nosv-scalibr version: 0.5.2\ncommit: n/a", "2.5.1"],
     ["1.172.0\n", "1.172.0"],
     ["v8.30.1", "8.30.1"],
   ])("reads %j as %j", (output, expected) => {

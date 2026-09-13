@@ -192,6 +192,25 @@ describe("scanner rulesets", () => {
   });
 });
 
+describe("scanner inventory", () => {
+  it.each(scannerRegistry.map((scanner) => [scanner.id, scanner] as const))(
+    "documents `%s` at the pinned version in the security review inventory",
+    (id, scanner) => {
+      // The inventory table is the human-facing record of the pin; letting it
+      // drift from the registry is how a stale version reaches a contributor.
+      const rows = securityReviewSource
+        .split("\n")
+        .filter((line) => line.startsWith("| ") && line.includes(`\`bun run ${scanner.script}\``));
+      expect(rows.length, `no inventory row runs \`${scanner.script}\``).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(row, `inventory row for \`${id}\` must state ${scanner.version}`).toContain(
+          `| ${scanner.version} |`,
+        );
+      }
+    },
+  );
+});
+
 describe("scanner installation", () => {
   it.each(scannerRegistry.map((scanner) => [scanner.id, scanner] as const))(
     "installs `%s` at the pinned version",
