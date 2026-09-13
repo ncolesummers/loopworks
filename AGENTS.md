@@ -28,17 +28,33 @@ Every issue implementation gets an adversarial review after its first green
 state and before final handoff or publication. This applies whether the work
 stops without a PR, ships as one PR, or ships as a stack.
 
-Use two independent read-only subagents in fresh contexts with the same brief.
-Give them only the issue, acceptance criteria, test plan, and diff—never the
-implementing session's reasoning. A stack is a team scheduling primitive:
-implement it from bottom to top and publish each independently reviewable
-lower layer as a draft after its own gates so human review can overlap work on
-a later layer, unless the user explicitly requires atomic publication. Before
-publishing the first layer, review that layer. Before publishing each later
-layer, review its diff in dependency context and the assembled top-of-stack
-diff. Exactly one adversarial review round is allowed per issue implementation
-or newly implemented stack layer. A round is one pass by both independent
-reviewers over every diff in that scope.
+Reviewers are read-only subagents in fresh contexts working from the same
+brief. Give them only the issue, acceptance criteria, test plan, and diff—never
+the implementing session's reasoning.
+
+Size the review by blast radius, not diff size. One reviewer suffices for
+lockfile-only dependency bumps, documentation edits that change no procedure or
+control, line-citation or wording fixes, prompt wording, and test-only
+refactors that change no assertion. Wording that changes a rule, threshold, or
+gate is not a wording fix, wherever it lives. Two independent reviewers are
+mandatory for anything under `src/`, `.github/workflows/`, `scripts/`, the
+`.omnigent/` policy bundle, auth or session code, database schema or
+migrations, and any change to what a security gate or CI check accepts—pins,
+checksums, allowlists, ignore files, or overrides—or whether it runs at all. A
+bump that only moves resolved dependency versions stays at one reviewer;
+editing what a gate tolerates is two. A change that mixes tiers takes the
+higher tier. When unsure, use two.
+
+A stack is a team scheduling primitive: implement it from bottom to top and
+publish each independently reviewable lower layer as a draft after its own
+gates so human review can overlap work on a later layer, unless the user
+explicitly requires atomic publication. Before publishing the first layer,
+review that layer. Before publishing each later layer, review its diff in
+dependency context and the assembled top-of-stack diff. Each layer's tier is
+its own blast radius, so a stack can mix one-reviewer and two-reviewer layers.
+Exactly one adversarial review round is allowed per issue implementation or
+newly implemented stack layer. A round is one pass by every reviewer the tier
+requires over every diff in that scope.
 
 Use this brief verbatim:
 
@@ -47,7 +63,7 @@ Use this brief verbatim:
 > severity, failing scenario or repro. No fixes, no praise. An empty list must
 > state what you attacked and why it held.
 
-Dedupe both findings lists. Fix every in-scope critical-severity finding;
+Dedupe findings across reviewers. Fix every in-scope critical-severity finding;
 critical-severity findings cannot be deferred. Fix or explicitly defer
 non-critical findings with a stated reason. Verify fixes with targeted tests
 and required validation, including security regressions for critical findings.
@@ -60,9 +76,9 @@ When a finding is outside the issue's acceptance criteria, record it in a
 linked backlog issue if it is actionable. Out-of-scope findings do not extend
 or block the current implementation. After the bounded review is complete,
 rerun the checks required by the Validation section and report the round count
-and every finding's disposition. If tool policy cannot provide two independent
-reviewers for the mandatory first round, stop before final handoff or
-publication and report the blocker.
+and every finding's disposition. If tool policy cannot provide the reviewers
+the tier requires—two independent reviewers for a two-reviewer change, one
+otherwise—stop before final handoff or publication and report the blocker.
 
 For an authorized stack, complete the current layer's TDD, scoped review,
 validation, preflight, signed commit, local signature verification, draft PR,

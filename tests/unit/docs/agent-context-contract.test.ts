@@ -92,7 +92,7 @@ describe("agent context budget", () => {
     for (const context of [rootGuide, implementIssueSkill, implementIssuePrSkill]) {
       const normalized = context.replaceAll(/\s+/g, " ");
       expect(normalized).toContain("Exactly one adversarial review round");
-      expect(normalized).toContain("both independent reviewers");
+      expect(normalized).toContain("every reviewer the tier requires");
       expect(normalized).toContain("critical-severity findings");
       expect(normalized).not.toMatch(/three.round|additional rounds|next review round/i);
       expect(normalized).toContain("blocks handoff or publication");
@@ -113,6 +113,79 @@ describe("agent context budget", () => {
     expect(normalizedWorktreeSkill).not.toContain("repeat TDD, adversarial review");
     expect(normalizedWorktreeSkill).toContain("each later layer in dependency context");
     expect(normalizedWorktreeSkill).toContain("assembled top-of-stack diff");
+  });
+
+  it("tiers the adversarial reviewer count by blast radius", () => {
+    const normalizedRoot = rootGuide.replaceAll(/\s+/g, " ");
+
+    expect(normalizedRoot).not.toContain("Use two independent read-only subagents");
+    expect(normalizedRoot).toContain("Size the review by blast radius, not diff size.");
+
+    // Tier membership is pinned per side of the paragraph, so moving a scope
+    // from the two-reviewer list into the one-reviewer list fails here.
+    const tierText = normalizedRoot.slice(
+      normalizedRoot.indexOf("Size the review by blast radius"),
+      normalizedRoot.indexOf("When unsure, use two.") + "When unsure, use two.".length,
+    );
+    const boundary = tierText.indexOf("Two independent reviewers are mandatory for anything under");
+    expect(boundary).toBeGreaterThan(0);
+    const oneReviewerTier = tierText.slice(0, boundary);
+    const twoReviewerTier = tierText.slice(boundary);
+
+    for (const item of [
+      "lockfile-only dependency bumps",
+      "documentation edits that change no procedure or control",
+      "line-citation or wording fixes",
+      "prompt wording",
+      "test-only refactors that change no assertion",
+    ]) {
+      expect(oneReviewerTier).toContain(item);
+    }
+    // Wording that moves a rule is not a one-reviewer wording fix.
+    expect(oneReviewerTier).toContain("Wording that changes a rule, threshold, or gate");
+
+    for (const scope of [
+      "`src/`",
+      "`.github/workflows/`",
+      "`scripts/`",
+      "`.omnigent/`",
+      "auth or session code",
+      "database schema or migrations",
+      "what a security gate or CI check accepts",
+    ]) {
+      expect(twoReviewerTier).toContain(scope);
+      expect(oneReviewerTier).not.toContain(scope);
+    }
+    expect(twoReviewerTier).toContain("or whether it runs");
+    expect(twoReviewerTier).toContain("takes the higher tier");
+    expect(twoReviewerTier).toContain("When unsure, use two.");
+
+    // The stop condition keeps a floor at both tiers.
+    expect(normalizedRoot).not.toContain(
+      "If tool policy cannot provide two independent reviewers for the mandatory first round",
+    );
+    expect(normalizedRoot).toContain("cannot provide the reviewers the tier requires");
+    expect(normalizedRoot).toContain(
+      "two independent reviewers for a two-reviewer change, one otherwise",
+    );
+
+    for (const skill of [implementIssueSkill, implementIssuePrSkill]) {
+      const normalized = skill.replaceAll(/\s+/g, " ");
+      expect(normalized).toContain("Size the reviewer count by blast radius");
+      expect(normalized).toContain(
+        "two independent reviewers for `src/`, `.github/workflows/`, `scripts/`, `.omnigent/`, auth or session code, schema or migrations, and anything that changes what a security gate or CI check accepts",
+      );
+      expect(normalized).toContain("Mixed tiers take the higher tier; when unsure, use two.");
+    }
+
+    // The stacked-PR guide defers to the root tier lists instead of restating
+    // a lossy subset of them.
+    const normalizedDevelopment = developmentGuide.replaceAll(/\s+/g, " ");
+    expect(normalizedDevelopment).not.toContain("both reviewers");
+    expect(normalizedDevelopment).not.toMatch(/dual.review/i);
+    expect(normalizedDevelopment).toContain("blast-radius tiers set each layer's reviewer count");
+    expect(normalizedDevelopment).toContain("read its tier lists");
+    expect(normalizedDevelopment).not.toContain("always takes two");
   });
 
   it("publishes an authorized stack incrementally for concurrent human review", () => {
