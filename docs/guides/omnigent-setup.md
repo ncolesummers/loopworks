@@ -360,7 +360,7 @@ a guard which lies is worse than an absent guard.
   `terra` that is `blast_radius`, `deny_merge`, `block_orchestration_skills`,
   and `deny_nested_agents`; for `reviewer_astra` it adds `read_only_os` and
   `deny_shell`. Losing `blast_radius` matters on its own: it denies force-push
-  and gates ordinary pushes (`polly-loopworks-spec.test.ts:521-525`). Omnigent
+  and gates ordinary pushes (`polly-loopworks-spec.test.ts:522-526`). Omnigent
   reports `policy_hook_disabled_reason`, but the bundle ships no preflight that
   consumes it, so nothing fails closed and nobody reads it for you. The Codex
   version floor in section 1 is the pre-launch check that reduces this risk.
