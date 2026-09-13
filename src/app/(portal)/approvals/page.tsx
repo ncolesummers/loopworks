@@ -7,6 +7,8 @@ import {
   getPortalSourceLabel,
   type PortalRecordsDatabase,
   type PortalRecordsResult,
+  portalApprovalLimit,
+  portalApprovalRunLimit,
 } from "@/lib/portal/records";
 
 export async function ApprovalsPageContent({
@@ -38,11 +40,29 @@ export async function ApprovalsPageContent({
     <div className="space-y-6">
       <h1 className="sr-only">Approvals</h1>
       <h2 className="sr-only">Approval state</h2>
-      <ApprovalGatePanel
-        approval={portalResult.records.approval}
-        firstRun={deriveFirstRunState({ result: portalResult })}
-        sourceLabel={getPortalSourceLabel(portalResult)}
-      />
+      <p className="text-sm text-muted-foreground">
+        Up to {portalApprovalLimit} gates from the {portalApprovalRunLimit} most recent runs,
+        ordered by request time. Open a run for its full history.
+      </p>
+      {portalResult.records.approvals.length > 0 ? (
+        <ul className="space-y-6" aria-label="Approval gates">
+          {portalResult.records.approvals.map((approval, index) => (
+            <li key={approval.id ?? index} data-approval-id={approval.id}>
+              <ApprovalGatePanel
+                approval={approval}
+                enableActions={portalResult.source === "db"}
+                sourceLabel={getPortalSourceLabel(portalResult)}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ApprovalGatePanel
+          approval={null}
+          firstRun={deriveFirstRunState({ result: portalResult })}
+          sourceLabel={getPortalSourceLabel(portalResult)}
+        />
+      )}
     </div>
   );
 }

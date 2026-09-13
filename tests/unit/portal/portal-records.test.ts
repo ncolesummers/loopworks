@@ -71,6 +71,27 @@ describe("portal records (pglite integration)", () => {
     NODE_ENV: "production",
   } as const;
 
+  it("retains every seeded approval state and both actors", async () => {
+    await seedDemoData(testDatabase());
+    const result = await readPortalRecords({ database: context.db, githubAppId: 800_000 });
+    expect(result.records.approvals).toHaveLength(6);
+    expect(result.records.approvals.map((gate) => gate.state)).toEqual(
+      expect.arrayContaining([
+        "requested",
+        "approved",
+        "rejected",
+        "bypassed",
+        "cancelled",
+        "applied",
+      ]),
+    );
+    expect(result.records.approvals.find((gate) => gate.state === "approved")).toMatchObject({
+      id: expect.any(String),
+      owner: expect.any(String),
+      resolvedBy: expect.any(String),
+    });
+  });
+
   it("materializes the five portal page surfaces from seeded database rows", async () => {
     await seedDemoData(testDatabase());
 
@@ -478,6 +499,7 @@ describe("portal records (pglite integration)", () => {
       findUnmetPortalRequirements(
         {
           approval: null,
+          approvals: [],
           artifacts: [],
           deployments: [],
           githubInstallations: [],
@@ -495,6 +517,7 @@ describe("portal records (pglite integration)", () => {
       findUnmetPortalRequirements(
         {
           approval: portalFixture.approval,
+          approvals: [portalFixture.approval],
           artifacts: [],
           deployments: portalFixture.deployments,
           githubInstallations: portalFixture.githubInstallations,
@@ -655,6 +678,7 @@ describe("portal records (pglite integration)", () => {
       getPortalSourceLabel({
         records: {
           approval: null,
+          approvals: [],
           artifacts: [],
           deployments: [],
           githubInstallations: [],
@@ -674,6 +698,7 @@ describe("portal records (pglite integration)", () => {
         fallbackReason: "database_unavailable",
         records: {
           approval: portalFixture.approval,
+          approvals: [portalFixture.approval],
           artifacts: portalFixture.artifacts,
           deployments: portalFixture.deployments,
           githubInstallations: portalFixture.githubInstallations,
@@ -693,6 +718,7 @@ describe("portal records (pglite integration)", () => {
         error: "Portal data store unavailable.",
         records: {
           approval: null,
+          approvals: [],
           artifacts: [],
           deployments: [],
           githubInstallations: [],

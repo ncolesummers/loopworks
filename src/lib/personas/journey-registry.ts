@@ -618,13 +618,9 @@ export const personaJourneyRegistry: PersonaJourneyRegistry = personaJourneyRegi
       scenarioId: "A02",
       kind: "deferred",
       reason:
-        "Partly covered already: tests/e2e/portal.spec.ts asserts the requesting actor and " +
-        "reviewer evidence on /approvals. What is blocked is the rest of the scenario. " +
-        "mapApproval in src/lib/portal/records.ts returns the single highest-priority row or " +
-        "null, so requested, approved, rejected, bypassed, and expired cannot be observed " +
-        "together on one surface; only the requesting actor is rendered, not the resolving " +
-        "one; and the test-writing plan-approval requirement has no rendered surface at all. " +
-        "A registry journey waits on /approvals listing gates.",
+        "Partial browser coverage: tests/e2e/portal.spec.ts and tests/e2e/seeded-postgres.spec.ts cover approval context, decisions, attribution, and evidence. " +
+        "Exact-plan approval enforcement already exists in src/lib/loops/transitions/test-writing.ts. " +
+        "#275 renders the linked plan on the gate card; a dedicated plan-review surface and the complete exact-plan test-writing registry journey remain deferred to #266.",
       trackedBy: "#266",
     },
     {
@@ -687,11 +683,10 @@ export const personaJourneyRegistry: PersonaJourneyRegistry = personaJourneyRegi
       scenarioId: "S05",
       kind: "deferred",
       reason:
-        "The browser half needs two identities inside one journey, and the approval confirm " +
-        "button closes its dialog without writing — nothing in src/ calls the approval " +
-        "transition route — so a persisted approval login cannot be observed. Allowlist " +
-        "rejection itself is covered by tests/unit/auth/allowlist.test.ts; the Playwright " +
-        "column is what waits on an approval write path.",
+        "#275 connects decisions to the session-attributed route; tests/unit/api/approvals-transition.test.ts proves GitHub attribution. " +
+        "schemas/persona-journey.ts defines one journeySessionSchema value per journey with one authenticated sessionProfileId, not an identity-switch action. " +
+        "Allowlist denial runs through src/auth.ts callbacks.signIn during GitHub OAuth; the no-external-network test policy prevents that round-trip. " +
+        "tests/unit/auth/allowlist.test.ts covers denial deterministically. The two-identity registry journey remains deferred to #266.",
       trackedBy: "#266",
     },
     {

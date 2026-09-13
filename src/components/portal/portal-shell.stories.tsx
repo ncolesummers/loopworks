@@ -7,6 +7,7 @@ import type { PortalRecords } from "@/lib/portal/records";
 
 const fixtureRecords = {
   approval: portalFixture.approval,
+  approvals: [portalFixture.approval],
   artifacts: portalFixture.artifacts,
   deployments: portalFixture.deployments,
   githubInstallations: portalFixture.githubInstallations,

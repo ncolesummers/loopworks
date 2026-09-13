@@ -191,6 +191,14 @@ export interface ApprovalChecklistItem {
 }
 
 export interface ApprovalGateRecord {
+  decisionNote?: string;
+  plan?: { id: string; sha256: string; content?: string };
+  /** Absent for legacy presentation-only fixtures. */
+  id?: string;
+  runId?: string;
+  scope?: string;
+  resolvedBy?: string;
+  artifacts?: ArtifactRecord[];
   state: ApprovalState;
   owner: string;
   due: string;
@@ -210,6 +218,7 @@ export type RunStatus =
 export type RunStepStatus = "queued" | "running" | "skipped" | "failed" | "succeeded";
 
 export interface RunApprovalRecord {
+  decisionNote?: string;
   id: string;
   note?: string;
   requestedAt: string;

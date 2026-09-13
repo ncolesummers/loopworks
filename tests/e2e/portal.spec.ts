@@ -439,20 +439,17 @@ test.describe("Loopworks portal", () => {
     }
   });
 
-  // Persona A02: approval gates preserve actor/evidence context through the request flow.
-  test("approval request flow keeps reviewer evidence visible", async ({ page }) => {
+  // Persona A02: fixture evidence stays inspectable without pretending to persist a decision.
+  test("approval fixture keeps reviewer evidence visible without offering writes", async ({
+    page,
+  }) => {
     await page.goto("/approvals");
-
-    await expect(page.getByText("Owner Priya")).toBeVisible();
+    await expect(page.getByText("Requested by Priya")).toBeVisible();
+    await expect(page.getByText("Resolved by — awaiting decision")).toBeVisible();
     await expect(page.getByText("Write paths require explicit approval")).toBeVisible();
-
-    await page.getByRole("button", { name: "Request approval" }).click();
-    await expect(page.getByRole("dialog", { name: "Request security approval" })).toBeVisible();
-    await expect(page.getByLabel("Reviewer notes")).toContainText(
-      "Verified GitHub scoping, preview visibility, and redaction rules",
-    );
-    await page.getByRole("button", { name: "Submit request" }).click();
-    await expect(page.getByRole("dialog", { name: "Request security approval" })).toBeHidden();
+    await expect(
+      page.getByRole("button", { name: /Request approval|Review approval/ }),
+    ).toHaveCount(0);
   });
 
   test("routes an operator from settings into repository selection and back", async ({ page }) => {
