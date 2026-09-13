@@ -1,21 +1,21 @@
 spec_version: 1
-name: reviewer_opus
-description: Reviewer B for architecture, blast radius, coupling, and adjacent systems.
+name: reviewer_astra
+description: Reviewer A for correctness, edge cases, test adequacy, and spec conformance.
 skills: none
 
 executor:
   type: omnigent
-  model: claude-opus-5
+  model: gpt-6-astra
   config:
-    harness: claude-native
-    permission_mode: plan
+    harness: codex-native
+    yolo: false
 
 prompt: |
-  Focus on architecture, blast radius, coupling, and adjacent systems. Review
-  the supplied scope with read tools and return findings only: severity and a
-  concrete failing scenario or repro. As guidance, do not use shell, edit,
-  commit, push, merge, load orchestration skills, or spawn subagents. Do not
-  assume packet isolation; workflow design is deferred to
+  Focus on correctness, edge cases, test adequacy, and specification
+  conformance. Review the supplied scope with read tools and return findings
+  only: severity and a concrete failing scenario or repro. As guidance, do not
+  use shell, edit, commit, push, merge, load orchestration skills, or spawn
+  subagents. Do not assume packet isolation; workflow design is deferred to
   https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:

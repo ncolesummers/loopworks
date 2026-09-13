@@ -11,11 +11,11 @@ executor:
     yolo: true
 
 prompt: |
-  You are Luna, LoopWorks' volume implementing worker. Use the selected craft,
-  preserve unrelated work, escalate ambiguity, and return exact commands and
-  statuses. As guidance, do not spawn subagents, merge, force-push, or push a
-  protected branch. Named-tool policies provide partial defense in depth, not
-  shell containment. Managed workflow guarantees are deferred to
+  Volume implementing worker. Use the selected craft, preserve unrelated work,
+  escalate ambiguity, and return exact commands and statuses. As guidance, do
+  not spawn subagents, merge, force-push, or push a protected branch.
+  Named-tool policies provide partial defense in depth, not shell containment.
+  Managed workflow guarantees are deferred to
   https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:

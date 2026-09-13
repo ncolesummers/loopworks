@@ -23,6 +23,7 @@ const omnigentRevision = "ba241c3592000b8098101164d3de03d52ca74ddf";
 const issue280Url = "https://github.com/ncolesummers/loopworks/issues/280";
 
 const implementingWorkers = {
+  astra: { harness: "codex-native", model: "gpt-6-astra" },
   sol: { harness: "codex-native", model: "gpt-5.6-sol" },
   luna: { harness: "codex-native", model: "gpt-5.6-luna" },
   terra: { harness: "codex-native", model: "gpt-5.6-terra" },
@@ -30,7 +31,7 @@ const implementingWorkers = {
 } as const;
 
 const reviewerWorkers = {
-  reviewer_sol: { harness: "codex-native", model: "gpt-5.6-sol" },
+  reviewer_astra: { harness: "codex-native", model: "gpt-6-astra" },
   reviewer_opus: { harness: "claude-native", model: "claude-opus-5" },
 } as const;
 
@@ -240,7 +241,7 @@ describe("polly-loopworks bundle contract", () => {
     );
   });
 
-  it("declares exactly the six role-named workers", () => {
+  it("declares exactly the seven role-named workers", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const expectedNames = Object.keys(expectedWorkers).sort();
     expect([...(orchestrator.tools?.agents ?? [])].sort()).toEqual(expectedNames);
@@ -263,14 +264,44 @@ describe("polly-loopworks bundle contract", () => {
     expect(directoryNames).not.toContain("gemini");
   });
 
-  it("pins the exact harness and model for every worker and excludes Fable", () => {
+  it("gives astra the same skills, os_env, and guardrails as sol with an autonomous codex harness", () => {
+    const astra = readAgent("astra");
+    const sol = readAgent("sol");
+    expect(astra.skills).toEqual(sol.skills);
+    expect(astra.os_env).toEqual(sol.os_env);
+    expect(policies(astra)).toEqual(policies(sol));
+    for (const name of ["astra", "sol", "luna", "terra"] as const) {
+      expect(readAgent(name).executor?.config?.yolo).toBe(true);
+    }
+  });
+
+  it("pins the exact harness and model for every worker", () => {
     for (const [name, expected] of Object.entries(expectedWorkers)) {
       const config = readAgent(name as keyof typeof expectedWorkers);
       expect(config.name).toBe(name);
       expect(config.executor?.config?.harness).toBe(expected.harness);
       expect(config.executor?.model).toBe(expected.model);
-      expect(config.executor?.model).not.toBe("claude-fable-5");
     }
+  });
+
+  it("routes default implementation to astra and keeps sol as the mid-tier spill", () => {
+    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
+    const prompt = (orchestrator.prompt ?? "").replace(/\s+/g, " ");
+    const routing = readFileSync(path.join(bundleRoot, "ROUTING.md"), "utf8").replace(/\s+/g, " ");
+    expect(prompt).toContain("`astra` (`gpt-6-astra`) is the default substantive implementer");
+    expect(prompt).toContain("`reviewer_astra` (`gpt-6-astra`)");
+    expect(prompt).toContain("`reviewer_opus` (`claude-opus-5`)");
+    expect(prompt).toContain("`sol` (`gpt-5.6-sol`) handles work between Terra and Astra");
+    expect(routing).toContain("| `astra` | `gpt-6-astra` | Default substantive implementation |");
+    expect(routing).toContain("| `reviewer_astra` | `gpt-6-astra` |");
+    expect(routing).not.toContain("reviewer_sol");
+  });
+
+  it("states the one-round cross-provider adversarial review rule in the orchestrator prompt", () => {
+    const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
+    const prompt = (orchestrator.prompt ?? "").toLowerCase().replace(/\s+/g, " ");
+    expect(prompt).toContain("exactly one adversarial review round");
+    expect(prompt).toContain("`reviewer_astra` and `reviewer_opus`");
   });
 
   it("configures reviewer restrictions and records the codex-native fail-open gap", () => {
@@ -299,7 +330,7 @@ describe("polly-loopworks bundle contract", () => {
       }
     }
 
-    expect(readAgent("reviewer_sol").executor?.config?.yolo).toBe(false);
+    expect(readAgent("reviewer_astra").executor?.config?.yolo).toBe(false);
     expect(readAgent("reviewer_opus").executor?.config?.permission_mode).toBe("plan");
 
     for (const relativePath of [
@@ -311,7 +342,7 @@ describe("polly-loopworks bundle contract", () => {
       expect(text).toContain("policy_hook_disabled_reason");
       expect(text).toContain("every codex-native worker");
       expect(text).toContain("implementers");
-      for (const name of ["sol", "luna", "terra", "reviewer_sol"]) {
+      for (const name of ["astra", "sol", "luna", "terra", "reviewer_astra"]) {
         expect(text).toContain(`\`${name}\``);
       }
       expect(text).not.toContain("## Binding controls");
@@ -458,34 +489,43 @@ describe("polly-loopworks bundle contract", () => {
             "  handler = policy.get('function', {}).get('path')",
             "  arguments = policy.get('function', {}).get('arguments') or {}",
             "  prefix = f'{actor}.{policy_name}'",
-            "  if policy_name == 'deny_merge':",
-            "   evaluate = cel_policy(expression=arguments['expression'])",
-            "   for tool in ['Bash', 'sys_os_shell']:",
-            "    for index, shell_command in enumerate(merge_commands): check(f'{prefix}.{tool}.deny.{index}', evaluate(call(tool, {'command': shell_command})), 'DENY')",
-            "    check(f'{prefix}.{tool}.allow', evaluate(call(tool, {'command': 'git status'})), 'ALLOW')",
-            "  elif policy_name == 'deny_nested_agents':",
-            "   evaluate = cel_policy(expression=arguments['expression'])",
-            "   for tool in nested_tools:",
-            "    expected = 'ALLOW' if actor == 'orchestrator' and tool == 'sys_session_send' else 'DENY'",
-            "    check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'task': 'review'})), expected)",
-            "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
-            "  elif policy_name == 'deny_shell':",
-            "   evaluate = cel_policy(expression=arguments['expression'])",
-            "   for tool in shell_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'command': 'git status'})), 'DENY')",
-            "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
-            "  elif policy_name == 'block_orchestration_skills':",
-            "   evaluate = block_skills(blocked=arguments['blocked'])",
-            "   for skill in arguments['blocked']: check(f'{prefix}.deny.{skill}', evaluate(call('Skill', {'skill': skill})), 'DENY')",
-            "   check(f'{prefix}.allow', evaluate(call('Skill', {'skill': 'not-a-project-skill'})), 'ALLOW')",
-            "  elif policy_name == 'read_only_os':",
-            "   evaluate = read_only_os(**arguments)",
-            "   for tool in write_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'file_path': 'src/x.ts'}), {}), 'DENY')",
-            "   check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'}), {}), 'ALLOW')",
-            "  elif policy_name == 'blast_radius':",
-            "   evaluate = blast_radius(**arguments)",
-            "   check(f'{prefix}.force_push', evaluate(call('Bash', {'command': 'git push --force origin HEAD:main'}), {}), 'DENY')",
-            "   check(f'{prefix}.push', evaluate(call('Bash', {'command': 'git push origin feat/267'}), {}), 'ASK' if arguments.get('gate_pushes', True) else 'ALLOW')",
-            "   check(f'{prefix}.allow', evaluate(call('Bash', {'command': 'git status'}), {}), 'ALLOW')",
+            "  match policy_name:",
+            "   case 'deny_merge':",
+            "    evaluate = cel_policy(expression=arguments['expression'])",
+            "    for tool in ['Bash', 'sys_os_shell']:",
+            "     for index, shell_command in enumerate(merge_commands): check(f'{prefix}.{tool}.deny.{index}', evaluate(call(tool, {'command': shell_command})), 'DENY')",
+            "     check(f'{prefix}.{tool}.allow', evaluate(call(tool, {'command': 'git status'})), 'ALLOW')",
+            "   case 'deny_nested_agents':",
+            "    evaluate = cel_policy(expression=arguments['expression'])",
+            "    for tool in nested_tools:",
+            "     # the orchestrator's sends are governed by deny_custom_sessions below, not by deny_nested_agents",
+            "     expected = 'ALLOW' if actor == 'orchestrator' and tool == 'sys_session_send' else 'DENY'",
+            "     check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'task': 'review'})), expected)",
+            "    check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
+            "   case 'deny_custom_sessions':",
+            "    evaluate = cel_policy(expression=arguments['expression'])",
+            "    check(f'{prefix}.deny.sys_session_create', evaluate(call('sys_session_create', {'config_path': 'custom.yaml'})), 'DENY')",
+            "    check(f'{prefix}.deny.undeclared_model', evaluate(call('sys_session_send', {'args': {'model': 'not-a-roster-model'}})), 'DENY')",
+            "    check(f'{prefix}.allow.declared_model', evaluate(call('sys_session_send', {'args': {'model': 'gpt-6-astra'}})), 'ALLOW')",
+            "   case 'deny_shell':",
+            "    evaluate = cel_policy(expression=arguments['expression'])",
+            "    for tool in shell_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'command': 'git status'})), 'DENY')",
+            "    check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'})), 'ALLOW')",
+            "   case 'block_orchestration_skills':",
+            "    evaluate = block_skills(blocked=arguments['blocked'])",
+            "    for skill in arguments['blocked']: check(f'{prefix}.deny.{skill}', evaluate(call('Skill', {'skill': skill})), 'DENY')",
+            "    check(f'{prefix}.allow', evaluate(call('Skill', {'skill': 'not-a-project-skill'})), 'ALLOW')",
+            "   case 'read_only_os':",
+            "    evaluate = read_only_os(**arguments)",
+            "    for tool in write_tools: check(f'{prefix}.deny.{tool}', evaluate(call(tool, {'file_path': 'src/x.ts'}), {}), 'DENY')",
+            "    check(f'{prefix}.allow', evaluate(call('Read', {'file_path': 'README.md'}), {}), 'ALLOW')",
+            "   case 'blast_radius':",
+            "    evaluate = blast_radius(**arguments)",
+            "    check(f'{prefix}.force_push', evaluate(call('Bash', {'command': 'git push --force origin HEAD:main'}), {}), 'DENY')",
+            "    check(f'{prefix}.push', evaluate(call('Bash', {'command': 'git push origin feat/267'}), {}), 'ASK' if arguments.get('gate_pushes', True) else 'ALLOW')",
+            "    check(f'{prefix}.allow', evaluate(call('Bash', {'command': 'git status'}), {}), 'ALLOW')",
+            "   case _:",
+            "    bad[prefix] = {'expected': 'a probed policy', 'actual': 'no probe branch for this policy name'}",
             "print(json.dumps({'checks': checks, 'bad': bad}, sort_keys=True))",
             "raise SystemExit(1 if bad else 0)",
           ].join("\n"),
@@ -503,13 +543,13 @@ describe("polly-loopworks bundle contract", () => {
     },
   );
 
-  runtimePolicyTest("executes the explicit Fable safeguard branch", { timeout: 30_000 }, () => {
+  runtimePolicyTest("executes the custom-child session safeguard", { timeout: 30_000 }, () => {
     const source = omnigentSource();
     expect(source, "OMNIGENT_SOURCE_ROOT must point to the pinned Omnigent checkout").toBeDefined();
     expect(source?.revision).toBe(omnigentRevision);
     const sourceRoot = source?.root as string;
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
-    const expression = policyExpression(policies(orchestrator).deny_claude_fable_5);
+    const expression = policyExpression(policies(orchestrator).deny_custom_sessions);
     const importPython = process.env.OMNIGENT_IMPORT_PYTHON;
     const command = importPython ?? "uv";
     const commandPrefix = importPython
@@ -538,11 +578,13 @@ describe("polly-loopworks bundle contract", () => {
           " return {'type': 'tool_call', 'data': {'name': name, 'arguments': arguments}}",
           "evaluate = cel_policy(expression=expression)",
           "checks = {",
-          " 'fable': evaluate(call('sys_session_send', {'args': {'model': 'claude-fable-5'}})),",
-          " 'declared': evaluate(call('sys_session_send', {'args': {'model': 'gpt-5.6-sol'}})),",
+          " 'declared': evaluate(call('sys_session_send', {'args': {'model': 'gpt-6-astra'}})),",
+          " 'claude_send': evaluate(call('sys_session_send', {'args': {'model': 'claude-opus-5'}})),",
+          " 'undeclared': evaluate(call('sys_session_send', {'args': {'model': 'not-a-roster-model'}})),",
+          " 'no_model': evaluate(call('sys_session_send', {'args': {'input': 'hello'}})),",
           " 'custom_child': evaluate(call('sys_session_create', {'config_path': 'custom.yaml'})),",
           "}",
-          "expected = {'fable': 'DENY', 'declared': 'ALLOW', 'custom_child': 'DENY'}",
+          "expected = {'declared': 'ALLOW', 'claude_send': 'ALLOW', 'undeclared': 'DENY', 'no_model': 'ALLOW', 'custom_child': 'DENY'}",
           "bad = {name: {'expected': expected[name], 'actual': result} for name, result in checks.items() if not result or result.get('result') != expected[name]}",
           "print(json.dumps({'checks': checks, 'bad': bad}, sort_keys=True))",
           "raise SystemExit(1 if bad else 0)",
@@ -849,12 +891,41 @@ describe("polly-loopworks bundle contract", () => {
     },
   );
 
-  it("configures the Fable override and custom-child safeguard", () => {
+  it("keeps the custom-child safeguard without any model denial", () => {
     const orchestrator = readYaml<OrchestratorConfig>(".omnigent/polly-loopworks/config.yaml");
     const orchestratorPolicies = policies(orchestrator);
-    const expression = policyExpression(orchestratorPolicies.deny_claude_fable_5);
+    expect(orchestratorPolicies).not.toHaveProperty("deny_claude_fable_5");
+    const expression = policyExpression(orchestratorPolicies.deny_custom_sessions);
     expect(expression).toContain('event.data.name == "sys_session_create"');
-    expect(expression).toContain("claude-fable-5");
+    expect(expression).toContain('event.data.name == "sys_session_send"');
+    expect(expression).toContain("!(event.data.arguments.args.model in [");
+    const rosterModels = [...new Set(Object.values(expectedWorkers).map((w) => w.model))];
+    for (const model of rosterModels) {
+      expect(expression).toContain(`"${model}"`);
+    }
+    for (const listed of expression.match(/"(?:gpt|claude)-[^"]+"/g) ?? []) {
+      expect(rosterModels).toContain(listed.slice(1, -1));
+    }
+
+    const bundleTexts = [
+      readFileSync(path.join(bundleRoot, "config.yaml"), "utf8"),
+      readFileSync(path.join(bundleRoot, "ROUTING.md"), "utf8"),
+      readFileSync(orchestrationSkillPath, "utf8"),
+      ...Object.keys(expectedWorkers).map((name) =>
+        readFileSync(path.join(bundleRoot, `agents/${name}/config.yaml`), "utf8"),
+      ),
+    ];
+    for (const text of bundleTexts) {
+      expect(text.toLowerCase()).not.toContain("fable");
+    }
+    for (const relativePath of [
+      "docs/adr/0034-project-scoped-polly-model-routing.md",
+      "docs/guides/omnigent-setup.md",
+    ]) {
+      const text = readFileSync(path.join(repoRoot, relativePath), "utf8");
+      expect(text).not.toMatch(/fable[^.]*is denied/i);
+      expect(text).not.toMatch(/den(?:y|ies|ied) [^.]*fable[^.]*override/i);
+    }
   });
 
   it("defers workflow guarantees to issue 280 and keeps only routing behavior", () => {

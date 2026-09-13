@@ -14,11 +14,11 @@ executor:
     harness: claude-sdk
 
 prompt: |
-  You are polly-loopworks, a model router and supervisory assistant for
-  LoopWorks. Prefer delegating repository mutations to a suitable implementing
-  worker and use the reviewer roles for review tasks. This is operating
-  guidance, not containment: the orchestrator retains an unrestricted shell and
-  can launch clients outside the named agent tools.
+  Model router and supervisory assistant. Prefer delegating repository
+  mutations to a suitable implementing worker and use the reviewer roles for
+  review tasks. This is operating guidance, not containment: the orchestrator
+  retains an unrestricted shell and can launch clients outside the named agent
+  tools.
 
   As a routing preflight, check `command -v codex claude || true`, report any
   unavailable harness, and choose an available model-pinned role. Do not claim
@@ -27,18 +27,29 @@ prompt: |
 
   ## Routing
 
-  - `sol` (`gpt-5.6-sol`) is the default substantive implementer.
+  - `astra` (`gpt-6-astra`) is the default substantive implementer.
+  - `sol` (`gpt-5.6-sol`) handles work between Terra and Astra.
   - `luna` (`gpt-5.6-luna`) handles mechanical and volume work.
   - `terra` (`gpt-5.6-terra`) handles work between Luna and Sol.
   - `opus` (`claude-opus-5`) handles architecture, ambiguity, escalation, and
     cross-provider spill.
-  - `reviewer_sol` (`gpt-5.6-sol`) reviews correctness and test adequacy.
+  - `reviewer_astra` (`gpt-6-astra`) reviews correctness and test adequacy.
   - `reviewer_opus` (`claude-opus-5`) reviews architecture and blast radius.
 
-  Never select `claude-fable-5` for benchmark performance. The policy denies a
-  direct `sys_session_send` override and rejects `sys_session_create`; changing
-  that requires an explicit policy change. Those tested event branches do not
-  make the unrestricted shell a containment boundary.
+  Your own model is not pinned; you run on the Claude Agent SDK's built-in
+  default unless the operator passes `--model` at launch, and the operator
+  relaunches you on Codex when the Claude side is unavailable. The policy
+  rejects `sys_session_create` and any `sys_session_send` model override
+  outside the declared roster models; changing that requires an explicit
+  policy change. Those tested event branches do not make the unrestricted
+  shell a containment boundary.
+
+  ## Adversarial review
+
+  Exactly one adversarial review round is allowed per issue implementation or
+  newly implemented stack layer. A round is one pass by both cross-provider
+  reviewers, `reviewer_astra` and `reviewer_opus`, over every diff in scope.
+  Fixes, feedback, and rebases do not restart the round or reset its count.
 
   ## Skill policy
 
@@ -85,11 +96,12 @@ terminals:
 
 tools:
   agents:
+    - astra
     - sol
     - luna
     - terra
     - opus
-    - reviewer_sol
+    - reviewer_astra
     - reviewer_opus
 
 guardrails:
@@ -128,7 +140,7 @@ guardrails:
             event.data.name in ["spawn_agent", "Agent", "Task", "TaskCreate", "sys_session_create"]
             ? {"result": "DENY", "reason": "Named nested or custom agent tools are blocked; shell-launched clients are outside this policy."}
             : {"result": "ALLOW"}
-    deny_claude_fable_5:
+    deny_custom_sessions:
       type: function
       function:
         path: omnigent.policies.builtins.cel.cel_policy
@@ -140,6 +152,6 @@ guardrails:
               event.data.name == "sys_session_send" &&
               "args" in event.data.arguments &&
               "model" in event.data.arguments.args &&
-              event.data.arguments.args.model == "claude-fable-5"
-            ? {"result": "DENY", "reason": "claude-fable-5 has a lower DeepSWE score than opus-5 at equal token burn; change policy explicitly for a safeguard exception."}
+              !(event.data.arguments.args.model in ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "claude-opus-5"])
+            ? {"result": "DENY", "reason": "Model overrides are limited to the declared roster models; change policy explicitly to add one."}
             : {"result": "ALLOW"}

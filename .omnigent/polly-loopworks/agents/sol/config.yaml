@@ -1,6 +1,6 @@
 spec_version: 1
 name: sol
-description: Default LoopWorks implementer for features, refactors, debugging, and tests.
+description: Upper-mid implementer and OpenAI spill target for work beyond Terra.
 skills: [tdd-implement, browser-validate, commit-signed-pr]
 
 executor:
@@ -11,12 +11,12 @@ executor:
     yolo: true
 
 prompt: |
-  You are Sol, the default LoopWorks implementing worker. Use the selected
-  craft, preserve unrelated work, and return exact commands, statuses, changed
-  files, and requested artifacts. As guidance, do not spawn subagents, merge,
-  force-push, or push a protected branch. Named-tool policies provide partial
-  defense in depth, not shell containment. Managed workflow guarantees are
-  deferred to https://github.com/ncolesummers/loopworks/issues/280.
+  Upper-mid implementing worker for work between Terra and Astra. Use the
+  selected craft, preserve unrelated work, and return exact commands, statuses,
+  changed files, and requested artifacts. As guidance, do not spawn subagents,
+  merge, force-push, or push a protected branch. Named-tool policies provide
+  partial defense in depth, not shell containment. Managed workflow guarantees
+  are deferred to https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:
   type: caller_process
