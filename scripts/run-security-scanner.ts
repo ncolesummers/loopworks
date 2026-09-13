@@ -72,10 +72,11 @@ export const scannerRegistry: readonly ScannerDefinition[] = [
     id: "osv",
     script: "security:osv",
     binary: "osv-scanner",
-    version: "2.5.0",
+    version: "2.5.1",
     versionArgs: ["--version"],
     scanArgs: ["scan", "source", "--recursive", "--config=osv-scanner.toml", "."],
-    installInstruction: "brew install osv-scanner (pin 2.5.0)",
+    installInstruction:
+      "install osv-scanner 2.5.1 exactly; see docs/security-review.md, Pinned scanner binaries",
     lane: "validate",
     enforcement: "blocking",
     findingExitCodes: [1],
@@ -159,7 +160,7 @@ export function scannerById(id: string): ScannerDefinition {
 
 /**
  * Reads the first `major.minor.patch` in a version probe's output. The three
- * scanners print three different shapes (`8.30.1`, `osv-scanner version 2.5.0`,
+ * scanners print three different shapes (`8.30.1`, `osv-scanner version: 2.5.1` followed by an `osv-scalibr version:` line,
  * `1.172.0`), and a probe that failed prints none, which must not be mistaken
  * for a match against the pin.
  */

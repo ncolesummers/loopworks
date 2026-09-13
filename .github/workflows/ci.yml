@@ -87,7 +87,7 @@ jobs:
       - name: Install pinned scanners
         env:
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          OSV_SCANNER_SHA256: edcfc41d257db36148f065055655fe3fcfc434b0b423ea67468a84c207524e0c
+          OSV_SCANNER_SHA256: f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be
         run: |
           set -euo pipefail
           bin="$HOME/.local/share/loopworks-security-bin"
@@ -102,7 +102,7 @@ jobs:
           install -m 0755 gitleaks "$bin/gitleaks"
 
           curl -fsSL -o osv-scanner \
-            "https://github.com/google/osv-scanner/releases/download/v2.5.0/osv-scanner_linux_amd64"
+            "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_linux_amd64"
           printf '%s  osv-scanner\n' "$OSV_SCANNER_SHA256" | sha256sum -c -
           install -m 0755 osv-scanner "$bin/osv-scanner"
 
