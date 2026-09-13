@@ -114,12 +114,20 @@ Exception: the test-plan subagent may start and explore the app with
 
 Follow the universal contract in root `AGENTS.md` after the first green and
 before handoff or publication. It applies whether the work stops without a PR,
-ships as one PR, or ships as a stack. Exactly one adversarial review round
-includes both independent reviewers per issue implementation or newly
-implemented stack layer. Fix critical-severity findings and verify fixes with
-targeted tests and required validation. An unresolved in-scope critical finding
-blocks handoff or publication. Fixes, feedback, and rebases do not restart
-adversarial review or reset its count.
+ships as one PR, or ships as a stack. Size the reviewer count by blast radius
+using the root guide's tiers: one reviewer for lockfile-only bumps,
+documentation that changes no procedure or control, wording or line-citation
+fixes, prompt wording, and test-only refactors that change no assertion; two
+independent reviewers for `src/`, `.github/workflows/`, `scripts/`,
+`.omnigent/`, auth or session code, schema or migrations, and anything that
+changes what a security gate or CI check accepts or whether it runs. Wording
+that moves a rule, threshold, or gate is not a wording fix. Mixed tiers take
+the higher tier; when unsure, use two. Exactly one adversarial review round
+includes every reviewer the tier requires per issue implementation or newly
+implemented stack layer. Fix critical-severity findings and verify fixes with targeted tests and
+required validation. An unresolved in-scope critical finding blocks handoff or
+publication. Fixes, feedback, and rebases do not restart adversarial review or
+reset its count.
 Record actionable out-of-scope findings in a linked backlog issue; they do not
 extend or block the current implementation.
 

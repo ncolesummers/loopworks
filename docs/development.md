@@ -281,12 +281,15 @@ The root guide's adversarial review is universal, not a single-PR workflow
 step. A stack is a team scheduling primitive, so work from bottom to top and
 publish each independently reviewable layer after its own gates. This lets
 human review of a lower draft overlap implementation of a later layer, unless
-the user explicitly requires atomic publication. Before publishing the first
-layer, both reviewers inspect that layer. Before publishing each later layer,
-both inspect its diff in dependency context and the assembled top-of-stack
-diff. Each newly implemented layer gets exactly one round. Fixes, feedback,
-and rebases do not reset the count; verify corrections with targeted tests and
-required validation. Unresolved in-scope critical findings block publication.
+the user explicitly requires atomic publication. The root guide's blast-radius
+tiers set each layer's reviewer count; read its tier lists per layer rather
+than sizing a layer by its diff. Before publishing the first layer, the tier's
+reviewers inspect that layer. Before publishing each
+later layer, they inspect its diff in dependency context and the assembled
+top-of-stack diff. Each newly implemented layer gets exactly one round. Fixes,
+feedback, and rebases do not reset the count; verify corrections with targeted
+tests and required validation. Unresolved in-scope critical findings block
+publication.
 
 ### Work with a stack
 
@@ -315,7 +318,7 @@ git config extensions.worktreeConfig true
 git config --worktree rerere.enabled true
 git config --worktree remote.pushDefault origin
 gh stack init agent/123-model
-# Run the model layer's TDD, scoped dual-review round, and validation.
+# Run the model layer's TDD, its tier's scoped review round, and validation.
 bun run commit:preflight
 git add path/to/model.test.ts path/to/model.ts
 git commit -S -m "feat(model): add the issue model"
@@ -328,8 +331,8 @@ gh pr edit <model-pr> --body-file "$MODEL_PR_BODY"
 bun run commit:provenance --github <model-pr>
 
 gh stack add agent/123-service
-# Run service TDD, then have both reviewers inspect the service diff in model
-# dependency context and the assembled model-plus-service diff.
+# Run service TDD, then have the tier's reviewers inspect the service diff
+# in model dependency context and the assembled model-plus-service diff.
 bun run commit:preflight
 git add path/to/service.test.ts path/to/service.ts
 git commit -S -m "feat(service): consume the issue model"
