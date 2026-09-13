@@ -215,6 +215,9 @@ export function RunRecordsView({
                               <span>Resolved at {approval.resolvedAt}</span>
                             ) : null}
                             {approval.note ? <span>{approval.note}</span> : null}
+                            {approval.decisionNote ? (
+                              <span>Decision note: {approval.decisionNote}</span>
+                            ) : null}
                           </div>
                         </div>
                       );
