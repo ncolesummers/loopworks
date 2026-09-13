@@ -19,6 +19,7 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env.DATABASE_URL ?? "",
       GITHUB_APP_ID: "800000",
+      LOOPWORKS_ALLOWED_GITHUB_USERS: "approval-browser-operator",
       LOOPWORKS_PORTAL_DATA_MODE: "",
     },
   },
