@@ -8,29 +8,39 @@ work is tracked by [issue #280](https://github.com/ncolesummers/loopworks/issues
 
 | Role | Model | Routing use |
 | --- | --- | --- |
-| `sol` | `gpt-5.6-sol` | Default substantive implementation |
+| `astra` | `gpt-6-astra` | Default substantive implementation |
+| `sol` | `gpt-5.6-sol` | Upper-mid implementation and spill beyond Terra |
 | `luna` | `gpt-5.6-luna` | Mechanical and volume work |
 | `terra` | `gpt-5.6-terra` | Mid-tier implementation and spill |
 | `opus` | `claude-opus-5` | Architecture, ambiguity, and cross-provider spill |
-| `reviewer_sol` | `gpt-5.6-sol` | Correctness and test-adequacy review |
+| `reviewer_astra` | `gpt-6-astra` | Correctness and test-adequacy review |
 | `reviewer_opus` | `claude-opus-5` | Architecture and blast-radius review |
 
-No worker pins `claude-fable-5`. The executing CEL probe demonstrates that a
-direct `sys_session_send` override to Fable is denied, an ordinary declared
-model override is allowed, and `sys_session_create` is denied. The unrestricted
-orchestrator shell remains outside those event branches, so this safeguard is
-not general process containment.
+The orchestrator pins no model. It declares the `claude-sdk` harness only, so
+Omnigent launches it with no model and the Claude Agent SDK's built-in default
+applies; `skills: none` also excludes the `user` setting source, so
+`~/.claude/settings.json` does not choose the brain. Omnigent 0.13's automatic
+brain fallback covers only its own bundled example agents, and
+`llm.fallback_models` is consumed only by the server-side policy LLM client,
+so a path-launched bundle gets no automatic cross-harness fallback. When the
+Claude side is unavailable the operator relaunches the bundle with
+`--harness codex --model gpt-6-astra`; see the setup guide. The executing CEL
+probe demonstrates that a `sys_session_send` override to a declared roster
+model is allowed, an override to an undeclared model is denied, and
+`sys_session_create` is denied. The unrestricted orchestrator shell remains
+outside those event branches, so this safeguard is not general process
+containment.
 
 ## Reviewer restrictions
 
 Both reviewer configs request the macOS `darwin_seatbelt` sandbox with no
 workspace write grants, configure `read_only_os`, deny named shell and edit
 tools, and gate pushes. `reviewer_opus` disables Claude's bypass mode with
-`permission_mode: plan`; `reviewer_sol` sets `yolo: false`.
+`permission_mode: plan`; `reviewer_astra` sets `yolo: false`.
 
 The policy hook for every codex-native worker can fail open when the Codex app
 server is too old or workspace trust is rejected. This affects the implementers
-`sol`, `luna`, and `terra`, plus `reviewer_sol`. Omnigent reports
+`astra`, `sol`, `luna`, and `terra`, plus `reviewer_astra`. Omnigent reports
 `policy_hook_disabled_reason`, but this bundle has no executable preflight that
 consumes it. In that state the named policy checks do not bind. A Linux reviewer
 also needs a separately verified `linux_bwrap` configuration; this bundle does

@@ -1,30 +1,28 @@
 spec_version: 1
-name: reviewer_sol
-description: Reviewer A for correctness, edge cases, test adequacy, and spec conformance.
-skills: none
+name: astra
+description: Default LoopWorks implementer for features, refactors, debugging, and tests.
+skills: [tdd-implement, browser-validate, commit-signed-pr]
 
 executor:
   type: omnigent
-  model: gpt-5.6-sol
+  model: gpt-6-astra
   config:
     harness: codex-native
-    yolo: false
+    yolo: true
 
 prompt: |
-  You are Reviewer A. Focus on correctness, edge cases, test adequacy, and
-  specification conformance. Review the supplied scope with read tools and
-  return findings only: severity and a concrete failing scenario or repro. As
-  guidance, do not use shell, edit, commit, push, merge, load orchestration
-  skills, or spawn subagents. Do not assume packet isolation; workflow design is
+  You are Astra, the default LoopWorks implementing worker. Use the selected
+  craft, preserve unrelated work, and return exact commands, statuses, changed
+  files, and requested artifacts. As guidance, do not spawn subagents, merge,
+  force-push, or push a protected branch. Named-tool policies provide partial
+  defense in depth, not shell containment. Managed workflow guarantees are
   deferred to https://github.com/ncolesummers/loopworks/issues/280.
 
 os_env:
   type: caller_process
   cwd: .
   sandbox:
-    type: darwin_seatbelt
-    write_paths: []
-    cwd_allow_hidden: [.venv, .polly]
+    type: none
 
 guardrails:
   policies:
@@ -33,20 +31,18 @@ guardrails:
       function:
         path: omnigent.policies.builtins.orchestration.blast_radius
         arguments:
-          gate_pushes: true
-    read_only_os:
-      type: function
-      function:
-        path: omnigent.policies.builtins.orchestration.read_only_os
-    deny_shell:
+          gate_pushes: false
+    deny_merge:
       type: function
       function:
         path: omnigent.policies.builtins.cel.cel_policy
         arguments:
           expression: >-
             event.type == "tool_call" &&
-            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal", "execute_code", "developer__shell"]
-            ? {"result": "DENY", "reason": "Reviewer shell access is disabled because shell can mutate the checkout."}
+            event.data.name in ["sys_os_shell", "Bash", "bash", "Shell", "terminal"] &&
+            "command" in event.data.arguments &&
+            event.data.arguments.command.matches("(?s).*\\bgh\\b.*(?:\\bpr\\b.*\\bmerge\\b|\\bapi\\b.*(?:/pulls/\\S+/merge\\b|/merges\\b|\\bgraphql\\b.*\\bmergePullRequest\\b)).*")
+            ? {"result": "DENY", "reason": "A common GitHub CLI merge form is blocked as a best-effort speed bump."}
             : {"result": "ALLOW"}
     block_orchestration_skills:
       type: function

@@ -14,17 +14,20 @@ containment, ledger, and dispatch guarantees were not implemented.
 
 ## Decision
 
-Add `.omnigent/polly-loopworks/` as a routing-only bundle with six role-named,
+Add `.omnigent/polly-loopworks/` as a routing-only bundle with seven role-named,
 model-pinned workers:
 
-- `sol`, `luna`, `terra`, and `opus` are implementation roles; and
-- `reviewer_sol` and `reviewer_opus` are review roles.
+- `astra`, `sol`, `luna`, `terra`, and `opus` are implementation roles; and
+- `reviewer_astra` and `reviewer_opus` are review roles.
 
 Do not register a Gemini worker. The available Antigravity native executor does
-not bind the worker prompt, policy hook, or read-only sandbox. No worker pins
-`claude-fable-5`; an executing CEL probe verifies that a direct Fable model
-override is denied, a declared-model send is allowed, and custom session
-creation is denied.
+not bind the worker prompt, policy hook, or read-only sandbox. The orchestrator
+pins no model: it declares only the `claude-sdk` harness, so the Claude Agent
+SDK's built-in default applies, and the operator relaunches it with
+`--harness codex --model gpt-6-astra` when the Claude side is unavailable. An
+executing CEL probe verifies that a send to a declared roster model is allowed,
+a send to an undeclared model is denied, and custom session creation is
+denied.
 
 Target the current bundle at the LoopWorks macOS host. Reviewer configs request
 `darwin_seatbelt` with no workspace write grants, disable harness bypass modes,
@@ -38,7 +41,7 @@ handler select its supported event shape.
 
 The policy hook for every codex-native worker can fail open when the Codex app
 server is too old or workspace trust is rejected. This affects the implementers
-`sol`, `luna`, and `terra`, plus `reviewer_sol`. Omnigent reports
+`astra`, `sol`, `luna`, and `terra`, plus `reviewer_astra`. Omnigent reports
 `policy_hook_disabled_reason` once, but this bundle has no executable preflight
 that consumes it. In that degraded state the named merge, agent, skill, write,
 and shell policies do not bind. Keep those roles for routing capacity while
@@ -112,8 +115,8 @@ enforced by this routing bundle.
 - Runtime policy tests run only when `OMNIGENT_SOURCE_ROOT` points to the pinned
   source revision; without it those tests are explicitly skipped.
 - The runtime probes execute merge denial through `Bash` and `sys_os_shell`,
-  Fable denial, public handler imports, and resolver-derived qualified skill
-  calls.
+  custom-session denial, public handler imports, and resolver-derived qualified
+  skill calls.
 - `bun run validate` remains the aggregate repository gate and runs serially.
 
 ## Follow-ups
@@ -126,3 +129,27 @@ enforced by this routing bundle.
   decisions through an enforceable hook and sandbox.
 - Replace the cwd convention when Omnigent provides a tested per-worker
   workspace boundary.
+
+## Amendment 2026-09-13 (#313)
+
+Direction unchanged; roster and safeguard details updated in place per
+[#313](https://github.com/ncolesummers/loopworks/issues/313):
+
+- `gpt-6-astra` joins the roster as `astra`, the default substantive
+  implementer, and as `reviewer_astra`, the OpenAI-side reviewer that replaces
+  `reviewer_sol`. `sol` moves to the seat between `terra` and `astra`. Opus
+  keeps one implementer seat and one reviewer seat.
+- The `deny_claude_fable_5` policy is removed. It matched the literal id
+  `claude-fable-5`, which is not the shipping model id, so it denied nothing;
+  the operator's Fable access is also ending, so the safeguard has no purpose.
+  Its `sys_session_create` branch survives as `deny_custom_sessions`, which
+  also denies any `sys_session_send` model override outside the declared
+  roster models so the roster stays model-pinned without naming any model to
+  avoid.
+- The orchestrator's model is recorded as unpinned, with the Codex relaunch
+  documented as the only fallback. Omnigent 0.13's automatic brain fallback is
+  limited to its bundled example agents, and `llm.fallback_models` feeds only
+  the policy LLM client, so a path-launched bundle has no automatic
+  cross-harness fallback.
+- The orchestrator prompt now restates the root `AGENTS.md` rule that exactly
+  one adversarial review round is allowed per issue implementation.
