@@ -140,6 +140,7 @@ describe("agent context budget", () => {
       "test-only refactors that change no assertion",
     ]) {
       expect(oneReviewerTier).toContain(item);
+      expect(twoReviewerTier).not.toContain(item);
     }
     // Wording that moves a rule is not a one-reviewer wording fix.
     expect(oneReviewerTier).toContain("Wording that changes a rule, threshold, or gate");
@@ -173,7 +174,13 @@ describe("agent context budget", () => {
       const normalized = skill.replaceAll(/\s+/g, " ");
       expect(normalized).toContain("Size the reviewer count by blast radius");
       expect(normalized).toContain(
-        "two independent reviewers for `src/`, `.github/workflows/`, `scripts/`, `.omnigent/`, auth or session code, schema or migrations, and anything that changes what a security gate or CI check accepts",
+        "one reviewer for lockfile-only bumps, documentation that changes no procedure or control, wording or line-citation fixes, prompt wording, and test-only refactors that change no assertion",
+      );
+      expect(normalized).toContain(
+        "two independent reviewers for `src/`, `.github/workflows/`, `scripts/`, `.omnigent/`, auth or session code, schema or migrations, and anything that changes what a security gate or CI check accepts or whether it runs",
+      );
+      expect(normalized).toContain(
+        "Wording that moves a rule, threshold, or gate is not a wording fix.",
       );
       expect(normalized).toContain("Mixed tiers take the higher tier; when unsure, use two.");
     }
@@ -183,8 +190,6 @@ describe("agent context budget", () => {
     const normalizedDevelopment = developmentGuide.replaceAll(/\s+/g, " ");
     expect(normalizedDevelopment).not.toContain("both reviewers");
     expect(normalizedDevelopment).not.toMatch(/dual.review/i);
-    expect(normalizedDevelopment).toContain("blast-radius tiers set each layer's reviewer count");
-    expect(normalizedDevelopment).toContain("read its tier lists");
     expect(normalizedDevelopment).not.toContain("always takes two");
   });
 
