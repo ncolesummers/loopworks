@@ -74,7 +74,6 @@ export async function applyApprovalTransition(
       note: input.note,
       occurredAt,
     });
-    const note = transition.note ?? input.note?.trim();
 
     const [approval] = await tx
       .update(approvals)
@@ -82,7 +81,6 @@ export async function applyApprovalTransition(
         status: transition.to,
         resolvedBy: transition.actorId,
         resolvedAt: new Date(transition.occurredAt),
-        ...(note ? { note } : {}),
       })
       .where(
         and(

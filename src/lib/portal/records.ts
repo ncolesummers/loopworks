@@ -1,8 +1,9 @@
-import { asc, desc, eq } from "drizzle-orm";
-
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { db } from "@/db/client";
 import {
+  agentPlans,
   approvals,
+  approvalTransitionEvents,
   deployments as deploymentRows,
   githubInstallations,
   loopDefinitions,
@@ -15,6 +16,7 @@ import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { portalFixture } from "@/lib/fixtures";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { projectApprovalPlan } from "@/lib/portal/approval-plan";
 import { findUnverifiedStoreIdentity } from "@/lib/portal/store-identity";
 import { type RunRecordDatabase, readRunRecords } from "@/lib/runs/run-record";
 import { isProductionRuntime } from "@/lib/runtime";
@@ -40,6 +42,7 @@ export type PortalRecordsDatabase = Pick<typeof db, "select">;
 
 export type PortalRecords = {
   approval: ApprovalGateRecord | null;
+  approvals: ApprovalGateRecord[];
   artifacts: ArtifactRecord[];
   deployments: DeploymentRecord[];
   githubInstallations: GitHubInstallationRecord[];
@@ -288,40 +291,60 @@ function approvalPriority(status: ApprovalStatus): number {
   return priorities[status];
 }
 
-function mapApproval(approvalRows: ApprovalRow[]): ApprovalGateRecord | null {
-  const approval = [...approvalRows].sort((left, right) => {
-    const priorityDiff = approvalPriority(left.status) - approvalPriority(right.status);
-    if (priorityDiff !== 0) {
-      return priorityDiff;
-    }
+// A bounded window shared by the portal. The runs surface retains full history.
+export const portalApprovalLimit = 100;
+export const portalApprovalRunLimit = 50;
 
-    return right.requestedAt.getTime() - left.requestedAt.getTime();
-  })[0];
-
-  if (!approval) {
-    return null;
-  }
-
-  return {
-    checklist: [
-      { done: true, label: `Scope ${approval.scope}` },
-      { done: true, label: `Requested by ${approval.requestedBy}` },
-      {
-        done: Boolean(approval.loopId),
-        label: approval.loopId ? "Loop context attached" : "No loop context attached",
-      },
-      {
-        done: Boolean(approval.resolvedAt),
-        label: approval.resolvedAt ? "Resolution recorded" : "Awaiting resolution",
-      },
-    ],
-    due: approval.resolvedAt
-      ? `Resolved ${formatClock(approval.resolvedAt)}`
-      : `Requested ${formatClock(approval.requestedAt)}`,
-    owner: approval.requestedBy,
-    risk: approval.note ?? `Approval scope ${approval.scope}.`,
-    state: approval.status,
-  };
+function mapApprovals(
+  approvalRows: (ApprovalRow & {
+    planContent?: Record<string, unknown> | null;
+    decisionNote?: string | null;
+  })[],
+): ApprovalGateRecord[] {
+  return (
+    [...approvalRows]
+      // Status-independent ordering keeps a decision from moving its focused card.
+      .sort(
+        (left, right) =>
+          left.requestedAt.getTime() - right.requestedAt.getTime() ||
+          left.id.localeCompare(right.id),
+      )
+      .map((approval) => ({
+        id: approval.id,
+        decisionNote: approval.decisionNote ?? undefined,
+        ...(approval.scope === "plan-review"
+          ? {
+              plan: projectApprovalPlan({
+                content: approval.planContent,
+                planId: approval.metadata?.planId,
+                planSha256: approval.metadata?.planSha256,
+                runId: approval.runId,
+              }),
+            }
+          : {}),
+        runId: approval.runId ?? undefined,
+        scope: approval.scope,
+        resolvedBy: approval.resolvedBy ?? undefined,
+        checklist: [
+          { done: true, label: `Scope ${approval.scope}` },
+          { done: true, label: `Requested by ${approval.requestedBy}` },
+          {
+            done: Boolean(approval.loopId),
+            label: approval.loopId ? "Loop context attached" : "No loop context attached",
+          },
+          {
+            done: Boolean(approval.resolvedAt),
+            label: approval.resolvedAt ? "Resolution recorded" : "Awaiting resolution",
+          },
+        ],
+        due: approval.resolvedAt
+          ? `Resolved ${formatClock(approval.resolvedAt)}`
+          : `Requested ${formatClock(approval.requestedAt)}`,
+        owner: approval.requestedBy,
+        risk: approval.note ?? `Approval scope ${approval.scope}.`,
+        state: approval.status,
+      }))
+  );
 }
 
 function setting(
@@ -420,6 +443,7 @@ function mapSettings(input: {
 function fixturePortalRecords(): PortalRecords {
   return {
     approval: portalFixture.approval,
+    approvals: [portalFixture.approval],
     artifacts: portalFixture.artifacts,
     deployments: portalFixture.deployments,
     githubInstallations: portalFixture.githubInstallations,
@@ -437,6 +461,7 @@ function unavailablePortalRecords(): PortalRecords {
   // shared module-level `emptyPortalRecords` would leak mutations across reads.
   return {
     approval: null,
+    approvals: [],
     artifacts: [],
     deployments: [],
     githubInstallations: [],
@@ -505,7 +530,6 @@ export async function readPortalRecords(input: {
     loopDefinitionRows,
     vercelProjectRows,
     deploymentRowsResult,
-    approvalRows,
     runResult,
   ] = await Promise.all([
     input.database.select().from(repositories).orderBy(asc(repositories.name)),
@@ -526,12 +550,43 @@ export async function readPortalRecords(input: {
       .orderBy(asc(repositories.fullName), asc(loopDefinitions.loopKey)),
     input.database.select().from(vercelProjects).orderBy(asc(vercelProjects.projectName)),
     input.database.select().from(deploymentRows).orderBy(desc(deploymentRows.createdAt)),
-    input.database.select().from(approvals).orderBy(asc(approvals.requestedAt)),
     readRunRecords({
       database: input.database as RunRecordDatabase,
+      limit: portalApprovalRunLimit,
+      approvalLimit: portalApprovalLimit,
       now,
     }),
   ]);
+  const visibleRunIds = runResult.runs.map((run) => run.id);
+  // Orphan gates have no visible run/evidence to review and are excluded.
+  const joinedApprovals = visibleRunIds.length
+    ? await input.database
+        .select({
+          approval: approvals,
+          planContent: agentPlans.plan,
+          decisionNote: sql<string | null>`(
+      select ${approvalTransitionEvents.note} from ${approvalTransitionEvents}
+      where ${approvalTransitionEvents.approvalId} = ${approvals.id} and ${approvalTransitionEvents.note} is not null
+      order by ${approvalTransitionEvents.occurredAt} desc, ${approvalTransitionEvents.id} desc limit 1
+    )`.as("decision_note"),
+        })
+        .from(approvals)
+        .leftJoin(
+          agentPlans,
+          and(
+            eq(agentPlans.runId, approvals.runId),
+            sql`${agentPlans.id}::text = ${approvals.metadata}->>'planId'`,
+          ),
+        )
+        .where(inArray(approvals.runId, visibleRunIds))
+        .orderBy(desc(approvals.requestedAt), asc(approvals.id))
+        .limit(portalApprovalLimit)
+    : [];
+  const approvalRows = joinedApprovals.map(({ approval, planContent, decisionNote }) => ({
+    ...approval,
+    planContent,
+    decisionNote,
+  }));
   const activeGithubInstallationRows = githubInstallationRows.filter(
     (installation) => installation.appId === input.githubAppId,
   );
@@ -549,10 +604,23 @@ export async function readPortalRecords(input: {
   const selectedRun = preferredRun(runResult.runs);
 
   const artifacts = selectedRun?.artifacts ?? [];
+  const runsById = new Map(runResult.runs.map((run) => [run.id, run]));
+  const approvalGates = mapApprovals(approvalRows).map((gate) => ({
+    ...gate,
+    artifacts: gate.runId ? (runsById.get(gate.runId)?.artifacts ?? []) : [],
+  }));
+
+  const preferredApprovalId = [...approvalRows].sort(
+    (a, b) =>
+      approvalPriority(a.status) - approvalPriority(b.status) ||
+      b.requestedAt.getTime() - a.requestedAt.getTime() ||
+      a.id.localeCompare(b.id),
+  )[0]?.id;
 
   return {
     records: {
-      approval: mapApproval(approvalRows),
+      approval: approvalGates.find((gate) => gate.id === preferredApprovalId) ?? null,
+      approvals: approvalGates,
       artifacts,
       deployments: deploymentRowsResult.map((deployment) => mapDeploymentRow(deployment, now)),
       githubInstallations: activeGithubInstallationRows.map((installation) => ({
@@ -650,7 +718,7 @@ export async function getPortalRecordsForPortal(input: {
       if (unmetRequirements.length > 0) {
         input.logger?.warn(
           {
-            approvalCount: result.records.approval ? 1 : 0,
+            approvalCount: result.records.approvals.length,
             deploymentCount: result.records.deployments.length,
             loopCount: result.records.loops.length,
             repositoryCount: result.records.repos.length,

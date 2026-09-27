@@ -87,78 +87,109 @@ describe("approval transition API", () => {
     });
   }
 
-  it("attributes and persists approval transitions to the authenticated GitHub login", async () => {
-    const { approvalId } = await insertRequestedApproval();
-    const approvalWaitTimeMetrics: {
-      decision: string;
-      durationSeconds: number;
-      gate: string;
-    }[] = [];
-    vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
-    authMock.mockResolvedValue({
-      expires: "2026-06-27T00:00:00.000Z",
-      user: {
-        name: "Nathan Summers",
-        email: "nathan@example.com",
-        githubLogin: "ncolesummers",
-      },
-    });
+  it.each(["approve", "reject"] as const)(
+    "attributes and persists %s to the authenticated GitHub login",
+    async (action) => {
+      const { approvalId } = await insertRequestedApproval();
+      const approvalWaitTimeMetrics: {
+        decision: string;
+        durationSeconds: number;
+        gate: string;
+      }[] = [];
+      vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
+      authMock.mockResolvedValue({
+        expires: "2026-06-27T00:00:00.000Z",
+        user: {
+          name: "Nathan Summers",
+          email: "nathan@example.com",
+          githubLogin: "ncolesummers",
+        },
+      });
 
+      const response = await handleApprovalTransitionPost(
+        transitionRequest({
+          approvalId,
+          expectedStatus: "requested",
+          action,
+          note: "Evidence checked.",
+        }),
+        {
+          database: context.db as unknown as ApprovalTransitionDatabase,
+          now: () => new Date("2026-07-02T16:05:00.000Z"),
+          recordApprovalWaitTimeMetric(input) {
+            approvalWaitTimeMetrics.push(input);
+          },
+        },
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        transition: {
+          from: "requested",
+          to: action === "approve" ? "approved" : "rejected",
+          action,
+          actorId: "ncolesummers",
+          occurredAt: "2026-07-02T16:05:00.000Z",
+          note: "Evidence checked.",
+        },
+      });
+
+      const approvalRows = await context.db.select().from(approvals);
+      expect(approvalRows[0]).toMatchObject({
+        status: action === "approve" ? "approved" : "rejected",
+        resolvedBy: "ncolesummers",
+        note: "Approval required before write path advances.",
+      });
+      expect(approvalRows[0].resolvedAt).toEqual(new Date("2026-07-02T16:05:00.000Z"));
+
+      const eventRows = await context.db.select().from(approvalTransitionEvents);
+      expect(eventRows).toHaveLength(1);
+      expect(eventRows[0]).toMatchObject({
+        action,
+        actorId: "ncolesummers",
+        fromStatus: "requested",
+        toStatus: action === "approve" ? "approved" : "rejected",
+      });
+      expect(eventRows[0].metadata).toMatchObject({
+        expectedStatus: "requested",
+        authMode: "github",
+      });
+      expect(approvalWaitTimeMetrics).toEqual([
+        {
+          decision: action === "approve" ? "approved" : "rejected",
+          durationSeconds: 300,
+          gate: "pr-write",
+        },
+      ]);
+    },
+  );
+
+  it.each([401, 403, 404])("rejects %s without persisting a decision", async (status) => {
+    const { approvalId } = await insertRequestedApproval();
+    vi.stubEnv("LOOPWORKS_AUTH_BYPASS", "false");
+    vi.stubEnv("LOOPWORKS_ALLOWED_GITHUB_USERS", "ncolesummers");
+    authMock.mockResolvedValue(
+      status === 401
+        ? null
+        : {
+            expires: "2026-09-14T00:00:00.000Z",
+            user: { githubLogin: status === 403 ? "unauthorized-operator" : "ncolesummers" },
+          },
+    );
     const response = await handleApprovalTransitionPost(
       transitionRequest({
-        approvalId,
+        approvalId: status === 404 ? "12000000-0000-4000-8000-000000000099" : approvalId,
         expectedStatus: "requested",
         action: "approve",
-        note: "Evidence checked.",
       }),
-      {
-        database: context.db as unknown as ApprovalTransitionDatabase,
-        now: () => new Date("2026-07-02T16:05:00.000Z"),
-        recordApprovalWaitTimeMetric(input) {
-          approvalWaitTimeMetrics.push(input);
-        },
-      },
+      { database: context.db as unknown as ApprovalTransitionDatabase },
     );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      transition: {
-        from: "requested",
-        to: "approved",
-        action: "approve",
-        actorId: "ncolesummers",
-        occurredAt: "2026-07-02T16:05:00.000Z",
-        note: "Evidence checked.",
-      },
+    expect(response.status).toBe(status);
+    expect((await context.db.select().from(approvals))[0]).toMatchObject({
+      status: "requested",
+      resolvedBy: null,
     });
-
-    const approvalRows = await context.db.select().from(approvals);
-    expect(approvalRows[0]).toMatchObject({
-      status: "approved",
-      resolvedBy: "ncolesummers",
-      note: "Evidence checked.",
-    });
-    expect(approvalRows[0].resolvedAt).toEqual(new Date("2026-07-02T16:05:00.000Z"));
-
-    const eventRows = await context.db.select().from(approvalTransitionEvents);
-    expect(eventRows).toHaveLength(1);
-    expect(eventRows[0]).toMatchObject({
-      action: "approve",
-      actorId: "ncolesummers",
-      fromStatus: "requested",
-      toStatus: "approved",
-    });
-    expect(eventRows[0].metadata).toMatchObject({
-      expectedStatus: "requested",
-      authMode: "github",
-    });
-    expect(approvalWaitTimeMetrics).toEqual([
-      {
-        decision: "approved",
-        durationSeconds: 300,
-        gate: "pr-write",
-      },
-    ]);
+    expect(await context.db.select().from(approvalTransitionEvents)).toHaveLength(0);
   });
 
   it("refuses to cancel an approved gate while its external write claim is active", async () => {

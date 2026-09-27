@@ -1,3 +1,4 @@
+import type { PlanningAgentOutput } from "@agent/planning-agent";
 import type { ApprovalStatus } from "@/lib/approvals";
 
 export type RepoHealth = "healthy" | "watch" | "blocked" | "disconnected";
@@ -190,7 +191,32 @@ export interface ApprovalChecklistItem {
   done: boolean;
 }
 
+export interface ApprovalPlanRecord {
+  id?: string;
+  sha256?: string;
+  content?: string;
+  review?: PlanningAgentOutput;
+  reviewability:
+    | "ready"
+    | "missing"
+    | "malformed"
+    | "unsupported"
+    | "unbound"
+    | "mismatch"
+    | "unpinned";
+  reason?: string;
+  canReject: boolean;
+}
+
 export interface ApprovalGateRecord {
+  decisionNote?: string;
+  plan?: ApprovalPlanRecord;
+  /** Absent for legacy presentation-only fixtures. */
+  id?: string;
+  runId?: string;
+  scope?: string;
+  resolvedBy?: string;
+  artifacts?: ArtifactRecord[];
   state: ApprovalState;
   owner: string;
   due: string;
@@ -210,6 +236,7 @@ export type RunStatus =
 export type RunStepStatus = "queued" | "running" | "skipped" | "failed" | "succeeded";
 
 export interface RunApprovalRecord {
+  decisionNote?: string;
   id: string;
   note?: string;
   requestedAt: string;

@@ -24,6 +24,15 @@ next status, action, actor id, timestamp, note, and metadata such as auth mode.
 `bypass` transition from `requested`, and it must include authenticated actor
 attribution.
 
+### Note ownership (issue #275)
+
+`approvals.note` retains the requester's context. Transitions do not overwrite it.
+Reviewer notes belong to `approval_transition_events.note`; approvals and run
+surfaces project the latest non-null audit note separately as **Decision note**.
+This uses the existing transaction and route, with no second write path. Older
+rows whose request context was already overwritten cannot be reconstructed by
+this change.
+
 ## Consequences
 
 The portal can render a concise current approval state while preserving durable

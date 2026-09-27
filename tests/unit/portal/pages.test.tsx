@@ -30,6 +30,18 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
         risk: "Requesting review before the preview promotes.",
         state: "requested",
       },
+      approvals: [
+        {
+          checklist: [
+            { done: false, label: "Scope deploy-preview" },
+            { done: false, label: "Requested by morgan-dev" },
+          ],
+          due: "Requested 08:56",
+          owner: "morgan-dev",
+          risk: "Requesting review before the preview promotes.",
+          state: "requested",
+        },
+      ],
       artifacts: [],
       deployments: [],
       githubInstallations: [
@@ -136,7 +148,7 @@ describe("database-backed portal pages fail closed without fixture gates", () =>
 
     render(await ApprovalsPageContent(input));
     expect(screen.queryByText(/unavailable in production/i)).toBeNull();
-    expect(screen.getByText("Owner morgan-dev")).toBeTruthy();
+    expect(screen.getByText("Requested by morgan-dev")).toBeTruthy();
     expect(screen.getByText("Scope deploy-preview")).toBeTruthy();
     expect(screen.queryByText(/fixture/i)).toBeNull();
     cleanup();

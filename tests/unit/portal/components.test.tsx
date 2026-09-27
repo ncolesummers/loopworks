@@ -703,7 +703,9 @@ describe("portal reusable components", () => {
       />,
     );
 
-    expect(screen.getByText("Verified against the current portal state.")).toBeTruthy();
+    expect(screen.getByText("Scope deploy-preview")).toBeTruthy();
+    expect(screen.getByText("Awaiting resolution")).toBeTruthy();
+    expect(screen.queryByText("Verified against the current portal state.")).toBeNull();
     expect(screen.queryByText(/fixture/i)).toBeNull();
 
     cleanup();

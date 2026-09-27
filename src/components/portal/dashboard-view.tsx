@@ -35,6 +35,7 @@ import type { ArtifactRecord, LoopRegistryItem, TimelineEvent } from "@/lib/type
 
 const emptyDashboardRecords: PortalRecords = {
   approval: null,
+  approvals: [],
   artifacts: [],
   deployments: [],
   githubInstallations: [],
@@ -322,6 +323,7 @@ export function DashboardView({
         <div id="approval" className="min-w-0">
           <ApprovalGatePanel
             approval={records.approval}
+            showEvidence={false}
             firstRun={firstRun}
             sourceLabel={sourceLabel}
           />

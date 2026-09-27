@@ -14,6 +14,7 @@ import type { PortalRecords, PortalRecordsResult } from "@/lib/portal/records";
 function records(overrides: Partial<PortalRecords> = {}): PortalRecords {
   return {
     approval: null,
+    approvals: [],
     artifacts: [],
     deployments: [],
     githubInstallations: [],

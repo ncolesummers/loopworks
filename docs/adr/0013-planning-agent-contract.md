@@ -62,6 +62,22 @@ explicit environment configuration.
 Fixture mode is explicit and local-only. It requires
 `LOOPWORKS_EVE_FIXTURE_MODE=true` and fails closed in production-like runtimes.
 
+### Approval review presentation (issue #275, 2026-09-26)
+
+The approvals surface projects the persisted planning schema into a readable
+review and retains the complete original artifact and bound identity as
+secondary evidence. The same review remains accessible inside the decision
+dialog. Planned validation commands and expected evidence are requirements, not
+claims that checks have run; scope, attached context, and resolution are metadata.
+
+Confirmation is disabled in this UI when the bound plan is missing, malformed,
+incompatible with the supported contract, unpinned, or identity/digest-mismatched.
+Rejection remains available when the existing route's required plan ID and run
+association are present. This is a presentation safeguard, not new API
+validation: the existing transition route and downstream exact-plan enforcement
+remain authoritative and unchanged. Approval records authorization to proceed to
+test writing; it does not authorize every later write or establish test success.
+
 ## Consequences
 
 Planning uses supplied issue context, adaptive run-bound GitHub backlog reads,

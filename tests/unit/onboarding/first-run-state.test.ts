@@ -24,6 +24,7 @@ type PortalResultInput = {
 function portalRecordsResult(input: PortalResultInput = {}): PortalRecordsResult {
   const records: PortalRecords = {
     approval: portalFixture.approval,
+    approvals: [portalFixture.approval],
     artifacts: portalFixture.artifacts,
     deployments: portalFixture.deployments,
     githubInstallations: input.githubInstallations ?? [

@@ -1,7 +1,14 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 
 import type { db } from "@/db/client";
-import { approvals, artifacts, loopRuns, repositories, runSteps } from "@/db/schema";
+import {
+  approvals,
+  approvalTransitionEvents,
+  artifacts,
+  loopRuns,
+  repositories,
+  runSteps,
+} from "@/db/schema";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { validationReportArtifactMetadataSchema } from "@/lib/loops/validation-report";
 import type { LoopworksLogger } from "@/lib/observability/logger";
@@ -313,6 +320,8 @@ function groupBy<T, K extends string>(items: T[], getKey: (item: T) => K): Map<K
 export async function readRunRecords(input: {
   database: RunRecordDatabase;
   now?: Date;
+  limit?: number;
+  approvalLimit?: number;
 }): Promise<RunRecordsResult> {
   const now = input.now ?? new Date();
   const runRows = await input.database
@@ -330,7 +339,9 @@ export async function readRunRecords(input: {
       status: loopRuns.status,
     })
     .from(loopRuns)
-    .innerJoin(repositories, eq(loopRuns.repositoryId, repositories.id));
+    .innerJoin(repositories, eq(loopRuns.repositoryId, repositories.id))
+    .orderBy(desc(loopRuns.queuedAt), asc(loopRuns.id))
+    .limit(input.limit ?? 2147483647);
   const runIds = runRows.map((run) => run.id);
 
   const [stepRows, artifactRows, approvalRows] =
@@ -347,17 +358,32 @@ export async function readRunRecords(input: {
             .where(inArray(artifacts.runId, runIds))
             .orderBy(asc(artifacts.createdAt)),
           input.database
-            .select()
+            .select({
+              ...getTableColumns(approvals),
+              // Keep the correlated outer id qualified in this single-table SELECT.
+              decisionNote: sql<string | null>`(
+              select ${approvalTransitionEvents.note} from ${approvalTransitionEvents}
+              where ${approvalTransitionEvents.approvalId} = ${sql.identifier("approvals")}.${sql.identifier("id")}
+                and ${approvalTransitionEvents.note} is not null
+              order by ${approvalTransitionEvents.occurredAt} desc, ${approvalTransitionEvents.id} desc limit 1
+            )`.as("decision_note"),
+            })
             .from(approvals)
             .where(inArray(approvals.runId, runIds))
-            .orderBy(asc(approvals.requestedAt)),
+            .orderBy(desc(approvals.requestedAt), asc(approvals.id))
+            .limit(input.approvalLimit ?? 2147483647),
         ])
       : [[], [], []];
 
   const stepsByRun = groupBy(stepRows, (step) => step.runId);
   const artifactsByRun = groupBy(artifactRows, (artifact) => artifact.runId);
   const approvalsByRun = groupBy(
-    approvalRows.filter((approval) => approval.runId),
+    // Select the latest bounded window, then retain chronological run history.
+    approvalRows
+      .filter((approval) => approval.runId)
+      .sort(
+        (a, b) => a.requestedAt.getTime() - b.requestedAt.getTime() || a.id.localeCompare(b.id),
+      ),
     (approval) => approval.runId ?? "",
   );
   const stepStatusById = new Map(stepRows.map((step) => [step.id, step.status]));
@@ -385,6 +411,7 @@ export async function readRunRecords(input: {
         (approval) => ({
           id: approval.id,
           ...(approval.note ? { note: approval.note } : {}),
+          ...(approval.decisionNote ? { decisionNote: approval.decisionNote } : {}),
           requestedAt: formatClock(approval.requestedAt),
           requestedBy: approval.requestedBy,
           ...(approval.resolvedAt ? { resolvedAt: formatClock(approval.resolvedAt) } : {}),
