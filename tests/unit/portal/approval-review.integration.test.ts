@@ -1,9 +1,11 @@
 /** @vitest-environment node */
+
 import { agentPlans, approvals, artifacts, loopRuns, repositories } from "@/db/schema";
 import { applyApprovalTransition } from "@/lib/approval-transitions";
 import type { ApprovalTransitionDatabase } from "@/lib/approvals";
 import { readPortalRecords } from "@/lib/portal/records";
 import { readRunRecords } from "@/lib/runs/run-record";
+import { approvalPlanFixture } from "../../fixtures/approval-plan";
 import {
   createPgliteTestDatabase,
   type PgliteTestDatabase,
@@ -62,7 +64,9 @@ it("F1 carries linked plan content, id and digest through the portal read", asyn
     metadata: { planId, planSha256: sha256 },
   });
   const { records } = await readPortalRecords({ database: context.db });
-  expect(records.approvals.find((gate) => gate.scope === "plan-review")?.plan).toEqual({
+  expect(records.approvals.find((gate) => gate.scope === "plan-review")?.plan).toMatchObject({
+    reviewability: "malformed",
+    canReject: true,
     id: planId,
     sha256,
     content: JSON.stringify(
@@ -174,4 +178,59 @@ it("F7 enforces the explicit 100 gate upper bound", async () => {
     })),
   );
   expect((await readPortalRecords({ database: context.db })).records.approvals).toHaveLength(100);
+});
+
+it("projects a schema-valid bound plan with a distinct internal artifact identity", async () => {
+  await context.db
+    .insert(agentPlans)
+    .values({ id: planId, runId, input: {}, plan: approvalPlanFixture });
+  await context.db.insert(approvals).values({
+    runId,
+    scope: "plan-review",
+    requestedBy: "planner",
+    metadata: { planId, planSha256: approvalPlanFixture.identity.sha256 },
+  });
+  const { records } = await readPortalRecords({ database: context.db });
+  expect(records.approvals.find((gate) => gate.scope === "plan-review")?.plan).toMatchObject({
+    id: planId,
+    reviewability: "ready",
+    review: approvalPlanFixture,
+  });
+});
+
+it("does not join plan content from another run even when metadata names that plan", async () => {
+  const [repo] = await context.db.select().from(repositories);
+  const [otherRun] = await context.db
+    .insert(loopRuns)
+    .values({ repositoryId: repo.id, loopKey: "development-loop" })
+    .returning();
+  await context.db
+    .insert(agentPlans)
+    .values({ id: planId, runId: otherRun.id, input: {}, plan: approvalPlanFixture });
+  await context.db.insert(approvals).values({
+    runId,
+    scope: "plan-review",
+    requestedBy: "planner",
+    metadata: { planId, planSha256: approvalPlanFixture.identity.sha256 },
+  });
+  const { records } = await readPortalRecords({ database: context.db });
+  const plan = records.approvals.find((gate) => gate.scope === "plan-review")?.plan;
+  expect(plan).toMatchObject({ id: planId, reviewability: "missing" });
+  expect(plan?.review).toBeUndefined();
+  expect(plan?.content).toBeUndefined();
+});
+
+it("blocks decisions when persisted metadata contains a malformed plan row id", async () => {
+  await context.db.insert(approvals).values({
+    runId,
+    scope: "plan-review",
+    requestedBy: "planner",
+    metadata: { planId: "not-a-uuid", planSha256: approvalPlanFixture.identity.sha256 },
+  });
+  const { records } = await readPortalRecords({ database: context.db });
+  expect(records.approvals.find((gate) => gate.scope === "plan-review")?.plan).toMatchObject({
+    id: "not-a-uuid",
+    reviewability: "unbound",
+    canReject: false,
+  });
 });

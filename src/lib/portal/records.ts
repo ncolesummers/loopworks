@@ -1,5 +1,4 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-
 import type { db } from "@/db/client";
 import {
   agentPlans,
@@ -17,6 +16,7 @@ import { createRepoRecordFromProjection } from "@/lib/catalog/repo-record";
 import { readSuppliedRawConfig } from "@/lib/config/registry";
 import { portalFixture } from "@/lib/fixtures";
 import type { LoopworksLogger } from "@/lib/observability/logger";
+import { projectApprovalPlan } from "@/lib/portal/approval-plan";
 import { findUnverifiedStoreIdentity } from "@/lib/portal/store-identity";
 import { type RunRecordDatabase, readRunRecords } from "@/lib/runs/run-record";
 import { isProductionRuntime } from "@/lib/runtime";
@@ -312,17 +312,14 @@ function mapApprovals(
       .map((approval) => ({
         id: approval.id,
         decisionNote: approval.decisionNote ?? undefined,
-        ...(approval.scope === "plan-review" &&
-        typeof approval.metadata?.planId === "string" &&
-        typeof approval.metadata?.planSha256 === "string"
+        ...(approval.scope === "plan-review"
           ? {
-              plan: {
-                id: approval.metadata.planId,
-                sha256: approval.metadata.planSha256,
-                ...(approval.planContent
-                  ? { content: JSON.stringify(approval.planContent, null, 2) }
-                  : {}),
-              },
+              plan: projectApprovalPlan({
+                content: approval.planContent,
+                planId: approval.metadata?.planId,
+                planSha256: approval.metadata?.planSha256,
+                runId: approval.runId,
+              }),
             }
           : {}),
         runId: approval.runId ?? undefined,

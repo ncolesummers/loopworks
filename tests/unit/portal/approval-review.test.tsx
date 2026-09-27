@@ -5,9 +5,11 @@ import { DashboardView } from "@/components/portal/dashboard-view";
 import { portalFixture } from "@/lib/fixtures";
 import type { ApprovalGateRecord } from "@/lib/types";
 
+import { approvalPlanFixture } from "../../fixtures/approval-plan";
+
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-const gate: ApprovalGateRecord = {
+const gate = {
   ...portalFixture.approval,
   id: "27500000-0000-4000-8000-000000000002",
   runId: "27500000-0000-4000-8000-000000000001",
@@ -18,9 +20,15 @@ const gate: ApprovalGateRecord = {
   plan: {
     id: "27500000-0000-4000-8000-000000000003",
     sha256: "a".repeat(64),
-    content: '<script>alert("plan")</script>',
+    content: JSON.stringify({
+      ...approvalPlanFixture,
+      untrusted: '<script>alert("plan")</script>',
+    }),
+    review: approvalPlanFixture,
+    reviewability: "ready",
+    canReject: true,
   },
-};
+} satisfies ApprovalGateRecord;
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -52,7 +60,7 @@ function success() {
 }
 it("F1 shows the plan as plain text and names the card and dialog decision", () => {
   const { container } = render(<ApprovalGatePanel approval={gate} enableActions />);
-  expect(screen.getByText('<script>alert("plan")</script>')).toBeTruthy();
+  expect(screen.getByText(/<script>alert/)).toBeTruthy();
   expect(container.querySelector("script")).toBeNull();
   expect(screen.getByText("Plan 27500000-0000-4000-8000-000000000003")).toBeTruthy();
   expect(screen.getByText(`SHA256 ${"a".repeat(64)}`)).toBeTruthy();
@@ -141,3 +149,130 @@ it("F9 reports a saved decision whose refreshed state never arrives", async () =
   expect(screen.getByRole("alert").textContent).toMatch(/Decision saved.*Reload/);
   expect(screen.getByRole("link", { name: "Reload approvals" })).toBeTruthy();
 });
+
+it("presents structured review sections in the active decision context", () => {
+  render(
+    <ApprovalGatePanel
+      approval={{ ...gate, plan: { ...gate.plan, reviewability: "malformed", review: undefined } }}
+      enableActions
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Review approval/ }));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.getByRole("heading", { name: "What approval permits" })).toBeTruthy();
+  expect(dialog.getByText(/Plan content cannot be reviewed/)).toBeTruthy();
+  expect(
+    (dialog.getByRole("button", { name: /Confirm approval/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+});
+it("never labels attached metadata as substantive verification", () => {
+  render(
+    <ApprovalGatePanel
+      approval={{ ...gate, checklist: [{ label: "Loop context attached", done: true }] }}
+    />,
+  );
+  expect(screen.queryByText("Verified against the current portal state.")).toBeNull();
+});
+
+it("renders the realistic structured plan and keeps its evidence inside confirmation", () => {
+  render(
+    <ApprovalGatePanel approval={{ ...gate, artifacts: portalFixture.artifacts }} enableActions />,
+  );
+  for (const name of [
+    "Summary",
+    "Proposed steps",
+    "Planned validation",
+    "Risks and mitigations",
+    "What approval permits",
+  ]) {
+    expect(screen.getByRole("heading", { name })).toBeTruthy();
+  }
+  expect(screen.getByText(approvalPlanFixture.steps[0].outcome)).toBeTruthy();
+  expect(screen.getByText(approvalPlanFixture.risks[0].mitigation)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Review approval/ }));
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.getByRole("heading", { name: "Proposed steps" })).toBeTruthy();
+  expect(dialog.getByText(approvalPlanFixture.summary)).toBeTruthy();
+  expect(dialog.getByText(approvalPlanFixture.validationGates[0].evidence)).toBeTruthy();
+  expect(dialog.getByRole("link", { name: portalFixture.artifacts[0].label })).toBeTruthy();
+});
+it.each(["missing", "malformed", "unsupported", "unbound", "mismatch", "unpinned"] as const)(
+  "blocks confirmation for %s while retaining rejection",
+  (reviewability) => {
+    render(
+      <ApprovalGatePanel
+        approval={{ ...gate, plan: { ...gate.plan, reviewability, review: undefined } }}
+        enableActions
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Review approval/ }));
+    expect(
+      (screen.getByRole("button", { name: /Confirm approval/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: /Reject approval/ }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  },
+);
+it("keeps unbound rejection unavailable when the existing route lacks plan identity", () => {
+  render(
+    <ApprovalGatePanel
+      approval={{
+        ...gate,
+        plan: { ...gate.plan, reviewability: "unbound", canReject: false, review: undefined },
+      }}
+      enableActions
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Review approval/ }));
+  expect(
+    (screen.getByRole("button", { name: /Reject approval/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+});
+
+it("supports technical disclosure and cancellation focus", async () => {
+  render(<ApprovalGatePanel approval={gate} enableActions />);
+  const trigger = screen.getByRole("button", { name: /Review approval/ });
+  await userEvent.click(trigger);
+  const dialog = within(screen.getByRole("dialog"));
+  const technical = dialog.getByText("Technical details");
+  await userEvent.click(technical);
+  expect(technical.closest("details")?.open).toBe(true);
+  await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("escapes plan prose and removes unsafe issue links while retaining raw evidence", () => {
+  const title = '<img src=x onerror="secret()">';
+  const { container } = render(
+    <ApprovalGatePanel
+      approval={{
+        ...gate,
+        plan: {
+          ...gate.plan,
+          review: {
+            ...approvalPlanFixture,
+            issue: { ...approvalPlanFixture.issue, title, url: "javascript:secret()" },
+          },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText(title)).toBeTruthy();
+  expect(screen.queryByRole("link", { name: title })).toBeNull();
+  expect(container.querySelector("img")).toBeNull();
+  expect(screen.getByText(/<script>alert/)).toBeTruthy();
+});
+
+it.each(["plan-review", "deploy-preview"])(
+  "keeps requester prerequisites in the active %s decision dialog",
+  (scope) => {
+    const risk = "Only approve if the production migration has been explicitly reviewed.";
+    render(<ApprovalGatePanel approval={{ ...gate, scope, risk }} enableActions />);
+    fireEvent.click(screen.getByRole("button", { name: /Review approval/ }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText(risk)).toBeTruthy();
+    expect(dialog.getByText(`Requested by ${gate.owner}`)).toBeTruthy();
+  },
+);

@@ -45,6 +45,8 @@ const componentEmptyStates: Readonly<Record<string, readonly string[]>> = {
 
 /** Why each remaining portal component has no empty state of its own. */
 const componentsWithoutEmptyStates: Readonly<Record<string, string>> = {
+  "approval-plan-review.tsx":
+    "renders one bound artifact; missing content is an explicit reviewability error, while ApprovalGatePanel owns the empty approval collection",
   "artifact-list-item.tsx": "renders one artifact row; its list owns the empty state",
   "fixture-gated-page.tsx": "delegates entirely to FixtureUnavailableNotice",
   "loop-card.tsx": "renders one loop row; its registry owns the empty state",

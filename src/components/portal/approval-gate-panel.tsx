@@ -4,10 +4,11 @@ import { ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { z } from "zod";
+import { ApprovalPlanReview } from "@/components/portal/approval-plan-review";
 import { ArtifactListItem } from "@/components/portal/artifact-list-item";
 import { resolvePortalEmptyState } from "@/components/portal/empty-states";
 import { EmptyState } from "@/components/portal/reusable-states";
-import { getApprovalChecklistStatus, getApprovalStatus } from "@/components/portal/status-mapping";
+import { getApprovalStatus } from "@/components/portal/status-mapping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -58,7 +59,7 @@ export function ApprovalGatePanel({
   if (!approval) {
     return (
       <Card className="shadow-none">
-        <CardHeader className="flex-row items-end justify-between gap-4">
+        <CardHeader className="flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <CardTitle>Approval gate</CardTitle>
             <CardDescription>
@@ -88,13 +89,15 @@ export function ApprovalGatePanel({
 
   return (
     <Card className="shadow-none">
-      <CardHeader className="flex-row items-end justify-between gap-4">
+      <CardHeader className="flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <CardTitle>
             {showEvidence && approval.scope ? `Approval gate — ${gateName}` : "Approval gate"}
           </CardTitle>
           <CardDescription>
-            Security signoff is required before high-risk automation or write paths advance.
+            {approval.scope === "plan-review"
+              ? "Review the proposed work and evidence before deciding whether this plan may proceed to test writing."
+              : "Review the requested scope and evidence before recording a decision."}
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -112,16 +115,8 @@ export function ApprovalGatePanel({
             View run
           </a>
         )}
-        {showEvidence && approval.plan && (
-          <section aria-label="Plan under review" className="space-y-2 rounded-md border p-4">
-            <p>Plan {approval.plan.id}</p>
-            <p className="break-all font-mono text-xs">SHA256 {approval.plan.sha256}</p>
-            {approval.plan.content ? (
-              <pre className="whitespace-pre-wrap break-all text-sm">{approval.plan.content}</pre>
-            ) : (
-              <p>Plan content is unavailable. Review the linked plan evidence before deciding.</p>
-            )}
-          </section>
+        {showEvidence && approval.scope === "plan-review" && (
+          <ApprovalPlanReview plan={approval.plan} />
         )}
         <p
           ref={statusRef}
@@ -151,23 +146,11 @@ export function ApprovalGatePanel({
                   ? { ...item, label: "Resolution recorded", done: true }
                   : item,
               )
-              .map((item) => {
-                const itemStatus = getApprovalChecklistStatus(item.done);
-
-                return (
-                  <div key={item.label} className="flex items-start gap-3">
-                    <StatusBadge status={itemStatus.status} label={itemStatus.label} dotOnly />
-                    <div>
-                      <div className="text-sm font-medium">{item.label}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {item.done
-                          ? "Verified against the current portal state."
-                          : "Needs explicit maintainer review."}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              .map((item) => (
+                <div key={item.label} className="text-sm text-muted-foreground">
+                  {item.label}
+                </div>
+              ))}
           </div>
 
           <div className="space-y-3 rounded-md border p-4">
@@ -187,6 +170,7 @@ export function ApprovalGatePanel({
             {enableActions && approval.id && (approval.state === "requested" || resolution) && (
               <ApprovalDecision
                 approvalId={approval.id}
+                approval={approval}
                 gateName={gateName}
                 disabled={Boolean(resolution) || approval.state !== "requested"}
                 onResolved={setResolution}
@@ -220,6 +204,7 @@ const decisionResponseSchema = z.object({
 
 function ApprovalDecision({
   approvalId,
+  approval,
   onResolved,
   gateName,
   disabled,
@@ -227,6 +212,7 @@ function ApprovalDecision({
   onCloseAfterSave,
 }: Readonly<{
   approvalId: string;
+  approval: ApprovalGateRecord;
   onResolved: (resolution: {
     state: "approved" | "rejected";
     actor: string;
@@ -247,8 +233,13 @@ function ApprovalDecision({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const confirmBlocked =
+    approval.scope === "plan-review" && approval.plan?.reviewability !== "ready";
+  const rejectBlocked = approval.scope === "plan-review" && !approval.plan?.canReject;
+
   async function decide(action: "approve" | "reject") {
-    if (inFlight.current || disabled) return;
+    if (inFlight.current || disabled || (action === "approve" ? confirmBlocked : rejectBlocked))
+      return;
     inFlight.current = true;
     setPending(true);
     setError(null);
@@ -322,6 +313,7 @@ function ApprovalDecision({
         </Button>
       </DialogTrigger>
       <DialogContent
+        className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden p-4 sm:p-6"
         onCloseAutoFocus={(event) => {
           if (saved.current) {
             event.preventDefault();
@@ -336,35 +328,60 @@ function ApprovalDecision({
             decision.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor={noteId}>Reviewer notes</Label>
-          <Textarea
-            id={noteId}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            disabled={pending}
-          />
+        <div className="min-h-0 min-w-0 space-y-6 overflow-y-auto pr-1 [overflow-wrap:break-word]">
+          <section aria-label="Request context" className="space-y-2">
+            <h3 className="font-semibold">Request context</h3>
+            <p className="text-sm text-muted-foreground">Requested by {approval.owner}</p>
+            <p className="whitespace-pre-wrap text-sm">{approval.risk}</p>
+          </section>
+          {approval.scope === "plan-review" && <ApprovalPlanReview plan={approval.plan} />}
+          <section aria-label="Decision evidence" className="space-y-3">
+            <h3 className="font-semibold">Run evidence</h3>
+            {approval.runId && (
+              <a
+                href={`/runs?run=${encodeURIComponent(approval.runId)}`}
+                className="text-sm text-brand underline"
+              >
+                View run
+              </a>
+            )}
+            {(approval.artifacts ?? []).map((artifact) => (
+              <ArtifactListItem key={`${artifact.label}-${artifact.href}`} artifact={artifact} />
+            ))}
+            {!approval.artifacts?.length && (
+              <p className="text-sm text-muted-foreground">No run evidence attached.</p>
+            )}
+          </section>
+          <div className="space-y-2">
+            <Label htmlFor={noteId}>Reviewer notes</Label>
+            <Textarea
+              id={noteId}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              disabled={pending}
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-sm">
+              {error}
+            </p>
+          )}
         </div>
-        {error && (
-          <p role="alert" className="text-sm">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
+        <DialogFooter className="border-t pt-3">
           <Button variant="outline" disabled={pending} onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <Button
             aria-label={`Reject approval — ${gateName}`}
             variant="outline"
-            disabled={pending}
+            disabled={pending || rejectBlocked}
             onClick={() => void decide("reject")}
           >
             Reject approval
           </Button>
           <Button
             aria-label={pending ? "Saving…" : `Confirm approval — ${gateName}`}
-            disabled={pending}
+            disabled={pending || confirmBlocked}
             onClick={() => void decide("approve")}
           >
             {pending ? "Saving…" : "Confirm approval"}

@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 
-import { repositories, storeIdentity } from "@/db/schema";
+import { approvals, loopRuns, repositories, storeIdentity } from "@/db/schema";
 import { portalFixture } from "@/lib/fixtures";
 import {
   findUnmetPortalRequirements,
@@ -90,6 +90,20 @@ describe("portal records (pglite integration)", () => {
       owner: expect.any(String),
       resolvedBy: expect.any(String),
     });
+  });
+
+  it("exposes an explicit reviewability state for every plan-review gate", async () => {
+    await seedDemoData(testDatabase());
+    const [run] = await context.db.select().from(loopRuns).limit(1);
+    await context.db
+      .insert(approvals)
+      .values({ runId: run.id, scope: "plan-review", requestedBy: "planner" });
+    const result = await readPortalRecords({ database: context.db, githubAppId: 800_000 });
+    const gates = result.records.approvals.filter((gate) => gate.scope === "plan-review");
+    expect(gates.length).toBeGreaterThan(0);
+    for (const gate of gates) {
+      expect(gate.plan).toEqual(expect.objectContaining({ reviewability: expect.any(String) }));
+    }
   });
 
   it("materializes the five portal page surfaces from seeded database rows", async () => {

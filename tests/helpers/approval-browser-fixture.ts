@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { agentPlans, approvals, approvalTransitionEvents, artifacts, loopRuns } from "@/db/schema";
 import { type SeedDatabase, seedDemoData } from "@/lib/seed/demo-data";
+import { approvalPlanFixture } from "../fixtures/approval-plan";
 
 export const approvalBrowserFixture = {
   approvalId: "27500000-0000-4000-8000-000000000275",
   planId: "27500000-0000-4000-8000-000000000276",
   artifactId: "27500000-0000-4000-8000-000000000277",
-  sha256: "a".repeat(64),
+  sha256: approvalPlanFixture.identity.sha256,
   actor: "approval-browser-operator",
 };
 
@@ -28,14 +29,29 @@ export async function prepareApprovalBrowserFixture(database: SeedDatabase) {
       .values({
         id: approvalBrowserFixture.planId,
         runId: run.id,
-        input: {},
-        status: "requested",
-        plan: {
-          summary: "Review the approval surface changes before writing tests.",
-          identity: { sha256: approvalBrowserFixture.sha256 },
+        input: {
+          repositoryFullName: approvalPlanFixture.issue.repositoryFullName,
+          issueNumber: approvalPlanFixture.issue.number,
+          title: approvalPlanFixture.issue.title,
+          repositoryRevision: approvalPlanFixture.repositoryRevision,
         },
+        status: "requested",
+        plan: approvalPlanFixture,
       })
-      .onConflictDoUpdate({ target: agentPlans.id, set: { status: "requested" } });
+      .onConflictDoUpdate({
+        target: agentPlans.id,
+        set: {
+          status: "requested",
+          runId: run.id,
+          plan: approvalPlanFixture,
+          input: {
+            repositoryFullName: approvalPlanFixture.issue.repositoryFullName,
+            issueNumber: approvalPlanFixture.issue.number,
+            title: approvalPlanFixture.issue.title,
+            repositoryRevision: approvalPlanFixture.repositoryRevision,
+          },
+        },
+      });
     await tx
       .insert(approvals)
       .values({
@@ -44,7 +60,7 @@ export async function prepareApprovalBrowserFixture(database: SeedDatabase) {
         scope: "plan-review",
         requestedBy: "planner",
         status: "requested",
-        note: "Requesting review before the preview promotes.",
+        note: "Requesting review before this exact plan proceeds to test writing.",
         metadata: {
           planId: approvalBrowserFixture.planId,
           planSha256: approvalBrowserFixture.sha256,
@@ -54,10 +70,18 @@ export async function prepareApprovalBrowserFixture(database: SeedDatabase) {
       .onConflictDoUpdate({
         target: approvals.id,
         set: {
+          runId: run.id,
+          scope: "plan-review",
+          requestedBy: "planner",
+          requestedAt: new Date("2026-07-01T00:00:00Z"),
+          metadata: {
+            planId: approvalBrowserFixture.planId,
+            planSha256: approvalBrowserFixture.sha256,
+          },
           status: "requested",
           resolvedBy: null,
           resolvedAt: null,
-          note: "Requesting review before the preview promotes.",
+          note: "Requesting review before this exact plan proceeds to test writing.",
         },
       });
     await tx
@@ -69,7 +93,15 @@ export async function prepareApprovalBrowserFixture(database: SeedDatabase) {
         title: "Approval plan evidence",
         uri: "https://github.com/ncolesummers/loopworks/issues/275",
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: artifacts.id,
+        set: {
+          runId: run.id,
+          type: "plan",
+          title: "Approval plan evidence",
+          uri: "https://github.com/ncolesummers/loopworks/issues/275",
+        },
+      });
     return { ...approvalBrowserFixture, runId: run.id };
   });
 }
