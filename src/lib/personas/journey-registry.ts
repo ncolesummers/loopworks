@@ -620,7 +620,7 @@ export const personaJourneyRegistry: PersonaJourneyRegistry = personaJourneyRegi
       reason:
         "Partial browser coverage: tests/e2e/portal.spec.ts and tests/e2e/seeded-postgres.spec.ts cover approval context, decisions, attribution, and evidence. " +
         "Exact-plan approval enforcement already exists in src/lib/loops/transitions/test-writing.ts. " +
-        "#275 renders the linked plan on the gate card; a dedicated plan-review surface and the complete exact-plan test-writing registry journey remain deferred to #266.",
+        "#275 provides structured plan review and evidence within the approvals surface and active decision dialog. Only the complete exact-plan approval-to-test-writing registry/browser journey remains deferred to #266.",
       trackedBy: "#266",
     },
     {
@@ -684,7 +684,7 @@ export const personaJourneyRegistry: PersonaJourneyRegistry = personaJourneyRegi
       kind: "deferred",
       reason:
         "#275 connects decisions to the session-attributed route; tests/unit/api/approvals-transition.test.ts proves GitHub attribution. " +
-        "schemas/persona-journey.ts defines one journeySessionSchema value per journey with one authenticated sessionProfileId, not an identity-switch action. " +
+        "tests/e2e/seeded-postgres.spec.ts proves attribution to the explicitly configured fixture operator, not live GitHub sign-in. schemas/persona-journey.ts defines one journeySessionSchema value per journey with one authenticated sessionProfileId, not an identity-switch action. " +
         "Allowlist denial runs through src/auth.ts callbacks.signIn during GitHub OAuth; the no-external-network test policy prevents that round-trip. " +
         "tests/unit/auth/allowlist.test.ts covers denial deterministically. The two-identity registry journey remains deferred to #266.",
       trackedBy: "#266",
