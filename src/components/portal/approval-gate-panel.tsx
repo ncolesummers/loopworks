@@ -167,7 +167,7 @@ export function ApprovalGatePanel({
             <div className="text-sm text-muted-foreground">{approval.risk}</div>
 
             {decisionNote && <div className="text-sm">Decision note: {decisionNote}</div>}
-            {enableActions && approval.id && (approval.state === "requested" || resolution) && (
+            {enableActions && approval.id && approval.state === "requested" && (
               <ApprovalDecision
                 approvalId={approval.id}
                 approval={approval}

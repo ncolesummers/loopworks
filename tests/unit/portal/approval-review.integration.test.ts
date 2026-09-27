@@ -234,3 +234,75 @@ it("blocks decisions when persisted metadata contains a malformed plan row id", 
     canReject: false,
   });
 });
+
+it("selects the newest 100 gates before presenting them chronologically and preserves full run history", async () => {
+  const rows = Array.from({ length: 105 }, (_, i) => ({
+    id: `27500000-0000-4000-8000-${String(i + 100).padStart(12, "0")}`,
+    runId,
+    scope: `recent-${i}`,
+    requestedBy: "planner",
+    requestedAt: new Date(Date.UTC(2026, 8, 14, 0, 0, i)),
+  }));
+  await context.db.insert(approvals).values(rows);
+  const expected = rows.slice(5).map((row) => row.id);
+  const portal = await readPortalRecords({ database: context.db });
+  expect.soft(portal.records.approvals.map((gate) => gate.id)).toEqual(expected);
+  const bounded = await readRunRecords({ database: context.db, approvalLimit: 100 });
+  expect.soft(bounded.runs[0].approvals.map((gate) => gate.id)).toEqual(expected);
+  const full = await readRunRecords({ database: context.db });
+  expect(full.runs[0].approvals.map((gate) => gate.id)).toEqual([
+    approvalId,
+    ...rows.map((row) => row.id),
+  ]);
+});
+
+it("uses the approval id to deterministically select equal-time gates at the window boundary", async () => {
+  const rows = Array.from({ length: 105 }, (_, i) => ({
+    id: `27500000-0000-4000-8000-${String(i + 100).padStart(12, "0")}`,
+    runId,
+    scope: `tie-${i}`,
+    requestedBy: "planner",
+    requestedAt: new Date("2026-09-14T00:00:00Z"),
+  }));
+  await context.db.insert(approvals).values([...rows].reverse());
+  const expected = rows.slice(0, 100).map((row) => row.id);
+  const portal = await readPortalRecords({ database: context.db });
+  expect.soft(portal.records.approvals.map((gate) => gate.id)).toEqual(expected);
+  const bounded = await readRunRecords({ database: context.db, approvalLimit: 100 });
+  expect.soft(bounded.runs[0].approvals.map((gate) => gate.id)).toEqual(expected);
+});
+
+it("chooses dashboard status priority before newest request, without reordering the collection", async () => {
+  const newestRequestedId = "27500000-0000-4000-8000-000000000004";
+  await context.db.insert(approvals).values([
+    {
+      id: newestRequestedId,
+      runId,
+      scope: "newer-request",
+      requestedBy: "planner",
+      requestedAt: new Date("2026-09-13T00:00:01Z"),
+    },
+    {
+      runId,
+      scope: "newer-approved",
+      status: "approved",
+      requestedBy: "planner",
+      requestedAt: new Date("2026-09-14T00:00:00Z"),
+    },
+    {
+      runId,
+      scope: "newer-rejected",
+      status: "rejected",
+      requestedBy: "planner",
+      requestedAt: new Date("2026-09-15T00:00:00Z"),
+    },
+  ]);
+  const { records } = await readPortalRecords({ database: context.db });
+  expect(records.approval?.id).toBe(newestRequestedId);
+  expect(records.approvals.map((gate) => gate.scope)).toEqual([
+    "pr-write",
+    "newer-request",
+    "newer-approved",
+    "newer-rejected",
+  ]);
+});

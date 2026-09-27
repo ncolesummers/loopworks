@@ -579,7 +579,7 @@ export async function readPortalRecords(input: {
           ),
         )
         .where(inArray(approvals.runId, visibleRunIds))
-        .orderBy(asc(approvals.requestedAt), asc(approvals.id))
+        .orderBy(desc(approvals.requestedAt), asc(approvals.id))
         .limit(portalApprovalLimit)
     : [];
   const approvalRows = joinedApprovals.map(({ approval, planContent, decisionNote }) => ({
@@ -610,14 +610,16 @@ export async function readPortalRecords(input: {
     artifacts: gate.runId ? (runsById.get(gate.runId)?.artifacts ?? []) : [],
   }));
 
+  const preferredApprovalId = [...approvalRows].sort(
+    (a, b) =>
+      approvalPriority(a.status) - approvalPriority(b.status) ||
+      b.requestedAt.getTime() - a.requestedAt.getTime() ||
+      a.id.localeCompare(b.id),
+  )[0]?.id;
+
   return {
     records: {
-      approval:
-        [...approvalGates].sort(
-          (a, b) =>
-            approvalPriority(a.state as ApprovalStatus) -
-            approvalPriority(b.state as ApprovalStatus),
-        )[0] ?? null,
+      approval: approvalGates.find((gate) => gate.id === preferredApprovalId) ?? null,
       approvals: approvalGates,
       artifacts,
       deployments: deploymentRowsResult.map((deployment) => mapDeploymentRow(deployment, now)),

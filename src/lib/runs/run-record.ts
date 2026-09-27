@@ -370,7 +370,7 @@ export async function readRunRecords(input: {
             })
             .from(approvals)
             .where(inArray(approvals.runId, runIds))
-            .orderBy(asc(approvals.requestedAt), asc(approvals.id))
+            .orderBy(desc(approvals.requestedAt), asc(approvals.id))
             .limit(input.approvalLimit ?? 2147483647),
         ])
       : [[], [], []];
@@ -378,7 +378,12 @@ export async function readRunRecords(input: {
   const stepsByRun = groupBy(stepRows, (step) => step.runId);
   const artifactsByRun = groupBy(artifactRows, (artifact) => artifact.runId);
   const approvalsByRun = groupBy(
-    approvalRows.filter((approval) => approval.runId),
+    // Select the latest bounded window, then retain chronological run history.
+    approvalRows
+      .filter((approval) => approval.runId)
+      .sort(
+        (a, b) => a.requestedAt.getTime() - b.requestedAt.getTime() || a.id.localeCompare(b.id),
+      ),
     (approval) => approval.runId ?? "",
   );
   const stepStatusById = new Map(stepRows.map((step) => [step.id, step.status]));

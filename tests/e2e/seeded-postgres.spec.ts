@@ -152,6 +152,9 @@ test.describe("seeded Postgres portal", () => {
     expect(decision.transition.to).toBe("rejected");
     await expect(requested.getByRole("status")).toBeFocused();
     await expect(requested.getByRole("status")).toContainText("Rejected");
+    await expect(requested.getByRole("button", { name: /Review approval/ })).toHaveCount(0);
+    await expect(requested.getByRole("status")).toBeFocused();
+    await expect(requested.getByRole("status")).toContainText("Decision saved.");
     await expect(requested.getByRole("link", { name: "Approval plan evidence" })).toBeVisible();
     await requested.getByRole("status").evaluate((node) => node.scrollIntoView({ block: "start" }));
     await retainScreenshot(page, testInfo, "rejected-saved-mobile-dark");
@@ -222,6 +225,9 @@ test.describe("seeded Postgres portal", () => {
     });
     await expect(gate.getByRole("status")).toBeFocused();
     await expect(gate.getByRole("status")).toContainText("Approved");
+    await expect(gate.getByRole("button", { name: /Review approval/ })).toHaveCount(0);
+    await expect(gate.getByRole("status")).toBeFocused();
+    await expect(gate.getByRole("status")).toContainText("Decision saved.");
     await expect(gate.getByRole("link", { name: "Approval plan evidence" })).toBeVisible();
     await gate.getByRole("status").evaluate((node) => node.scrollIntoView({ block: "start" }));
     await retainScreenshot(page, testInfo, "approved-saved-mobile-light");

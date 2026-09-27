@@ -41,7 +41,7 @@ async function submit() {
   confirm.focus();
   await userEvent.keyboard("{Enter}");
 }
-function success() {
+function success(state: "approved" | "rejected" = "approved") {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
@@ -49,7 +49,7 @@ function success() {
         approvalId: gate.id,
         transition: {
           from: "requested",
-          to: "approved",
+          to: state,
           actorId: "ncolesummers",
           occurredAt: "2026-09-13T09:00:00Z",
           note: "Decision context",
@@ -94,6 +94,50 @@ it("F9 presents coherent saved state while refresh is pending", async () => {
   expect(screen.queryByText("Requested 08:56")).toBeNull();
   expect(screen.getByText(gate.risk)).toBeTruthy();
 });
+it.each(["approved", "rejected"] as const)(
+  "removes the review control after a saved %s decision receives terminal props",
+  async (state) => {
+    success(state);
+    const { rerender } = render(<ApprovalGatePanel approval={gate} enableActions />);
+    await userEvent.click(screen.getByRole("button", { name: /Review approval/ }));
+    const decision = screen.getByRole("button", {
+      name: state === "approved" ? /Confirm approval/ : /Reject approval/,
+    });
+    decision.focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("refreshing"));
+    const status = screen.getByRole("status");
+    expect(document.activeElement).toBe(status);
+    expect(
+      (screen.getByRole("button", { name: /Review approval/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    rerender(
+      <ApprovalGatePanel
+        approval={{
+          ...gate,
+          state,
+          resolvedBy: "ncolesummers",
+          due: "Resolved 09:00",
+          decisionNote: "Decision context",
+          checklist: [{ label: "Resolution recorded", done: true }],
+        }}
+        enableActions
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Review approval/ })).toBeNull();
+    expect(screen.getByRole("status")).toBe(status);
+    expect(document.activeElement).toBe(status);
+    expect(status.textContent).toContain(state === "approved" ? "Approved" : "Rejected");
+    expect(status.textContent).toContain("Decision saved.");
+    expect(status.textContent).not.toContain("refreshing");
+    expect(screen.getByText("Decision note: Decision context")).toBeTruthy();
+    expect(screen.getByText(gate.risk)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /View run/ })).toBeTruthy();
+    expect(screen.getByText(approvalPlanFixture.summary)).toBeTruthy();
+  },
+);
 it("F9 exposes refresh failure without reporting the saved write as failed", async () => {
   success();
   refresh.mockImplementation(() => {
