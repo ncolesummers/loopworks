@@ -112,7 +112,7 @@ jobs:
       # default `enable-cache: auto` disables caching for privileged and
       # publish-triggered events; this workflow runs only its safe triggers.
       - name: Setup uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       # Semgrep is a Python tool with no single release binary to digest-pin, so
       # the `==` pin is trust-on-first-use against PyPI and its transitive tree
